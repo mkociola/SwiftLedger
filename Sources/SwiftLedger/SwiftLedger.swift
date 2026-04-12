@@ -1,2 +1,3 @@
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
+/// SwiftLedger — A double-entry bookkeeping library for Swift.
+///
+/// Start with ``Ledger``, which ties together the ``ChartOfAccounts`` and ``Journal``.
