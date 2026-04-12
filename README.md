@@ -17,20 +17,18 @@ SwiftLedger enforces this rule at the type level: **a `Transaction` cannot be cr
 
 ### Swift Package Manager
 
-Add this to your `Package.swift`:
+Add this to your app's `Package.swift` using the local path:
 
 ```swift
 dependencies: [
-    .package(path: "../SwiftLedger"),  // local
-    // or via URL:
-    // .package(url: "https://github.com/you/SwiftLedger", from: "1.0.0"),
+    .package(path: "../SwiftLedger"),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["SwiftLedger"]),
 ]
 ```
 
-Or in Xcode: **File → Add Package Dependencies…** and paste the repo URL.
+Or in Xcode: **File → Add Package Dependencies… → Add Local…** and select the `SwiftLedger` folder.
 
 ## Quick start
 
