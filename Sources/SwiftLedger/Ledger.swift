@@ -48,6 +48,21 @@ public struct Ledger: Sendable, Codable, Hashable {
         return computeBalance(for: account, in: journal.transactions)
     }
 
+    /// Returns individual balances for every account whose name falls under `prefix`.
+    ///
+    /// Includes the account named exactly `prefix` (if any) plus all accounts
+    /// whose name begins with `prefix + ":"`. For example, passing
+    /// `"Expenses:Food"` returns balances for `"Expenses:Food"`,
+    /// `"Expenses:Food:Groceries"`, `"Expenses:Food:Dining Out"`, etc.
+    ///
+    /// Accounts in different currencies are returned as separate `AccountBalance`
+    /// entries — group by `account.currency` to aggregate per currency.
+    public func subtreeBalances(forPrefix prefix: String) -> [AccountBalance] {
+        chartOfAccounts.accounts(withPrefix: prefix).map {
+            computeBalance(for: $0, in: journal.transactions)
+        }
+    }
+
     /// Returns balances for every account in the chart.
     public func allBalances() -> [AccountBalance] {
         chartOfAccounts.all.map { account in

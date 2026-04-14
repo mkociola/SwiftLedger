@@ -46,6 +46,17 @@ public struct ChartOfAccounts: Sendable, Codable, Hashable {
         all.filter { $0.type == type }
     }
 
+    /// Returns all accounts that fall within the subtree rooted at `prefix`.
+    ///
+    /// An account is included if its name equals `prefix` exactly, or if its
+    /// name begins with `prefix + ":"` — matching whole path segments only.
+    /// For example, `accounts(withPrefix: "Expenses:Food")` returns
+    /// `"Expenses:Food"`, `"Expenses:Food:Groceries"`, etc., but not
+    /// `"Expenses:Foo"` or `"Expenses:Football"`.
+    public func accounts(withPrefix prefix: String) -> [Account] {
+        all.filter { $0.name == prefix || $0.name.hasPrefix(prefix + ":") }
+    }
+
     public var isEmpty: Bool { accounts.isEmpty }
     public var count: Int { accounts.count }
 }

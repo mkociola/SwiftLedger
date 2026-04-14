@@ -256,3 +256,76 @@ import Foundation
         #expect(loaded.chartOfAccounts.count == 1)
     }
 }
+
+// MARK: - Subtree Balance Tests
+
+@Suite("Subtree Balances") struct SubtreeBalanceTests {
+    func makeLedger() throws -> Ledger {
+        var ledger = Ledger()
+        let cash        = Account(name: "Assets:Cash",               type: .asset,   currency: "USD")
+        let groceries   = Account(name: "Expenses:Food:Groceries",   type: .expense, currency: "USD")
+        let dining      = Account(name: "Expenses:Food:Dining Out",  type: .expense, currency: "USD")
+        let rent        = Account(name: "Expenses:Housing:Rent",     type: .expense, currency: "USD")
+        try ledger.addAccount(cash)
+        try ledger.addAccount(groceries)
+        try ledger.addAccount(dining)
+        try ledger.addAccount(rent)
+
+        try ledger.post(Transaction(memo: "Groceries", entries: [
+            .debit(account: groceries, amount: Money(80, "USD")),
+            .credit(account: cash,     amount: Money(80, "USD")),
+        ]))
+        try ledger.post(Transaction(memo: "Dinner", entries: [
+            .debit(account: dining, amount: Money(45, "USD")),
+            .credit(account: cash,  amount: Money(45, "USD")),
+        ]))
+        try ledger.post(Transaction(memo: "Rent", entries: [
+            .debit(account: rent, amount: Money(1200, "USD")),
+            .credit(account: cash, amount: Money(1200, "USD")),
+        ]))
+        return ledger
+    }
+
+    @Test func subtreeIncludesAllChildren() throws {
+        let ledger = try makeLedger()
+        let balances = ledger.subtreeBalances(forPrefix: "Expenses:Food")
+        #expect(balances.count == 2)
+        let total = balances.reduce(Decimal.zero) { $0 + $1.netBalance.amount }
+        #expect(total == 125) // 80 + 45
+    }
+
+    @Test func subtreeExcludesUnrelatedAccounts() throws {
+        let ledger = try makeLedger()
+        let names = ledger.subtreeBalances(forPrefix: "Expenses:Food").map(\.account.name)
+        #expect(!names.contains("Expenses:Housing:Rent"))
+    }
+
+    @Test func subtreeIncludesExactPrefixMatch() throws {
+        var ledger = try makeLedger()
+        let food = Account(name: "Expenses:Food", type: .expense, currency: "USD")
+        try ledger.addAccount(food)
+        let balances = ledger.subtreeBalances(forPrefix: "Expenses:Food")
+        #expect(balances.count == 3)
+    }
+
+    @Test func prefixDoesNotMatchPartialSegment() throws {
+        let ledger = try makeLedger()
+        // "Expenses:Foo" must NOT match "Expenses:Food:Groceries"
+        let balances = ledger.subtreeBalances(forPrefix: "Expenses:Foo")
+        #expect(balances.isEmpty)
+    }
+
+    @Test func emptyPrefixReturnsNothing() throws {
+        let ledger = try makeLedger()
+        // A blank prefix shouldn't match everything via accidental hasPrefix("") == true
+        let balances = ledger.subtreeBalances(forPrefix: "")
+        #expect(balances.isEmpty)
+    }
+
+    @Test func chartOfAccountsWithPrefix() throws {
+        let ledger = try makeLedger()
+        let accounts = ledger.chartOfAccounts.accounts(withPrefix: "Expenses:Food")
+        #expect(accounts.count == 2)
+        #expect(accounts.allSatisfy { $0.name.hasPrefix("Expenses:Food") })
+    }
+}
