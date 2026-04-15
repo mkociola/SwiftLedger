@@ -73,30 +73,21 @@ private func makeTx(
     }
 
     @Test("adding same commodity yields correct sum")
-    func addSameCommodity() throws {
+    func addSameCommodity() {
         let a = Amount(quantity: 100, commodity: "USD")
         let b = Amount(quantity:  50, commodity: "USD")
-        let c = try a + b
+        let c = a + b
         #expect(c.quantity == 150)
         #expect(c.commodity == "USD")
     }
 
     @Test("subtracting same commodity yields correct difference")
-    func subtractSameCommodity() throws {
+    func subtractSameCommodity() {
         let a = Amount(quantity: 100, commodity: "USD")
         let b = Amount(quantity:  30, commodity: "USD")
-        let c = try a - b
+        let c = a - b
         #expect(c.quantity == 70)
         #expect(c.commodity == "USD")
-    }
-
-    @Test("adding different commodities throws commodityMismatch with both names")
-    func addDifferentCommodities() throws {
-        let a = Amount(quantity: 100, commodity: "USD")
-        let b = Amount(quantity:  50, commodity: "EUR")
-        var caught: LedgerError?
-        do { _ = try a + b } catch let e as LedgerError { caught = e }
-        #expect(caught == .commodityMismatch("USD", "EUR"))
     }
 
     @Test("scalar multiplication scales quantity and preserves commodity")

@@ -37,21 +37,19 @@ public struct Amount: Sendable, Codable, Hashable, CustomStringConvertible {
 // MARK: - Arithmetic
 
 extension Amount {
-    /// Adds two amounts. Throws if commodities differ.
-    public static func + (lhs: Amount, rhs: Amount) throws -> Amount {
-        guard lhs.commodity == rhs.commodity else {
-            throw LedgerError.commodityMismatch(lhs.commodity, rhs.commodity)
-        }
+    /// Adds two amounts. Precondition: commodities must match.
+    public static func + (lhs: Amount, rhs: Amount) -> Amount {
+        precondition(lhs.commodity == rhs.commodity,
+                     "Cannot add amounts with different commodities: \(lhs.commodity) + \(rhs.commodity)")
         return Amount(quantity: lhs.quantity + rhs.quantity,
                       commodity: lhs.commodity,
                       commodityIsPrefix: lhs.commodityIsPrefix)
     }
 
-    /// Subtracts two amounts. Throws if commodities differ.
-    public static func - (lhs: Amount, rhs: Amount) throws -> Amount {
-        guard lhs.commodity == rhs.commodity else {
-            throw LedgerError.commodityMismatch(lhs.commodity, rhs.commodity)
-        }
+    /// Subtracts two amounts. Precondition: commodities must match.
+    public static func - (lhs: Amount, rhs: Amount) -> Amount {
+        precondition(lhs.commodity == rhs.commodity,
+                     "Cannot subtract amounts with different commodities: \(lhs.commodity) - \(rhs.commodity)")
         return Amount(quantity: lhs.quantity - rhs.quantity,
                       commodity: lhs.commodity,
                       commodityIsPrefix: lhs.commodityIsPrefix)
