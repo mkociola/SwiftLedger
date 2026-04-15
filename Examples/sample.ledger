@@ -1,0 +1,85 @@
+; Sample journal — demonstrates the plain-text accounting format
+; supported by SwiftLedger.
+
+; Account declarations are optional. They let you explicitly set the
+; account type when the name root doesn't match the recognised conventions.
+account Assets:Checking
+account Assets:Savings
+account Liabilities:CreditCard
+account Equity:Opening
+account Income:Salary
+account Income:Freelance
+account Expenses:Rent
+account Expenses:Food:Groceries
+account Expenses:Food:Restaurants
+account Expenses:Transport
+account Expenses:Utilities
+
+; ── January ─────────────────────────────────────────────────────────────────
+
+2024-01-01 * Opening balances
+    Assets:Checking        $2500.00
+    Assets:Savings         $5000.00
+    Equity:Opening
+
+2024-01-15 * Salary
+    Assets:Checking        $3200.00
+    Income:Salary
+
+2024-01-01 * Rent — January
+    Expenses:Rent          $1200.00
+    Assets:Checking
+
+2024-01-07 Groceries
+    Expenses:Food:Groceries    $87.45
+    Liabilities:CreditCard
+
+2024-01-12 Lunch with client
+    Expenses:Food:Restaurants  $42.00
+    Liabilities:CreditCard
+
+2024-01-20 Monthly transit pass
+    Expenses:Transport         $95.00
+    Assets:Checking
+
+2024-01-22 Electricity bill
+    Expenses:Utilities         $68.30
+    Assets:Checking
+
+2024-01-28 Pay off credit card
+    Liabilities:CreditCard     $129.45
+    Assets:Checking
+
+; ── February ────────────────────────────────────────────────────────────────
+
+2024-02-01 * Rent — February
+    Expenses:Rent          $1200.00
+    Assets:Checking
+
+2024-02-05 Supermarket run
+    Expenses:Food:Groceries    $112.60
+    Liabilities:CreditCard
+
+2024-02-10 Freelance project payment
+    Assets:Checking        $800.00
+    Income:Freelance
+
+2024-02-15 * Salary
+    Assets:Checking        $3200.00
+    Income:Salary
+
+2024-02-18 ! Pending refund  ; status: pending
+    Assets:Checking        $35.00
+    Expenses:Food:Restaurants
+
+2024-02-20 Bus and train fares
+    Expenses:Transport         $42.50
+    Assets:Checking
+
+2024-02-25 Internet and phone
+    Expenses:Utilities         $55.00
+    Assets:Checking
+
+2024-02-28 Pay off credit card
+    Liabilities:CreditCard     $112.60
+    Assets:Checking

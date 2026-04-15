@@ -1,12 +1,10 @@
 # SwiftLedger
 
-A double-entry bookkeeping library for Swift. Designed to be embedded in iOS and macOS apps.
+A plain-text accounting library for Swift, implementing the [plain-text accounting](https://plaintextaccounting.org) (PTA) model popularised by [ledger-cli](https://ledger-cli.org) and [hledger](https://hledger.org).
 
-## What is double-entry bookkeeping?
+SwiftLedger parses `.ledger` / `.journal` files, enforces double-entry balance rules, and provides balance queries, reports, and persistence — designed to be embedded in iOS and macOS apps.
 
-Every financial transaction affects **two accounts** — one is debited, one is credited — and the totals must always balance. This is the foundation of all modern accounting (and how banks, ERPs, and accounting software work under the hood).
-
-SwiftLedger enforces this rule at the type level: **a `Transaction` cannot be created if debits ≠ credits.** The initializer throws, making an unbalanced ledger unrepresentable.
+> **Compatibility:** SwiftLedger supports a useful subset of the ledger-cli file format. Round-tripping preserves blank lines, comments, and directives, but elided posting amounts are written back as explicit values and formatting is normalised.
 
 ## Requirements
 
@@ -15,9 +13,7 @@ SwiftLedger enforces this rule at the type level: **a `Transaction` cannot be cr
 
 ## Installation
 
-### Swift Package Manager
-
-Add this to your app's `Package.swift`:
+Add to your `Package.swift`:
 
 ```swift
 dependencies: [
@@ -28,146 +24,338 @@ targets: [
 ]
 ```
 
-Or in Xcode: **File → Add Package Dependencies…**, paste the URL above and click **Add Package**.
+Or in Xcode: **File → Add Package Dependencies…**, paste the URL above.
 
 ## Quick start
+
+### Parse an existing journal file
 
 ```swift
 import SwiftLedger
 
-// 1. Create a ledger
+let text    = try String(contentsOf: fileURL, encoding: .utf8)
+let parser  = JournalParser()
+let journal = try parser.parse(text)
+let ledger  = Ledger(journal: journal)
+
+// Exact-account balance
+let checking = ledger.balance(for: "Assets:Checking")  // [Amount]
+
+// Subtree total (all Expenses:* combined)
+let totalExpenses = ledger.subtreeBalance(forPrefix: "Expenses")
+
+// All transactions in a date range
+let jan = ledger.transactions(
+    from: JournalDate(year: 2024, month: 1, day: 1),
+    to:   JournalDate(year: 2024, month: 1, day: 31)
+)
+```
+
+### Build a ledger programmatically
+
+```swift
 var ledger = Ledger()
 
-// 2. Register accounts
-let cash    = Account(name: "Cash",    type: .asset,   currency: "USD")
-let equity  = Account(name: "Equity",  type: .equity,  currency: "USD")
-let revenue = Account(name: "Revenue", type: .revenue, currency: "USD")
-let expense = Account(name: "Expense", type: .expense, currency: "USD")
+let tx = try Transaction(
+    date:        JournalDate(year: 2024, month: 6, day: 1),
+    description: "Coffee",
+    postings: [
+        Posting(accountName: "Expenses:Food",
+                amount: Amount(quantity: 5, commodity: "$", commodityIsPrefix: true)),
+        Posting(accountName: "Assets:Cash",
+                amount: Amount(quantity: -5, commodity: "$", commodityIsPrefix: true)),
+    ]
+)
+ledger.add(.transaction(tx))
 
-try ledger.addAccount(cash)
-try ledger.addAccount(equity)
-try ledger.addAccount(revenue)
-try ledger.addAccount(expense)
-
-// 3. Post transactions
-try ledger.post(Transaction(memo: "Owner investment", entries: [
-    .debit(account: cash,   amount: Money(1000, "USD")),
-    .credit(account: equity, amount: Money(1000, "USD")),
-]))
-
-try ledger.post(Transaction(memo: "Service revenue", entries: [
-    .debit(account: cash,     amount: Money(300, "USD")),
-    .credit(account: revenue, amount: Money(300, "USD")),
-]))
-
-try ledger.post(Transaction(memo: "Rent", entries: [
-    .debit(account: expense, amount: Money(200, "USD")),
-    .credit(account: cash,   amount: Money(200, "USD")),
-]))
-
-// 4. Query balances
-let cashBalance = try ledger.balance(for: cash.id)
-print(cashBalance.netBalance)           // 1100 USD
-
-// 5. Check the ledger is still in balance
-print(ledger.trialBalance().isBalanced) // true
+// Remove a mistakenly added transaction
+ledger.remove(.transaction(tx))
 ```
+
+See [`Examples/sample.ledger`](Examples/sample.ledger) for a complete journal file.
+
+## Plain-text format
+
+```ledger
+; Full-line comments start with ; or #
+
+; Optional account declarations
+account Assets:Checking
+account Income:Salary
+
+; Transactions: DATE [=AUXDATE] [* | !] [(CODE)] DESCRIPTION [  ; comment]
+;     [* | !] ACCOUNT  AMOUNT [  ; comment]
+;     [* | !] ACCOUNT  (elided — computed automatically)
+
+2024-01-15 * Salary received
+    Assets:Checking        $3200.00
+    Income:Salary                     ; elided: -$3200.00 computed
+
+2024-01-20 ! Pending refund  ; pending status
+    Assets:Checking        $35.00
+    Expenses:Food:Restaurants
+
+2024-02-10 (REF-042) Freelance payment
+    Assets:Checking        800 USD
+    Income:Freelance
+```
+
+Supported:
+- Dates: `YYYY-MM-DD` or `YYYY/MM/DD`
+- Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `£500.00`
+- Status: `*` cleared, `!` pending
+- Codes: `(REF-042)`
+- One elided posting per transaction (amount computed to balance)
+- `account NAME` directives (with optional type)
+- Inline comments after two or more spaces + `;`
 
 ## Core concepts
 
-### Account types
+### Account naming and types
 
-| Type        | Normal balance | Examples                        |
-|-------------|----------------|---------------------------------|
-| `.asset`    | Debit          | Cash, inventory, receivables    |
-| `.liability`| Credit         | Loans, accounts payable         |
-| `.equity`   | Credit         | Owner's capital, retained earnings |
-| `.revenue`  | Credit         | Sales, service income           |
-| `.expense`  | Debit          | Rent, salaries, utilities       |
+Accounts are identified by name only — no pre-registration is required. Types are inferred automatically from the top-level name segment:
 
-### Money
+| Root word                      | Type           |
+|-------------------------------|----------------|
+| `Assets` / `Asset`            | `.asset`       |
+| `Liabilities` / `Liability`   | `.liability`   |
+| `Equity` / `Equities`         | `.equity`      |
+| `Income` / `Revenue`          | `.revenue`     |
+| `Expenses` / `Expense`        | `.expense`     |
+| anything else                 | `.unclassified`|
 
-`Money` wraps `Decimal` (not `Double`) to avoid floating-point rounding errors.
+> **Important:** `BalanceSheet` and `IncomeStatement` only include accounts with a recognised type. Name your accounts `Assets:Cash`, not `Cash`, or they will not appear in reports.
 
-```swift
-let price = Money(Decimal(string: "19.99")!, "USD")
-let tax   = Money(Decimal(string: "1.60")!, "USD")
-let total = try price + tax  // 21.59 USD — exact
+Use `account NAME` directives to override the inferred type:
+
+```ledger
+account Cash
+  ; Without a directive this becomes .unclassified.
+  ; With explicit type (not yet parsed from directives) use Account(name:type:) programmatically.
 ```
 
-### Transactions
-
-Transactions are immutable and validated on creation:
+`Account` exposes helpers useful for SwiftUI tree views:
 
 ```swift
-// ✅ Balanced — works fine
-try Transaction(memo: "Sale", entries: [
-    .debit(account: cash,     amount: Money(100, "USD")),
-    .credit(account: revenue, amount: Money(100, "USD")),
-])
+let a = Account(name: "Expenses:Food:Groceries")
+a.shortName  // "Groceries"
+a.parent     // "Expenses:Food"
+a.type       // .expense
+```
 
-// ❌ Unbalanced — throws LedgerError.unbalanced
-try Transaction(memo: "Oops", entries: [
-    .debit(account: cash,     amount: Money(100, "USD")),
-    .credit(account: revenue, amount: Money(50, "USD")),
-])
+### Transaction and Posting
+
+`Transaction` is immutable and validated on creation:
+
+```swift
+// ✅ Balanced
+let tx = try Transaction(
+    date:        JournalDate(year: 2024, month: 3, day: 5),
+    description: "Groceries",
+    postings: [
+        Posting(accountName: "Expenses:Food",
+                amount: Amount(quantity:  87.45, commodity: "$", commodityIsPrefix: true)),
+        Posting(accountName: "Assets:Checking",
+                amount: Amount(quantity: -87.45, commodity: "$", commodityIsPrefix: true)),
+    ]
+)
+
+// ❌ Throws LedgerError.unbalancedTransaction
+let bad = try Transaction(
+    date: JournalDate(year: 2024, month: 3, day: 5),
+    description: "Oops",
+    postings: [
+        Posting(accountName: "Expenses:Food",
+                amount: Amount(quantity: 100, commodity: "$", commodityIsPrefix: true)),
+        Posting(accountName: "Assets:Checking",
+                amount: Amount(quantity:  -50, commodity: "$", commodityIsPrefix: true)),
+    ]
+)
+```
+
+**Signs:** there are no `.debit` / `.credit` helpers. Amounts are signed `Decimal` values. In the plain-text accounting convention: positive = value flowing *into* an account; negative = value flowing *out*.
+
+`Transaction` conforms to `Identifiable` (stable `id: UUID`) for safe use in SwiftUI lists.
+
+### Amount
+
+```swift
+let price = Amount(quantity: Decimal(string: "19.99")!, commodity: "$", commodityIsPrefix: true)
+let tax   = Amount(quantity: Decimal(string: "1.60")!,  commodity: "$", commodityIsPrefix: true)
+let total = price + tax        // $21.59 — exact Decimal arithmetic, no floating-point error
+
+// Different commodities: precondition failure (programmer error, not recoverable)
+// let bad = usd + eur         // ← crashes with a clear message
+
+let scaled = price * 3         // $59.97
+```
+
+Group a collection by commodity:
+
+```swift
+let postings: [Posting] = ...
+let nets = postings.map(\.amount).netByCommodity()  // one Amount per commodity
+```
+
+### JournalDate
+
+`JournalDate` is a timezone-free year/month/day value — it avoids the off-by-one errors that `Foundation.Date` can introduce near midnight with timezone conversions.
+
+```swift
+let d = JournalDate(year: 2024, month: 6, day: 15)
+JournalDate.today   // today's local date
+```
+
+## Balance queries
+
+All queries are on `Ledger`, which is a pure value type and can be snapshotted or passed across threads freely.
+
+```swift
+// Exact account
+let balance: [Amount] = ledger.balance(for: "Assets:Checking")
+
+// Subtree total (e.g. all Expenses:Food:* plus Expenses:Food itself)
+let foodTotal: [Amount] = ledger.subtreeBalance(forPrefix: "Expenses:Food")
+
+// All balances as of a date
+let snapshot = ledger.allBalances(asOf: JournalDate(year: 2024, month: 12, day: 31))
+
+// Transactions for one account
+let txs = ledger.transactions(for: "Assets:Checking")
+
+// Transactions in subtree
+let expTxs = ledger.transactions(forPrefix: "Expenses")
+
+// Date range
+let q1 = ledger.transactions(
+    from: JournalDate(year: 2024, month: 1, day: 1),
+    to:   JournalDate(year: 2024, month: 3, day: 31)
+)
 ```
 
 ## Reports
 
 All reports are pure value types computed from a `Ledger` snapshot.
 
-### Balance Sheet
-
-Assets = Liabilities + Equity
+### BalanceSheet
 
 ```swift
-let bs = BalanceSheet(ledger: ledger, currency: "USD")
-print(bs.totalAssets)              // 1100 USD
-print(bs.totalLiabilitiesAndEquity)
-print(bs.isBalanced)               // true
-```
+let bs = BalanceSheet(ledger: ledger)
+print(bs.isBalanced)  // true for any well-formed double-entry journal
 
-### Income Statement (P&L)
-
-```swift
-let is_ = IncomeStatement(ledger: ledger, from: startDate, to: endDate, currency: "USD")
-print(is_.totalRevenue)   // 300 USD
-print(is_.totalExpenses)  // 200 USD
-print(is_.netIncome)      // 100 USD
-print(is_.isProfit)       // true
-```
-
-### Account Statement
-
-Running balance for a single account:
-
-```swift
-let stmt = try AccountStatement(ledger: ledger, accountID: cash.id)
-for line in stmt.lines {
-    print(line.transaction.memo, line.runningBalance)
+for entry in bs.assets {
+    let qty = entry.quantity(for: "$") ?? 0
+    print(entry.account.shortName, qty)
 }
-print(stmt.closingBalance) // 1100 USD
+// Also: bs.liabilities, bs.equity
+```
+
+`BalanceSheet` accepts an optional `asOf: JournalDate` to show the position at a past date.
+
+### IncomeStatement
+
+```swift
+let statement = IncomeStatement(
+    ledger: ledger,
+    from: JournalDate(year: 2024, month: 1, day: 1),
+    to:   JournalDate(year: 2024, month: 12, day: 31)
+)
+
+for entry in statement.revenues  { print(entry.account.name, entry.amounts) }
+for entry in statement.expenses  { print(entry.account.name, entry.amounts) }
+print(statement.netIncome)  // [Amount] per commodity
+```
+
+### AccountStatement
+
+Running balance for one account, useful for a bank-statement view:
+
+```swift
+let stmt = AccountStatement(ledger: ledger, accountName: "Assets:Checking")
+
+for line in stmt.lines {
+    print(line.transaction.date, line.transaction.description)
+    print("  posting:", line.posting.amount)
+    print("  balance:", line.runningBalance)
+}
+```
+
+### AccountBalance
+
+Reports return `[AccountBalance]`. Each value has:
+
+```swift
+entry.account          // Account — name, type, shortName, parent
+entry.amounts          // [Amount] — one per commodity
+entry.quantity(for: "$")  // Decimal? — convenience accessor
 ```
 
 ## Persistence
 
-The library is storage-agnostic. Conform to `LedgerStore` in your app to plug in SwiftData, CoreData, or any other backend:
+Implement `LedgerStore` to plug in any storage backend:
 
 ```swift
-actor MySwiftDataStore: LedgerStore {
-    func load() async throws -> Ledger { /* load from SwiftData */ }
-    func save(_ ledger: Ledger) async throws { /* save to SwiftData */ }
+public protocol LedgerStore: Sendable {
+    func load() throws -> Ledger
+    func save(_ ledger: Ledger) throws
 }
 ```
 
-`InMemoryLedgerStore` is provided as a reference implementation — useful for unit tests and SwiftUI previews.
+### PlainTextJournalStore
+
+Reads and writes a `.ledger` file on disk using an atomic write:
 
 ```swift
+let store   = PlainTextJournalStore(url: fileURL)
+let manager = try LedgerManager(store: store)
+```
+
+### InMemoryLedgerStore
+
+Non-persistent, in-memory store — ideal for unit tests and SwiftUI previews:
+
+```swift
+let store = InMemoryLedgerStore(ledger: .sampleData)
+
 #Preview {
-    LedgerView(store: InMemoryLedgerStore(initial: .sampleData))
+    LedgerView(store: store)
 }
 ```
+
+### Custom store (SwiftData / CloudKit)
+
+```swift
+actor SwiftDataStore: LedgerStore {
+    func load() throws -> Ledger {
+        // fetch from SwiftData, build Journal, return Ledger
+    }
+    func save(_ ledger: Ledger) throws {
+        // serialize ledger.journal.items, persist via SwiftData
+    }
+}
+```
+
+## Concurrency
+
+`LedgerManager` is a Swift actor — it serialises all access and persists changes automatically after each mutation.
+
+```swift
+// init is synchronous (throws if store.load() fails)
+let manager = try LedgerManager(store: PlainTextJournalStore(url: fileURL))
+
+// queries — await only
+let txs = await manager.transactions(forPrefix: "Expenses")
+let bs  = await manager.balanceSheet()
+
+// mutations — try await (store.save can throw)
+try await manager.add(.transaction(tx))
+try await manager.remove(.transaction(tx))
+
+// reload from disk (e.g. after external edit)
+try await manager.reload()
+```
+
+The same API is available as non-`async` methods on `Ledger` for synchronous use cases (e.g. inside another actor or when persistence is not needed).
 
 ## Running the tests
 
@@ -178,3 +366,4 @@ swift test
 ## License
 
 MIT
+
