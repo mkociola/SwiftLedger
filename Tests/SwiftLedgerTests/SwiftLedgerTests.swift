@@ -851,7 +851,7 @@ account Assets:Savings
 @Suite("LedgerManager") struct LedgerManagerTests {
 
     @Test("added transaction is reflected in ledger queries")
-    func addTransaction() async throws {
+    func addTransaction() throws {
         let manager = try LedgerManager()
         let tx = try Transaction(
             date: makeDate(2024, 1, 1), description: "Salary",
@@ -860,15 +860,15 @@ account Assets:Savings
                 Posting(accountName: "Income:Salary", amount: Amount(quantity: -100, commodity: "USD")),
             ]
         )
-        try await manager.add(.transaction(tx))
-        let txs = await manager.transactions(for: "Assets:Cash")
+        try manager.add(.transaction(tx))
+        let txs = manager.transactions(for: "Assets:Cash")
         #expect(txs.count == 1)
         #expect(txs[0].description == "Salary")
         #expect(txs[0].postings[0].amount.quantity == 100)
     }
 
     @Test("removed transaction is no longer returned by queries")
-    func removeTransaction() async throws {
+    func removeTransaction() throws {
         let manager = try LedgerManager()
         let tx = try Transaction(
             date: makeDate(2024, 1, 1), description: "Salary",
@@ -877,13 +877,13 @@ account Assets:Savings
                 Posting(accountName: "Income:Salary", amount: Amount(quantity: -100, commodity: "USD")),
             ]
         )
-        try await manager.add(.transaction(tx))
-        #expect(try await manager.remove(.transaction(tx)))
-        #expect(await manager.transactions(for: "Assets:Cash").isEmpty)
+        try manager.add(.transaction(tx))
+        #expect(try manager.remove(.transaction(tx)))
+        #expect(manager.transactions(for: "Assets:Cash").isEmpty)
     }
 
     @Test("remove returns false and does not call save when item is absent")
-    func removeAbsentDoesNotSave() async throws {
+    func removeAbsentDoesNotSave() throws {
         let store   = MockLedgerStore()
         let manager = try LedgerManager(store: store)
         let tx = try Transaction(
@@ -893,15 +893,15 @@ account Assets:Savings
                 Posting(accountName: "Income:Salary", amount: Amount(quantity: -1, commodity: "USD")),
             ]
         )
-        #expect(try await manager.remove(.transaction(tx)) == false)
+        #expect(try manager.remove(.transaction(tx)) == false)
         #expect(store.saveCallCount == 0)
     }
 }
 
 // MARK: - Test doubles
 
-private final class MockLedgerStore: LedgerStore, @unchecked Sendable {
-    nonisolated(unsafe) private(set) var saveCallCount = 0
+private final class MockLedgerStore: LedgerStore {
+    private(set) var saveCallCount = 0
     func load() throws -> Ledger { Ledger() }
     func save(_ ledger: Ledger) throws { saveCallCount += 1 }
 }

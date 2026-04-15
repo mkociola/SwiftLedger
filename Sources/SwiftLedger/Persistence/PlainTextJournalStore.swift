@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Uses `JournalParser` to load and `JournalSerializer` to save, performing
 /// an atomic write to protect against partial writes.
-public final class PlainTextJournalStore: LedgerStore, @unchecked Sendable {
+public final class PlainTextJournalStore: LedgerStore {
     private let url: URL
     private let parser     = JournalParser()
     private let serializer = JournalSerializer()

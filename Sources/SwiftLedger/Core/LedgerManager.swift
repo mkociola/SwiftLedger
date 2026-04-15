@@ -1,5 +1,5 @@
-/// An actor that provides serialised access to a `Ledger` and optional persistence.
-public actor LedgerManager {
+/// Manages a `Ledger` and optional persistence.
+public final class LedgerManager {
     private var ledger: Ledger
     private let store:  (any LedgerStore)?
 

@@ -1,5 +1,5 @@
 /// A non-persistent in-memory store — primarily for testing.
-public final class InMemoryLedgerStore: LedgerStore, @unchecked Sendable {
+public final class InMemoryLedgerStore: LedgerStore {
     private var ledger: Ledger
 
     public init(ledger: Ledger = Ledger()) {
