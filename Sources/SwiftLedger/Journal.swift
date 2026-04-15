@@ -1,41 +1,59 @@
-import Foundation
+/// An `account` directive that appears in a journal file.
+///
+/// Declaring an account explicitly is optional in plain-text accounting;
+/// accounts are also inferred from postings. Directives allow an explicit
+/// account type to be specified.
+public struct AccountDirective: Sendable, Codable, Hashable {
+    public let name: String
+    public let type: AccountType?
 
-/// An append-only, ordered log of all posted transactions.
-public struct Journal: Sendable, Codable, Hashable {
-    private(set) var transactions: [Transaction] = []
+    public init(name: String, type: AccountType? = nil) {
+        self.name = name
+        self.type = type
+    }
+}
 
-    public init() {}
+/// A top-level item stored in an ordered journal AST.
+///
+/// Preserving all item types (including blank lines and comments) ensures
+/// that serialisation round-trips do not alter the file's layout.
+public enum JournalItem: Sendable, Codable, Hashable {
+    case transaction(Transaction)
+    case accountDirective(AccountDirective)
+    case comment(String)
+    case blank
+}
 
-    // MARK: - Appending
+/// An ordered sequence of journal items forming a complete ledger file.
+///
+/// The `Journal` is an immutable value type representing the parse result of
+/// one `.ledger` / `.journal` file. Use `Ledger` to perform queries over a
+/// `Journal`.
+public struct Journal: Sendable, Codable {
+    public private(set) var items: [JournalItem]
 
-    mutating func append(_ transaction: Transaction) {
-        transactions.append(transaction)
+    public init(items: [JournalItem] = []) {
+        self.items = items
     }
 
-    // MARK: - Queries
-
-    /// All transactions involving a specific account.
-    public func transactions(for accountID: UUID) -> [Transaction] {
-        transactions.filter { tx in
-            tx.entries.contains { $0.account.id == accountID }
+    /// All transactions in document order.
+    public var transactions: [Transaction] {
+        items.compactMap {
+            if case .transaction(let t) = $0 { return t }
+            return nil
         }
     }
 
-    /// Transactions within a date range (inclusive on both ends).
-    public func transactions(from start: Date, to end: Date) -> [Transaction] {
-        transactions.filter { $0.date >= start && $0.date <= end }
+    /// All `account` directives in document order.
+    public var accountDirectives: [AccountDirective] {
+        items.compactMap {
+            if case .accountDirective(let d) = $0 { return d }
+            return nil
+        }
     }
 
-    /// Transactions for an account within a date range.
-    public func transactions(for accountID: UUID, from start: Date, to end: Date) -> [Transaction] {
-        transactions(for: accountID).filter { $0.date >= start && $0.date <= end }
-    }
-
-    public var count: Int { transactions.count }
-    public var isEmpty: Bool { transactions.isEmpty }
-
-    /// Returns `true` if a transaction with the given id exists in the journal.
-    public func contains(id: UUID) -> Bool {
-        transactions.contains { $0.id == id }
+    /// Appends an item to the journal.
+    public mutating func append(_ item: JournalItem) {
+        items.append(item)
     }
 }

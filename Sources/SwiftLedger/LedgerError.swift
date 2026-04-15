@@ -2,43 +2,45 @@ import Foundation
 
 /// Errors thrown by the SwiftLedger library.
 public enum LedgerError: Error, Sendable {
-    /// A transaction's debit and credit totals do not balance.
-    case unbalanced(debitTotal: Money, creditTotal: Money)
-    /// A transaction was created with no entries.
+    // MARK: - Parsing
+    case parseError(line: Int, message: String)
+    case invalidDate(String)
+    case invalidAmount(String)
+    case multipleElidedPostings
+    case cannotResolveElision
+
+    // MARK: - Transaction
     case emptyTransaction
-    /// Two amounts in the same operation use different currencies.
-    case currencyMismatch(Money, Money)
-    /// An account with the same ID already exists in the chart of accounts.
-    case duplicateAccount(Account)
-    /// No account matching the given identifier was found.
-    case accountNotFound(UUID)
-    /// An entry amount is zero or negative; amounts must be strictly positive.
-    case invalidAmount(Money)
-    /// An account cannot be removed because it has posted transactions.
-    case accountHasTransactions(Account)
-    /// No transaction matching the given identifier was found in the journal.
-    case transactionNotFound(UUID)
+    case unbalancedTransaction(commodity: String, imbalance: Decimal)
+
+    // MARK: - Commodity
+    case commodityMismatch(String, String)
+
+    // MARK: - Store
+    case storeError(String)
 }
 
 extension LedgerError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .unbalanced(let d, let c):
-            "Transaction is unbalanced: debits \(d) ≠ credits \(c)"
+        case .parseError(let line, let msg):
+            "Parse error on line \(line): \(msg)"
+        case .invalidDate(let s):
+            "Invalid date: '\(s)'"
+        case .invalidAmount(let s):
+            "Invalid amount: '\(s)'"
+        case .multipleElidedPostings:
+            "A transaction may have at most one posting with an elided amount"
+        case .cannotResolveElision:
+            "Cannot resolve elided amount: remaining postings span multiple commodities"
         case .emptyTransaction:
-            "A transaction must contain at least one entry"
-        case .currencyMismatch(let a, let b):
-            "Currency mismatch between \(a.currency) and \(b.currency)"
-        case .duplicateAccount(let a):
-            "Account '\(a.name)' (\(a.id)) already exists"
-        case .accountNotFound(let id):
-            "No account found with id \(id)"
-        case .invalidAmount(let m):
-            "Entry amount must be positive, got \(m)"
-        case .accountHasTransactions(let a):
-            "Cannot remove account '\(a.name)': it has posted transactions"
-        case .transactionNotFound(let id):
-            "No transaction found with id \(id)"
+            "A transaction must contain at least two postings"
+        case .unbalancedTransaction(let c, let imbalance):
+            "Transaction is unbalanced in \(c): off by \(imbalance)"
+        case .commodityMismatch(let a, let b):
+            "Commodity mismatch: '\(a)' vs '\(b)'"
+        case .storeError(let msg):
+            "Store error: \(msg)"
         }
     }
 }

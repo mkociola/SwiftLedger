@@ -1,226 +1,143 @@
-import Foundation
-
-/// The top-level double-entry ledger.
+/// The plain-text accounting query engine.
 ///
-/// `Ledger` combines a ``ChartOfAccounts`` and a ``Journal``. Use it to
-/// register accounts, post transactions, and query balances or reports.
-///
-/// `Ledger` is a value type (`struct`). When used from concurrent contexts
-/// wrap it in an `actor` or protect with your own synchronization.
-public struct Ledger: Sendable, Codable, Hashable {
-    public private(set) var chartOfAccounts: ChartOfAccounts
+/// `Ledger` wraps a `Journal` and provides balance queries, account
+/// enumeration, and transaction filtering. Accounts are inferred automatically
+/// from posting names — no pre-registration is required.
+public struct Ledger: Sendable {
     public private(set) var journal: Journal
 
-    public init() {
-        self.chartOfAccounts = ChartOfAccounts()
-        self.journal = Journal()
+    public init(journal: Journal = Journal()) {
+        self.journal = journal
     }
 
-    // MARK: - Account management
+    // MARK: - Mutation
 
-    /// Registers a new account.
-    /// - Throws: `LedgerError.duplicateAccount` if already present.
-    public mutating func addAccount(_ account: Account) throws {
-        try chartOfAccounts.add(account)
+    /// Posts a new transaction to the journal (appends to the AST).
+    public mutating func post(_ transaction: Transaction) {
+        journal.append(.transaction(transaction))
     }
 
-    /// Removes an account from the chart of accounts.
-    ///
-    /// - Throws: `LedgerError.accountNotFound` if the account does not exist.
-    /// - Throws: `LedgerError.accountHasTransactions` if any posted transaction references this account.
-    public mutating func removeAccount(id: UUID) throws {
-        let account = try chartOfAccounts.account(id: id)
-        let hasTransactions = journal.transactions.contains { tx in
-            tx.entries.contains { $0.account.id == id }
+    /// Appends an `account` directive.
+    public mutating func addAccountDirective(_ directive: AccountDirective) {
+        journal.append(.accountDirective(directive))
+    }
+
+    // MARK: - Accounts
+
+    /// All accounts inferred from posting names, merged with any explicit
+    /// `account` directives. Sorted by name.
+    public var accounts: [Account] {
+        var seen: [String: Account] = [:]
+
+        // Explicit directives take precedence for type metadata.
+        for d in journal.accountDirectives {
+            let a = Account(name: d.name, type: d.type)
+            seen[d.name] = a
         }
-        guard !hasTransactions else { throw LedgerError.accountHasTransactions(account) }
-        chartOfAccounts.remove(id: id)
-    }
 
-    // MARK: - Posting
-
-    /// Validates and posts a transaction to the journal.
-    ///
-    /// All accounts referenced in the transaction's entries must already exist
-    /// in the chart of accounts, and each entry's currency must match the
-    /// canonical account currency in the chart.
-    ///
-    /// - Throws: `LedgerError.accountNotFound` if an entry references an unknown account.
-    /// - Throws: `LedgerError.currencyMismatch` if an entry's currency doesn't match the chart account.
-    public mutating func post(_ transaction: Transaction) throws {
-        for entry in transaction.entries {
-            let canonical = try chartOfAccounts.account(id: entry.account.id)
-            guard entry.amount.currency == canonical.currency else {
-                throw LedgerError.currencyMismatch(
-                    entry.amount,
-                    Money(.zero, canonical.currency)
-                )
+        // Infer from postings.
+        for t in journal.transactions {
+            for p in t.postings {
+                if seen[p.accountName] == nil {
+                    seen[p.accountName] = Account(name: p.accountName)
+                }
             }
         }
-        journal.append(transaction)
-    }
 
-    /// Posts a reversing transaction for `transaction`.
-    ///
-    /// - Parameters:
-    ///   - transaction: The transaction to reverse. Must already be posted to this ledger.
-    ///   - memo: Override memo for the reversing entry.
-    ///   - date: Date of the reversing transaction; defaults to today.
-    /// - Throws: `LedgerError.transactionNotFound` if the transaction is not in this ledger's journal.
-    public mutating func reverse(
-        _ transaction: Transaction,
-        memo: String? = nil,
-        date: Date = Date()
-    ) throws {
-        guard journal.contains(id: transaction.id) else {
-            throw LedgerError.transactionNotFound(transaction.id)
+        // Also infer all parent segments.
+        for name in Array(seen.keys) {
+            var parts = name.split(separator: ":")
+            while parts.count > 1 {
+                parts.removeLast()
+                let parentName = parts.joined(separator: ":")
+                if seen[parentName] == nil {
+                    seen[parentName] = Account(name: parentName)
+                }
+            }
         }
-        let reversed = try transaction.reversed(memo: memo, date: date)
-        try post(reversed)
+
+        return seen.values.sorted { $0.name < $1.name }
     }
 
     // MARK: - Balance queries
 
-    /// Computes the current balance for a single account.
-    /// - Throws: `LedgerError.accountNotFound` if the account is not in the chart.
-    public func balance(for accountID: UUID) throws -> AccountBalance {
-        let account = try chartOfAccounts.account(id: accountID)
-        return computeBalance(for: account, in: journal.transactions)
+    /// Returns the net balance for an exact account name, grouped by commodity.
+    /// An optional `asOf` date filters to transactions on or before that date.
+    public func balance(for accountName: String, asOf: JournalDate? = nil) -> [Amount] {
+        postings(for: accountName, asOf: asOf)
+            .map(\.amount)
+            .netByCommodity()
     }
 
-    /// Computes the balance for a single account as of a historical date (inclusive).
-    /// - Throws: `LedgerError.accountNotFound` if the account is not in the chart.
-    public func balance(for accountID: UUID, asOf date: Date) throws -> AccountBalance {
-        let account = try chartOfAccounts.account(id: accountID)
-        return computeBalance(for: account, in: journal.transactions, upTo: date)
+    /// Returns the net balance for an account and all of its sub-accounts,
+    /// grouped by commodity.
+    public func subtreeBalance(forPrefix prefix: String, asOf: JournalDate? = nil) -> [Amount] {
+        postingsInSubtree(prefix: prefix, asOf: asOf)
+            .map(\.amount)
+            .netByCommodity()
     }
 
-    /// Returns individual balances for every account whose name falls under `prefix`.
-    ///
-    /// Includes the account named exactly `prefix` (if any) plus all accounts
-    /// whose name begins with `prefix + ":"`. For example, passing
-    /// `"Expenses:Food"` returns balances for `"Expenses:Food"`,
-    /// `"Expenses:Food:Groceries"`, `"Expenses:Food:Dining Out"`, etc.
-    ///
-    /// Accounts in different currencies are returned as separate `AccountBalance`
-    /// entries — group by `account.currency` to aggregate per currency.
-    public func subtreeBalances(forPrefix prefix: String) -> [AccountBalance] {
-        chartOfAccounts.accounts(withPrefix: prefix).map {
-            computeBalance(for: $0, in: journal.transactions)
+    /// Returns all account balances as a dictionary keyed by account name.
+    /// Each value is a list of `Amount` (one per commodity).
+    public func allBalances(asOf: JournalDate? = nil) -> [String: [Amount]] {
+        var result: [String: [Amount]] = [:]
+        for account in accounts {
+            let bal = balance(for: account.name, asOf: asOf)
+            if !bal.isEmpty {
+                result[account.name] = bal
+            }
+        }
+        return result
+    }
+
+    // MARK: - Transaction queries
+
+    /// Returns transactions that contain at least one posting for an exact
+    /// account name, sorted by date then by original document order.
+    public func transactions(for accountName: String) -> [Transaction] {
+        filteredTransactions { t in
+            t.postings.contains { $0.accountName == accountName }
         }
     }
 
-    /// Returns subtree balances as of a historical date (inclusive).
-    public func subtreeBalances(forPrefix prefix: String, asOf date: Date) -> [AccountBalance] {
-        chartOfAccounts.accounts(withPrefix: prefix).map {
-            computeBalance(for: $0, in: journal.transactions, upTo: date)
-        }
-    }
-
-    /// Returns balances for every account in the chart.
-    public func allBalances() -> [AccountBalance] {
-        chartOfAccounts.all.map { computeBalance(for: $0, in: journal.transactions) }
-    }
-
-    /// Returns balances for every account in the chart as of a historical date (inclusive).
-    public func allBalances(asOf date: Date) -> [AccountBalance] {
-        chartOfAccounts.all.map { computeBalance(for: $0, in: journal.transactions, upTo: date) }
-    }
-
-    /// Computes a trial balance: all account balances grouped and validated.
-    ///
-    /// In a correctly maintained ledger the sum of all debit totals equals
-    /// the sum of all credit totals.
-    ///
-    /// - Returns: A `TrialBalance` snapshot.
-    public func trialBalance() -> TrialBalance {
-        TrialBalance(balances: allBalances())
-    }
-
-    // MARK: - Transaction history
-
-    /// All transactions that touch a given account, optionally filtered by date range.
-    public func transactions(
-        for accountID: UUID,
-        from start: Date? = nil,
-        to end: Date? = nil
-    ) throws -> [Transaction] {
-        _ = try chartOfAccounts.account(id: accountID)
-        if let start, let end {
-            return journal.transactions(for: accountID, from: start, to: end)
-        }
-        return journal.transactions(for: accountID)
-    }
-
-    /// All transactions that touch any account in the subtree rooted at `prefix`.
-    ///
-    /// Each transaction is returned at most once, even if it touches multiple
-    /// accounts in the subtree.
+    /// Returns transactions that contain at least one posting in the account
+    /// subtree rooted at `prefix`.
     public func transactions(forPrefix prefix: String) -> [Transaction] {
-        let ids = Set(chartOfAccounts.accounts(withPrefix: prefix).map(\.id))
-        return journal.transactions.filter { tx in
-            tx.entries.contains { ids.contains($0.account.id) }
+        filteredTransactions { t in
+            t.postings.contains { isInSubtree($0.accountName, prefix: prefix) }
+        }
+    }
+
+    /// Returns all transactions within an optional date range (inclusive).
+    public func transactions(from: JournalDate? = nil, to: JournalDate? = nil) -> [Transaction] {
+        filteredTransactions { t in
+            if let from = from, t.date < from { return false }
+            if let to   = to,   t.date > to   { return false }
+            return true
         }
     }
 
     // MARK: - Private helpers
 
-    private func computeBalance(
-        for account: Account,
-        in transactions: [Transaction],
-        upTo date: Date? = nil
-    ) -> AccountBalance {
-        let filtered = date.map { d in transactions.filter { $0.date <= d } } ?? transactions
-        let relevantEntries = filtered
-            .flatMap(\.entries)
-            .filter { $0.account.id == account.id }
-
-        let zero = Money(.zero, account.currency)
-        let debitTotal = relevantEntries
-            .filter { $0.side == .debit }
-            .map(\.amount)
-            .reduce(zero) { Money($0.amount + $1.amount, account.currency) }
-
-        let creditTotal = relevantEntries
-            .filter { $0.side == .credit }
-            .map(\.amount)
-            .reduce(zero) { Money($0.amount + $1.amount, account.currency) }
-
-        return AccountBalance(account: account, debitTotal: debitTotal, creditTotal: creditTotal)
-    }
-}
-
-// MARK: - Trial Balance
-
-/// A snapshot of all account balances used to verify the ledger is in balance.
-public struct TrialBalance: Sendable, Codable, Hashable {
-    public let balances: [AccountBalance]
-
-    /// `true` if total debits equal total credits across all accounts.
-    public var isBalanced: Bool {
-        let currencies = Set(balances.map(\.account.currency))
-        for currency in currencies {
-            let inCurrency = balances.filter { $0.account.currency == currency }
-            let totalDebits = inCurrency.reduce(Decimal.zero) { $0 + $1.debitTotal.amount }
-            let totalCredits = inCurrency.reduce(Decimal.zero) { $0 + $1.creditTotal.amount }
-            if totalDebits != totalCredits { return false }
-        }
-        return true
+    private func filteredTransactions(_ predicate: (Transaction) -> Bool) -> [Transaction] {
+        journal.transactions.filter(predicate)
     }
 
-    /// Total debit amounts per currency.
-    public func totalDebits(currency: CurrencyCode) -> Money {
-        let sum = balances
-            .filter { $0.account.currency == currency }
-            .reduce(Decimal.zero) { $0 + $1.debitTotal.amount }
-        return Money(sum, currency)
+    private func postings(for accountName: String, asOf: JournalDate?) -> [Posting] {
+        journal.transactions
+            .filter { asOf == nil || $0.date <= asOf! }
+            .flatMap(\.postings)
+            .filter { $0.accountName == accountName }
     }
 
-    /// Total credit amounts per currency.
-    public func totalCredits(currency: CurrencyCode) -> Money {
-        let sum = balances
-            .filter { $0.account.currency == currency }
-            .reduce(Decimal.zero) { $0 + $1.creditTotal.amount }
-        return Money(sum, currency)
+    private func postingsInSubtree(prefix: String, asOf: JournalDate?) -> [Posting] {
+        journal.transactions
+            .filter { asOf == nil || $0.date <= asOf! }
+            .flatMap(\.postings)
+            .filter { isInSubtree($0.accountName, prefix: prefix) }
+    }
+
+    private func isInSubtree(_ name: String, prefix: String) -> Bool {
+        name == prefix || name.hasPrefix(prefix + ":")
     }
 }

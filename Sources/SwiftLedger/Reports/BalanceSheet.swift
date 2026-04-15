@@ -1,75 +1,42 @@
-import Foundation
-
-/// A balance sheet snapshot at a specific point in time.
+/// A balance sheet (statement of financial position) as of a given date.
 ///
-/// Verifies the fundamental accounting equation:
-/// **Assets = Liabilities + Equity + Net Income**
-///
-/// Net income (Revenue − Expenses) is included because until the books are
-/// formally closed, revenue and expense balances are not yet rolled into equity.
-/// If the ledger uses period-end closing entries, `netIncome` will be zero and
-/// the classic `Assets = Liabilities + Equity` equation holds.
-public struct BalanceSheet: Sendable, Codable {
-    public let date: Date
-    public let currency: CurrencyCode
-
-    public let assets: [AccountBalance]
+/// Shows Assets, Liabilities, and Equity balances.
+/// `isBalanced` is `true` when the sum of ALL raw account amounts equals zero,
+/// which is always true for a well-formed double-entry journal.
+public struct BalanceSheet: Sendable {
+    public let asOf: JournalDate
+    public let assets:      [AccountBalance]
     public let liabilities: [AccountBalance]
-    public let equity: [AccountBalance]
-    /// Revenue and expense balances as of `date` (used to compute `netIncome`).
-    public let revenues: [AccountBalance]
-    public let expenses: [AccountBalance]
+    public let equity:      [AccountBalance]
 
-    public var totalAssets: Money {
-        sum(balances: assets)
-    }
+    /// `true` when the entire journal balances (sum of all postings = 0 per commodity).
+    public let isBalanced: Bool
 
-    public var totalLiabilities: Money {
-        sum(balances: liabilities)
-    }
+    public init(ledger: Ledger, asOf: JournalDate? = nil) {
+        let date       = asOf ?? JournalDate.today
+        self.asOf      = date
+        let balances   = ledger.allBalances(asOf: date)
+        let accounts   = ledger.accounts
 
-    public var totalEquity: Money {
-        sum(balances: equity)
-    }
+        func accountBalances(for type: AccountType) -> [AccountBalance] {
+            accounts
+                .filter { $0.type == type }
+                .compactMap { acc -> AccountBalance? in
+                    guard let amounts = balances[acc.name], !amounts.isEmpty else { return nil }
+                    let nonZero = amounts.filter { !$0.isZero }
+                    return nonZero.isEmpty ? nil : AccountBalance(account: acc, amounts: nonZero)
+                }
+        }
 
-    /// Current-period net income (Revenue − Expenses). Zero on closed books.
-    public var netIncome: Money {
-        Money(
-            revenues.reduce(Decimal.zero) { $0 + $1.netBalance.amount }
-            - expenses.reduce(Decimal.zero) { $0 + $1.netBalance.amount },
-            currency
-        )
-    }
+        self.assets      = accountBalances(for: .asset)
+        self.liabilities = accountBalances(for: .liability)
+        self.equity      = accountBalances(for: .equity)
 
-    /// Total of liabilities, equity, and current-period net income.
-    public var totalLiabilitiesAndEquity: Money {
-        Money(totalLiabilities.amount + totalEquity.amount + netIncome.amount, currency)
-    }
-
-    /// `true` when Assets = Liabilities + Equity + Net Income.
-    public var isBalanced: Bool {
-        totalAssets.amount == totalLiabilitiesAndEquity.amount
-    }
-
-    // MARK: - Init
-
-    /// Generates a balance sheet from a ledger as of the given date.
-    public init(ledger: Ledger, date: Date = Date(), currency: CurrencyCode) {
-        self.date = date
-        self.currency = currency.uppercased()
-
-        let balances = ledger.allBalances(asOf: date).filter { $0.account.currency == currency.uppercased() }
-        self.assets      = balances.filter { $0.account.type == .asset }
-        self.liabilities = balances.filter { $0.account.type == .liability }
-        self.equity      = balances.filter { $0.account.type == .equity }
-        self.revenues    = balances.filter { $0.account.type == .revenue }
-        self.expenses    = balances.filter { $0.account.type == .expense }
-    }
-
-    // MARK: - Private
-
-    private func sum(balances: [AccountBalance]) -> Money {
-        let total = balances.reduce(Decimal.zero) { $0 + $1.netBalance.amount }
-        return Money(total, currency)
+        // Balance check: all raw posting amounts should net to zero per commodity
+        let allAmounts = ledger.journal.transactions
+            .flatMap(\.postings)
+            .map(\.amount)
+        let nets = allAmounts.netByCommodity()
+        self.isBalanced = nets.allSatisfy(\.isZero)
     }
 }

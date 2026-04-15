@@ -1,65 +1,32 @@
-import Foundation
-
-/// A named account in the chart of accounts.
-public struct Account: Sendable, Hashable {
-    /// Stable unique identifier.
-    public let id: UUID
-    /// Human-readable account name (e.g. "Cash", "Accounts Receivable").
+/// An account inferred from or declared in a journal.
+///
+/// Accounts are identified purely by their name (e.g. `"Expenses:Food:Groceries"`).
+/// There is no mandatory pre-registration — accounts are derived automatically
+/// from posting account names.
+public struct Account: Sendable, Codable, Hashable {
+    /// Full account name (e.g. `"Assets:Checking"`, `"Expenses:Food:Groceries"`).
     public let name: String
-    /// The fundamental accounting category.
+    /// The accounting category, inferred from the name root or set explicitly.
     public let type: AccountType
-    /// Optional description or notes.
-    public let description: String
-    /// ISO 4217 currency code for this account.
-    public let currency: CurrencyCode
 
-    public init(
-        id: UUID = UUID(),
-        name: String,
-        type: AccountType,
-        description: String = "",
-        currency: CurrencyCode
-    ) {
-        let upper = currency.uppercased()
-        precondition(
-            upper.count == 3 && upper.allSatisfy(\.isLetter),
-            "Invalid currency code '\(currency)': must be a 3-letter ISO 4217 code (e.g. \"USD\")"
-        )
-        self.id = id
+    public init(name: String, type: AccountType? = nil) {
         self.name = name
-        self.type = type
-        self.description = description
-        self.currency = upper
+        self.type = type ?? AccountType.inferred(from: name)
     }
-}
 
-// MARK: - Identifiable
+    /// The immediate parent account name, or `nil` if this is a top-level account.
+    ///
+    ///     Account(name: "Expenses:Food:Groceries").parent // "Expenses:Food"
+    public var parent: String? {
+        guard let idx = name.lastIndex(of: ":") else { return nil }
+        return String(name[..<idx])
+    }
 
-extension Account: Identifiable {}
-
-// MARK: - Codable
-
-extension Account: Codable {
-    private enum CodingKeys: String, CodingKey { case id, name, type, description, currency }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let id          = try container.decode(UUID.self,        forKey: .id)
-        let name        = try container.decode(String.self,      forKey: .name)
-        let type        = try container.decode(AccountType.self, forKey: .type)
-        let description = try container.decode(String.self,      forKey: .description)
-        let currency    = try container.decode(String.self,      forKey: .currency)
-        let upper = currency.uppercased()
-        guard upper.count == 3 && upper.allSatisfy(\.isLetter) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .currency, in: container,
-                debugDescription: "Invalid currency code '\(currency)': must be 3 letters (ISO 4217)"
-            )
-        }
-        self.id          = id
-        self.name        = name
-        self.type        = type
-        self.description = description
-        self.currency    = upper
+    /// The short name of the account (the last segment after the final `:`).
+    ///
+    ///     Account(name: "Expenses:Food:Groceries").shortName // "Groceries"
+    public var shortName: String {
+        guard let idx = name.lastIndex(of: ":") else { return name }
+        return String(name[name.index(after: idx)...])
     }
 }

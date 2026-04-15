@@ -1,61 +1,46 @@
 import Foundation
 
-/// A line in an account statement with a running balance.
-public struct AccountStatementLine: Sendable, Codable, Hashable {
-    public let transaction: Transaction
-    /// The entry for this account within the transaction.
-    public let entry: Entry
-    /// Running balance after this line (on the account's normal side).
-    public let runningBalance: Money
-}
-
-/// A chronological statement of all activity for a single account,
-/// including a running balance after each transaction.
-public struct AccountStatement: Sendable, Codable {
-    public let account: Account
-    public let periodStart: Date?
-    public let periodEnd: Date?
-    public let lines: [AccountStatementLine]
-
-    /// The closing balance (last running balance, or zero if no transactions).
-    public var closingBalance: Money {
-        lines.last?.runningBalance ?? Money(.zero, account.currency)
+/// An account statement: a chronological list of transactions affecting one
+/// account, with a running balance per commodity.
+public struct AccountStatement: Sendable {
+    public struct Line: Sendable {
+        public let transaction: Transaction
+        public let posting: Posting
+        /// Running balance after this posting, per commodity.
+        public let runningBalance: [Amount]
     }
 
-    // MARK: - Init
+    public let accountName: String
+    public let lines: [Line]
 
-    public init(
-        ledger: Ledger,
-        accountID: UUID,
-        from start: Date? = nil,
-        to end: Date? = nil
-    ) throws {
-        let account = try ledger.chartOfAccounts.account(id: accountID)
-        self.account = account
-        self.periodStart = start
-        self.periodEnd = end
+    public init(ledger: Ledger, accountName: String, from: JournalDate? = nil, to: JournalDate? = nil) {
+        self.accountName = accountName
 
-        var txns = ledger.journal.transactions(for: accountID)
-        if let start { txns = txns.filter { $0.date >= start } }
-        if let end   { txns = txns.filter { $0.date <= end } }
-        txns.sort { $0.date < $1.date }
+        var balances: [String: Decimal] = [:]
+        var prefixFlags: [String: Bool]  = [:]
+        var resultLines: [Line]          = []
 
-        var running = Decimal.zero
-        self.lines = txns.compactMap { tx -> AccountStatementLine? in
-            guard let entry = tx.entries.first(where: { $0.account.id == accountID }) else {
-                return nil
+        let txs = ledger.journal.transactions
+            .filter {
+                if let f = from, $0.date < f { return false }
+                if let t = to,   $0.date > t { return false }
+                return $0.postings.contains { $0.accountName == accountName }
             }
-            // Increase running balance when on the normal side, decrease otherwise.
-            if entry.side == account.type.normalBalanceSide {
-                running += entry.amount.amount
-            } else {
-                running -= entry.amount.amount
+
+        for tx in txs {
+            for posting in tx.postings where posting.accountName == accountName {
+                let c = posting.amount.commodity
+                balances[c, default: .zero] += posting.amount.quantity
+                prefixFlags[c] = posting.amount.commodityIsPrefix
+
+                let runningBalance = balances.map { (commodity, qty) in
+                    Amount(quantity: qty, commodity: commodity, commodityIsPrefix: prefixFlags[commodity] ?? false)
+                }.sorted { $0.commodity < $1.commodity }
+
+                resultLines.append(Line(transaction: tx, posting: posting, runningBalance: runningBalance))
             }
-            return AccountStatementLine(
-                transaction: tx,
-                entry: entry,
-                runningBalance: Money(running, account.currency)
-            )
         }
+
+        self.lines = resultLines
     }
 }
