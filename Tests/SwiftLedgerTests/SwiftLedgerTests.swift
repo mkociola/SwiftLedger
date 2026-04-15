@@ -215,9 +215,10 @@ import Foundation
     @Test func balanceSheetBalances() throws {
         let ledger = try populatedLedger()
         let bs = BalanceSheet(ledger: ledger, currency: "USD")
-        // Assets: 1000 + 300 - 100 = 1200; Equity: 1000; net income goes to equity via reports
-        // We just check the equation holds at raw balance level
-        #expect(bs.totalAssets.amount > 0)
+        // Assets = 1200, Liabilities = 0, Equity = 1000, Net Income = 200
+        #expect(bs.totalAssets.amount == 1200)
+        #expect(bs.netIncome.amount == 200)
+        #expect(bs.isBalanced)
     }
 
     @Test func incomeStatementNetIncome() throws {
@@ -388,6 +389,22 @@ import Foundation
         let reversed = try tx.reversed()
         #expect(reversed.memo == "Reversal of: Sale")
     }
+
+    @Test func reversingUnpostedTransactionThrows() throws {
+        var ledger = Ledger()
+        let cash    = Account(name: "Cash",    type: .asset,   currency: "USD")
+        let revenue = Account(name: "Revenue", type: .revenue, currency: "USD")
+        try ledger.addAccount(cash)
+        try ledger.addAccount(revenue)
+
+        let unposted = try Transaction(memo: "Not posted", entries: [
+            try .debit(account: cash,    amount: Money(100, "USD")),
+            try .credit(account: revenue, amount: Money(100, "USD")),
+        ])
+        #expect(throws: LedgerError.self) {
+            try ledger.reverse(unposted)
+        }
+    }
 }
 
 // MARK: - Historical Balance Tests
@@ -476,5 +493,60 @@ import Foundation
         let store = FileLedgerStore(url: url)
         let ledger = try await store.load()
         #expect(ledger.chartOfAccounts.isEmpty)
+    }
+
+    @Test func transactionDateRoundTripPreservesSubseconds() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "test-ledger-dates-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = FileLedgerStore(url: url)
+        var ledger = Ledger()
+        let cash    = Account(name: "Cash",    type: .asset,   currency: "USD")
+        let revenue = Account(name: "Revenue", type: .revenue, currency: "USD")
+        try ledger.addAccount(cash)
+        try ledger.addAccount(revenue)
+
+        // Use a date with sub-second precision
+        let date = Date(timeIntervalSince1970: 1_700_000_000.123456)
+        let tx = try Transaction(date: date, memo: "Precision test", entries: [
+            try .debit(account: cash,    amount: Money(1, "USD")),
+            try .credit(account: revenue, amount: Money(1, "USD")),
+        ])
+        try ledger.post(tx)
+        try await store.save(ledger)
+
+        let loaded = try await store.load()
+        let loadedDate = loaded.journal.transactions.first!.date
+        // Dates must be equal within 1 millisecond
+        #expect(abs(loadedDate.timeIntervalSince(date)) < 0.001)
+    }
+}
+
+// MARK: - Decodable Validation Tests
+
+@Suite("Decodable Validation") struct DecodableValidationTests {
+    @Test func decodingInvalidCurrencyInMoneyThrows() throws {
+        let json = #"{"amount":"100","currency":"INVALID"}"#
+        let data = json.data(using: .utf8)!
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(Money.self, from: data)
+        }
+    }
+
+    @Test func decodingInvalidCurrencyInAccountThrows() throws {
+        let json = #"{"id":"00000000-0000-0000-0000-000000000001","name":"Cash","type":"asset","description":"","currency":"XX"}"#
+        let data = json.data(using: .utf8)!
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(Account.self, from: data)
+        }
+    }
+
+    @Test func decodingValidMoneySucceeds() throws {
+        let json = #"{"amount":42.5,"currency":"EUR"}"#
+        let data = json.data(using: .utf8)!
+        let money = try JSONDecoder().decode(Money.self, from: data)
+        #expect(money.currency == "EUR")
+        #expect(money.amount == Decimal(string: "42.5")!)
     }
 }

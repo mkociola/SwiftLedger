@@ -6,7 +6,7 @@ public typealias CurrencyCode = String
 /// An immutable monetary amount paired with a currency.
 ///
 /// Uses `Decimal` internally to avoid floating-point rounding errors.
-public struct Money: Sendable, Codable, Hashable, CustomStringConvertible {
+public struct Money: Sendable, Hashable, CustomStringConvertible {
     public let amount: Decimal
     public let currency: CurrencyCode
 
@@ -23,6 +23,27 @@ public struct Money: Sendable, Codable, Hashable, CustomStringConvertible {
     public var isZero: Bool { amount == .zero }
 
     public var description: String { "\(amount) \(currency)" }
+}
+
+// MARK: - Codable
+
+extension Money: Codable {
+    private enum CodingKeys: String, CodingKey { case amount, currency }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let amount   = try container.decode(Decimal.self, forKey: .amount)
+        let currency = try container.decode(String.self, forKey: .currency)
+        let upper = currency.uppercased()
+        guard upper.count == 3 && upper.allSatisfy(\.isLetter) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .currency, in: container,
+                debugDescription: "Invalid currency code '\(currency)': must be 3 letters (ISO 4217)"
+            )
+        }
+        self.amount   = amount
+        self.currency = upper
+    }
 }
 
 // MARK: - Arithmetic
@@ -53,17 +74,16 @@ extension Money {
     public var negated: Money { Money(-amount, currency) }
 }
 
-// MARK: - Comparable
+// MARK: - Comparison
 
-extension Money: Comparable {
-    /// Compares two monetary amounts.
-    /// - Precondition: Both values must share the same currency.
-    public static func < (lhs: Money, rhs: Money) -> Bool {
-        precondition(
-            lhs.currency == rhs.currency,
-            "Cannot compare Money values of different currencies: \(lhs.currency) vs \(rhs.currency)"
-        )
-        return lhs.amount < rhs.amount
+extension Money {
+    /// Returns `true` if `self` is less than `rhs`.
+    /// - Throws: `LedgerError.currencyMismatch` if currencies differ.
+    public func isLess(than rhs: Money) throws -> Bool {
+        guard currency == rhs.currency else {
+            throw LedgerError.currencyMismatch(self, rhs)
+        }
+        return amount < rhs.amount
     }
 }
 

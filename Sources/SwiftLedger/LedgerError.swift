@@ -16,6 +16,8 @@ public enum LedgerError: Error, Sendable {
     case invalidAmount(Money)
     /// An account cannot be removed because it has posted transactions.
     case accountHasTransactions(Account)
+    /// No transaction matching the given identifier was found in the journal.
+    case transactionNotFound(UUID)
 }
 
 extension LedgerError: LocalizedError {
@@ -35,6 +37,8 @@ extension LedgerError: LocalizedError {
             "Entry amount must be positive, got \(m)"
         case .accountHasTransactions(let a):
             "Cannot remove account '\(a.name)': it has posted transactions"
+        case .transactionNotFound(let id):
+            "No transaction found with id \(id)"
         }
     }
 }

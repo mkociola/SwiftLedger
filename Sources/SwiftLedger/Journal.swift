@@ -33,4 +33,9 @@ public struct Journal: Sendable, Codable, Hashable {
 
     public var count: Int { transactions.count }
     public var isEmpty: Bool { transactions.isEmpty }
+
+    /// Returns `true` if a transaction with the given id exists in the journal.
+    public func contains(id: UUID) -> Bool {
+        transactions.contains { $0.id == id }
+    }
 }

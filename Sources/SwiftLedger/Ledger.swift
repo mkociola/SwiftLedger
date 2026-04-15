@@ -42,12 +42,20 @@ public struct Ledger: Sendable, Codable, Hashable {
     /// Validates and posts a transaction to the journal.
     ///
     /// All accounts referenced in the transaction's entries must already exist
-    /// in the chart of accounts.
+    /// in the chart of accounts, and each entry's currency must match the
+    /// canonical account currency in the chart.
     ///
     /// - Throws: `LedgerError.accountNotFound` if an entry references an unknown account.
+    /// - Throws: `LedgerError.currencyMismatch` if an entry's currency doesn't match the chart account.
     public mutating func post(_ transaction: Transaction) throws {
         for entry in transaction.entries {
-            _ = try chartOfAccounts.account(id: entry.account.id)
+            let canonical = try chartOfAccounts.account(id: entry.account.id)
+            guard entry.amount.currency == canonical.currency else {
+                throw LedgerError.currencyMismatch(
+                    entry.amount,
+                    Money(.zero, canonical.currency)
+                )
+            }
         }
         journal.append(transaction)
     }
@@ -58,11 +66,15 @@ public struct Ledger: Sendable, Codable, Hashable {
     ///   - transaction: The transaction to reverse. Must already be posted to this ledger.
     ///   - memo: Override memo for the reversing entry.
     ///   - date: Date of the reversing transaction; defaults to today.
+    /// - Throws: `LedgerError.transactionNotFound` if the transaction is not in this ledger's journal.
     public mutating func reverse(
         _ transaction: Transaction,
         memo: String? = nil,
         date: Date = Date()
     ) throws {
+        guard journal.contains(id: transaction.id) else {
+            throw LedgerError.transactionNotFound(transaction.id)
+        }
         let reversed = try transaction.reversed(memo: memo, date: date)
         try post(reversed)
     }

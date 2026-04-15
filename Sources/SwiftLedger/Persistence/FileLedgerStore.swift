@@ -17,12 +17,30 @@ public actor FileLedgerStore: LedgerStore {
 
     public init(url: URL) {
         self.url = url
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
         let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
+        enc.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
+        }
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         self.encoder = enc
+
         let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
+        dec.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let string = try container.decode(String.self)
+            guard let date = formatter.date(from: string) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Cannot parse date: \(string)"
+                )
+            }
+            return date
+        }
         self.decoder = dec
     }
 

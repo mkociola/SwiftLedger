@@ -56,6 +56,7 @@ public actor LedgerManager {
     }
 
     /// Posts a reversing transaction for `transaction`.
+    /// - Throws: `LedgerError.transactionNotFound` if the transaction was not posted to this ledger.
     public func reverse(
         _ transaction: Transaction,
         memo: String? = nil,
