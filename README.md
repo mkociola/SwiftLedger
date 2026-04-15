@@ -173,7 +173,7 @@ let bad = try Transaction(
 )
 ```
 
-**Signs:** there are no `.debit` / `.credit` helpers. Amounts are signed `Decimal` values. In the plain-text accounting convention: positive = value flowing *into* an account; negative = value flowing *out*.
+**Signs:** amounts are signed `Decimal` values. Positive = value flowing *into* an account; negative = value flowing *out*.
 
 `Transaction` conforms to `Identifiable` (stable `id: UUID`) for safe use in SwiftUI lists.
 
