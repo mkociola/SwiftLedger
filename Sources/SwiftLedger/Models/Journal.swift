@@ -56,4 +56,18 @@ public struct Journal: Sendable, Codable {
     public mutating func append(_ item: JournalItem) {
         items.append(item)
     }
+
+    /// Removes the first occurrence of `item` from the journal.
+    ///
+    /// Equality is value-based: if the journal contains two structurally
+    /// identical items, only the first one is removed.
+    ///
+    /// - Returns: `true` if a matching item was found and removed;
+    ///   `false` if no match exists.
+    @discardableResult
+    public mutating func remove(_ item: JournalItem) -> Bool {
+        guard let idx = items.firstIndex(of: item) else { return false }
+        items.remove(at: idx)
+        return true
+    }
 }

@@ -8,7 +8,8 @@ import Foundation
 ///
 /// Use `JournalParser` to build transactions from plain-text `.ledger` files,
 /// which also resolves elided amounts before constructing `Transaction` objects.
-public struct Transaction: Sendable, Codable, Hashable {
+public struct Transaction: Identifiable, Sendable, Codable, Hashable {
+    public let id: UUID
     /// The effective date of the transaction.
     public let date: JournalDate
     /// Optional auxiliary/effective date (ledger `=` syntax).
@@ -30,6 +31,7 @@ public struct Transaction: Sendable, Codable, Hashable {
     /// - Throws: `LedgerError.unbalancedTransaction` if postings do not sum to zero
     ///   for any commodity.
     public init(
+        id: UUID = UUID(),
         date: JournalDate,
         auxDate: JournalDate? = nil,
         status: ClearingStatus = .unmarked,
@@ -40,6 +42,7 @@ public struct Transaction: Sendable, Codable, Hashable {
     ) throws {
         guard postings.count >= 2 else { throw LedgerError.emptyTransaction }
         try Self.validateBalance(postings)
+        self.id          = id
         self.date        = date
         self.auxDate     = auxDate
         self.status      = status

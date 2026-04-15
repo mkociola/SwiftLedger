@@ -24,5 +24,5 @@
 ///         Posting(accountName: "Assets:Checking", amount: Amount(quantity: -5, commodity: "$", commodityIsPrefix: true)),
 ///     ]
 /// )
-/// ledger.post(tx)
+/// ledger.add(.transaction(tx))
 /// ```

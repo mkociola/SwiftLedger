@@ -12,14 +12,18 @@ public struct Ledger: Sendable {
 
     // MARK: - Mutation
 
-    /// Posts a new transaction to the journal (appends to the AST).
-    public mutating func post(_ transaction: Transaction) {
-        journal.append(.transaction(transaction))
+    /// Appends an item to the journal.
+    public mutating func add(_ item: JournalItem) {
+        journal.append(item)
     }
 
-    /// Appends an `account` directive.
-    public mutating func addAccountDirective(_ directive: AccountDirective) {
-        journal.append(.accountDirective(directive))
+    /// Removes the first occurrence of `item` from the journal.
+    ///
+    /// - Returns: `true` if a matching item was found and removed;
+    ///   `false` if no match exists.
+    @discardableResult
+    public mutating func remove(_ item: JournalItem) -> Bool {
+        journal.remove(item)
     }
 
     // MARK: - Accounts

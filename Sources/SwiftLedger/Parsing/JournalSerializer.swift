@@ -90,7 +90,7 @@ public struct JournalSerializer {
     }
 
     private func formatAmount(_ a: Amount) -> String {
-        let q = formatDecimal(abs(a.quantity))
+        let q = abs(a.quantity).description
         let sign = a.quantity < 0 ? "-" : ""
         if a.commodityIsPrefix {
             return "\(sign)\(a.commodity)\(q)"

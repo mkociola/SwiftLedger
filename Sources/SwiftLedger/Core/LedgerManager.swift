@@ -10,14 +10,26 @@ public actor LedgerManager {
 
     // MARK: - Mutations
 
-    public func post(_ transaction: Transaction) throws {
-        ledger.post(transaction)
+    public func add(_ item: JournalItem) throws {
+        ledger.add(item)
         try store?.save(ledger)
     }
 
-    public func addAccountDirective(_ directive: AccountDirective) throws {
-        ledger.addAccountDirective(directive)
-        try store?.save(ledger)
+    /// Removes the first occurrence of `item` from the journal.
+    ///
+    /// Equality is value-based: if the journal contains two structurally
+    /// identical items, only the first one is removed.
+    ///
+    /// - Returns: `true` if a matching item was found and removed;
+    ///   `false` if no match exists.
+    /// - Throws: Any error raised by the store's `save` method.
+    @discardableResult
+    public func remove(_ item: JournalItem) throws -> Bool {
+        var updated = ledger
+        guard updated.remove(item) else { return false }
+        try store?.save(updated)
+        ledger = updated
+        return true
     }
 
     // MARK: - Queries

@@ -1,607 +1,916 @@
-import XCTest
+import Testing
+import Foundation
 @testable import SwiftLedger
 
-final class SwiftLedgerTests: XCTestCase {
+// MARK: - Helpers
 
-    // MARK: - JournalDate
+private func makeDate(_ year: Int, _ month: Int, _ day: Int) throws -> JournalDate {
+    try JournalDate(year: year, month: month, day: day)
+}
 
-    func testJournalDateBasic() throws {
-        let d = try JournalDate(year: 2024, month: 6, day: 15)
-        XCTAssertEqual(d.description, "2024-06-15")
+private func makeTx(
+    date: JournalDate,
+    description: String = "Test",
+    debit: String  = "Expenses:Food",
+    credit: String = "Assets:Cash",
+    amount: Decimal = 50,
+    commodity: String = "USD"
+) throws -> Transaction {
+    try Transaction(
+        date: date,
+        description: description,
+        postings: [
+            Posting(accountName: debit,  amount: Amount(quantity:  amount, commodity: commodity)),
+            Posting(accountName: credit, amount: Amount(quantity: -amount, commodity: commodity)),
+        ]
+    )
+}
+
+// MARK: - JournalDate
+
+@Suite("JournalDate") struct JournalDateTests {
+
+    @Test("description formats as yyyy-MM-dd with zero-padding")
+    func descriptionFormat() throws {
+        #expect(try makeDate(2024, 6, 15).description == "2024-06-15")
+        #expect(try makeDate(2024, 1,  5).description == "2024-01-05")
     }
 
-    func testJournalDateComparable() throws {
-        let d1 = try JournalDate(year: 2024, month: 1, day: 1)
-        let d2 = try JournalDate(year: 2024, month: 12, day: 31)
-        XCTAssertLessThan(d1, d2)
-        XCTAssertGreaterThan(d2, d1)
-        XCTAssertEqual(d1, d1)
+    @Test("comparison is strictly chronological")
+    func comparable() throws {
+        let earlier = try makeDate(2024, 1,  1)
+        let later   = try makeDate(2024, 12, 31)
+        #expect(earlier < later)
+        #expect(later > earlier)
+        #expect(earlier == earlier)
+        #expect(earlier != later)
     }
 
-    func testJournalDateInvalid() {
-        XCTAssertThrowsError(try JournalDate(year: 2024, month: 13, day: 1))
-        XCTAssertThrowsError(try JournalDate(year: 2024, month: 0,  day: 1))
-        XCTAssertThrowsError(try JournalDate(year: 2024, month: 1,  day: 0))
+    @Test("month out of 1–12 throws invalidDate with formatted string")
+    func invalidMonth() {
+        #expect(throws: LedgerError.invalidDate("2024-13-01")) { try makeDate(2024, 13, 1) }
+        #expect(throws: LedgerError.invalidDate("2024-00-01")) { try makeDate(2024,  0, 1) }
     }
 
-    // MARK: - Amount
+    @Test("day out of 1–31 throws invalidDate with formatted string")
+    func invalidDay() {
+        #expect(throws: LedgerError.invalidDate("2024-01-00")) { try makeDate(2024, 1,  0) }
+        #expect(throws: LedgerError.invalidDate("2024-01-32")) { try makeDate(2024, 1, 32) }
+    }
+}
 
-    func testAmountNegation() {
+// MARK: - Amount
+
+@Suite("Amount") struct AmountTests {
+
+    @Test("negation flips sign and preserves commodity and prefix flag")
+    func negation() {
+        let a = Amount(quantity: 100, commodity: "USD", commodityIsPrefix: false)
+        let n = a.negated
+        #expect(n.quantity == -100)
+        #expect(n.commodity == "USD")
+        #expect(n.commodityIsPrefix == false)
+    }
+
+    @Test("adding same commodity yields correct sum")
+    func addSameCommodity() throws {
         let a = Amount(quantity: 100, commodity: "USD")
-        XCTAssertEqual(a.negated.quantity, -100)
-        XCTAssertEqual(a.negated.commodity, "USD")
-    }
-
-    func testAmountAddSameCommodity() throws {
-        let a = Amount(quantity: 100, commodity: "USD")
-        let b = Amount(quantity: 50, commodity: "USD")
+        let b = Amount(quantity:  50, commodity: "USD")
         let c = try a + b
-        XCTAssertEqual(c.quantity, 150)
+        #expect(c.quantity == 150)
+        #expect(c.commodity == "USD")
     }
 
-    func testAmountAddDifferentCommodityThrows() {
+    @Test("subtracting same commodity yields correct difference")
+    func subtractSameCommodity() throws {
         let a = Amount(quantity: 100, commodity: "USD")
-        let b = Amount(quantity: 50, commodity: "EUR")
-        XCTAssertThrowsError(try a + b)
+        let b = Amount(quantity:  30, commodity: "USD")
+        let c = try a - b
+        #expect(c.quantity == 70)
+        #expect(c.commodity == "USD")
     }
 
-    func testAmountNetByCommodity() {
+    @Test("adding different commodities throws commodityMismatch with both names")
+    func addDifferentCommodities() throws {
+        let a = Amount(quantity: 100, commodity: "USD")
+        let b = Amount(quantity:  50, commodity: "EUR")
+        var caught: LedgerError?
+        do { _ = try a + b } catch let e as LedgerError { caught = e }
+        #expect(caught == .commodityMismatch("USD", "EUR"))
+    }
+
+    @Test("scalar multiplication scales quantity and preserves commodity")
+    func scalarMultiply() {
+        let a = Amount(quantity: 50, commodity: "USD")
+        let b = a * 3
+        #expect(b.quantity == 150)
+        #expect(b.commodity == "USD")
+    }
+
+    @Test("netByCommodity groups amounts and sums per commodity")
+    func netByCommodity() throws {
         let amounts = [
-            Amount(quantity: 100, commodity: "USD"),
-            Amount(quantity: -30, commodity: "USD"),
-            Amount(quantity: 50,  commodity: "EUR"),
+            Amount(quantity:  100, commodity: "USD"),
+            Amount(quantity:  -30, commodity: "USD"),
+            Amount(quantity:   50, commodity: "EUR"),
         ]
         let nets = amounts.netByCommodity()
-        let netUSD = nets.first { $0.commodity == "USD" }!
-        let netEUR = nets.first { $0.commodity == "EUR" }!
-        XCTAssertEqual(netUSD.quantity, 70)
-        XCTAssertEqual(netEUR.quantity, 50)
+        let usd = try #require(nets.first { $0.commodity == "USD" })
+        let eur = try #require(nets.first { $0.commodity == "EUR" })
+        #expect(nets.count == 2)
+        #expect(usd.quantity == 70)
+        #expect(eur.quantity == 50)
     }
 
-    func testAmountDescriptionPrefix() {
-        let a = Amount(quantity: 42, commodity: "$", commodityIsPrefix: true)
-        XCTAssertEqual(a.description, "$42")
+    @Test("description places commodity before number when commodityIsPrefix")
+    func descriptionPrefix() {
+        #expect(Amount(quantity: 42, commodity: "$", commodityIsPrefix: true).description == "$42")
     }
 
-    func testAmountDescriptionSuffix() {
-        let a = Amount(quantity: 42, commodity: "USD", commodityIsPrefix: false)
-        XCTAssertEqual(a.description, "42 USD")
+    @Test("description places commodity after number when not commodityIsPrefix")
+    func descriptionSuffix() {
+        #expect(Amount(quantity: 42, commodity: "USD", commodityIsPrefix: false).description == "42 USD")
     }
 
-    // MARK: - AccountType inference
+    @Test("isZero is true only for zero quantity")
+    func isZero() {
+        #expect(Amount(quantity:  0, commodity: "USD").isZero)
+        #expect(!Amount(quantity:  1, commodity: "USD").isZero)
+        #expect(!Amount(quantity: -1, commodity: "USD").isZero)
+    }
+}
 
-    func testAccountTypeInference() {
-        XCTAssertEqual(AccountType.inferred(from: "Assets:Checking"),            .asset)
-        XCTAssertEqual(AccountType.inferred(from: "Asset:Cash"),                 .asset)
-        XCTAssertEqual(AccountType.inferred(from: "Liabilities:Visa"),           .liability)
-        XCTAssertEqual(AccountType.inferred(from: "Equity:OpeningBalance"),      .equity)
-        XCTAssertEqual(AccountType.inferred(from: "Income:Salary"),              .revenue)
-        XCTAssertEqual(AccountType.inferred(from: "Revenue:Consulting"),         .revenue)
-        XCTAssertEqual(AccountType.inferred(from: "Expenses:Food"),              .expense)
-        XCTAssertEqual(AccountType.inferred(from: "Expense:Rent"),               .expense)
-        XCTAssertEqual(AccountType.inferred(from: "Suspense"),                   .unclassified)
+// MARK: - AccountType
+
+@Suite("AccountType") struct AccountTypeTests {
+
+    @Test("infers asset, liability, equity, revenue, expense from root segment")
+    func inference() {
+        #expect(AccountType.inferred(from: "Assets:Checking")       == .asset)
+        #expect(AccountType.inferred(from: "Asset:Cash")            == .asset)
+        #expect(AccountType.inferred(from: "Liabilities:Visa")      == .liability)
+        #expect(AccountType.inferred(from: "Liability:Loan")        == .liability)
+        #expect(AccountType.inferred(from: "Equity:OpeningBalance") == .equity)
+        #expect(AccountType.inferred(from: "Income:Salary")         == .revenue)
+        #expect(AccountType.inferred(from: "Revenue:Consulting")    == .revenue)
+        #expect(AccountType.inferred(from: "Expenses:Food")         == .expense)
+        #expect(AccountType.inferred(from: "Expense:Rent")          == .expense)
     }
 
-    // MARK: - Account
+    @Test("unrecognised root segment infers unclassified")
+    func unclassified() {
+        #expect(AccountType.inferred(from: "Suspense")         == .unclassified)
+        #expect(AccountType.inferred(from: "Temp:Holding")     == .unclassified)
+    }
 
-    func testAccountParentAndShortName() {
+    @Test("inference is case-insensitive on the root segment")
+    func caseInsensitive() {
+        #expect(AccountType.inferred(from: "assets:Cash")   == .asset)
+        #expect(AccountType.inferred(from: "EXPENSES:Food") == .expense)
+    }
+
+    @Test("displaySign is +1 for asset and expense, -1 for liability/equity/revenue")
+    func displaySign() {
+        #expect(AccountType.asset.displaySign    ==  1)
+        #expect(AccountType.expense.displaySign  ==  1)
+        #expect(AccountType.liability.displaySign == -1)
+        #expect(AccountType.equity.displaySign   == -1)
+        #expect(AccountType.revenue.displaySign  == -1)
+    }
+}
+
+// MARK: - Account
+
+@Suite("Account") struct AccountTests {
+
+    @Test("parent is all segments except last; shortName is last segment")
+    func parentAndShortName() {
         let a = Account(name: "Expenses:Food:Groceries")
-        XCTAssertEqual(a.parent, "Expenses:Food")
-        XCTAssertEqual(a.shortName, "Groceries")
+        #expect(a.parent    == "Expenses:Food")
+        #expect(a.shortName == "Groceries")
     }
 
-    func testAccountNoParent() {
+    @Test("top-level account has nil parent and full name as shortName")
+    func noParent() {
         let a = Account(name: "Assets")
-        XCTAssertNil(a.parent)
-        XCTAssertEqual(a.shortName, "Assets")
+        #expect(a.parent    == nil)
+        #expect(a.shortName == "Assets")
     }
 
-    // MARK: - Transaction validation
+    @Test("type is inferred from name root when not specified")
+    func inferredType() {
+        #expect(Account(name: "Assets:Checking").type == .asset)
+        #expect(Account(name: "Expenses:Food").type   == .expense)
+    }
 
-    func testTransactionBalanced() throws {
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
+    @Test("explicit type overrides name-based inference")
+    func explicitTypeOverridesInference() {
+        let a = Account(name: "Suspense", type: .asset)  // would infer .unclassified
+        #expect(a.type == .asset)
+    }
+}
+
+// MARK: - Transaction
+
+@Suite("Transaction") struct TransactionTests {
+
+    @Test("balanced transaction stores all fields correctly")
+    func balancedStoresFields() throws {
+        let date = try makeDate(2024, 1, 1)
         let tx = try Transaction(
-            date: d,
-            description: "Test",
+            date: date, status: .cleared, code: "CHQ001",
+            description: "Groceries",
             postings: [
-                Posting(accountName: "Assets:Checking",  amount: Amount(quantity: -100, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Expenses:Food",    amount: Amount(quantity:  100, commodity: "$", commodityIsPrefix: true)),
+                Posting(accountName: "Expenses:Food", amount: Amount(quantity:  50, commodity: "USD")),
+                Posting(accountName: "Assets:Cash",   amount: Amount(quantity: -50, commodity: "USD")),
+            ],
+            comment: "weekly shop"
+        )
+        #expect(tx.date        == date)
+        #expect(tx.status      == .cleared)
+        #expect(tx.code        == "CHQ001")
+        #expect(tx.description == "Groceries")
+        #expect(tx.comment     == "weekly shop")
+        #expect(tx.postings.count == 2)
+        #expect(tx.postings[0].accountName     == "Expenses:Food")
+        #expect(tx.postings[0].amount.quantity == 50)
+        #expect(tx.postings[1].accountName     == "Assets:Cash")
+        #expect(tx.postings[1].amount.quantity == -50)
+    }
+
+    @Test("unbalanced postings throw unbalancedTransaction with commodity and imbalance")
+    func unbalancedThrows() throws {
+        let date = try makeDate(2024, 1, 1)
+        // sum = -100 + 50 = -50 USD
+        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: -50)) {
+            try Transaction(
+                date: date, description: "Bad",
+                postings: [
+                    Posting(accountName: "Assets:Cash",  amount: Amount(quantity: -100, commodity: "USD")),
+                    Posting(accountName: "Expenses:Food", amount: Amount(quantity:   50, commodity: "USD")),
+                ]
+            )
+        }
+    }
+
+    @Test("fewer than two postings throws emptyTransaction")
+    func tooFewPostingsThrows() throws {
+        let date = try makeDate(2024, 1, 1)
+        #expect(throws: LedgerError.emptyTransaction) {
+            try Transaction(
+                date: date, description: "Single",
+                postings: [Posting(accountName: "Assets:Cash", amount: Amount(quantity: 100, commodity: "USD"))]
+            )
+        }
+    }
+
+    @Test("multi-commodity balance is validated independently per commodity")
+    func multiCommodityBalance() throws {
+        let date = try makeDate(2024, 1, 1)
+        let tx = try Transaction(
+            date: date, description: "BTC sale",
+            postings: [
+                Posting(accountName: "Assets:BTC",   amount: Amount(quantity:  -1, commodity: "BTC")),
+                Posting(accountName: "Expenses:Fee", amount: Amount(quantity:   1, commodity: "BTC")),
+                Posting(accountName: "Assets:USD",   amount: Amount(quantity: 100, commodity: "USD")),
+                Posting(accountName: "Income:Gain",  amount: Amount(quantity: -100, commodity: "USD")),
             ]
         )
-        XCTAssertEqual(tx.postings.count, 2)
+        let btcNet = tx.postings.filter { $0.amount.commodity == "BTC" }.map(\.amount.quantity).reduce(0, +)
+        let usdNet = tx.postings.filter { $0.amount.commodity == "USD" }.map(\.amount.quantity).reduce(0, +)
+        #expect(btcNet == 0)
+        #expect(usdNet == 0)
     }
 
-    func testTransactionUnbalancedThrows() throws {
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        XCTAssertThrowsError(try Transaction(
-            date: d,
-            description: "Bad",
-            postings: [
-                Posting(accountName: "Assets:Checking",  amount: Amount(quantity: -100, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Expenses:Food",    amount: Amount(quantity:   50, commodity: "$", commodityIsPrefix: true)),
-            ]
-        ))
+    @Test("two independently constructed transactions receive different IDs")
+    func uniqueIds() throws {
+        let date = try makeDate(2024, 1, 1)
+        let tx1 = try makeTx(date: date, description: "A")
+        let tx2 = try makeTx(date: date, description: "A")
+        #expect(tx1.id != tx2.id)
     }
 
-    func testTransactionTooFewPostingsThrows() throws {
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        XCTAssertThrowsError(try Transaction(
-            date: d,
-            description: "Single",
-            postings: [
-                Posting(accountName: "Assets:Checking", amount: Amount(quantity: 100, commodity: "USD")),
-            ]
-        ))
+    @Test("copying a struct value preserves the original ID")
+    func copiedValuePreservesId() throws {
+        let original = try makeTx(date: makeDate(2024, 1, 1))
+        let copy = original
+        #expect(copy.id == original.id)
     }
 
-    func testTransactionMultiCommodityBalance() throws {
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
+    @Test("explicit ID passed to init is stored as-is")
+    func explicitIdPreserved() throws {
+        let fixedID = UUID()
         let tx = try Transaction(
-            date: d,
-            description: "Multi",
+            id: fixedID, date: makeDate(2024, 1, 1), description: "A",
             postings: [
-                Posting(accountName: "Assets:BTC",       amount: Amount(quantity: -1,   commodity: "BTC")),
-                Posting(accountName: "Assets:USD",       amount: Amount(quantity:  100, commodity: "USD")),
-                Posting(accountName: "Income:Gain",      amount: Amount(quantity: -100, commodity: "USD")),
-                Posting(accountName: "Expenses:Fee",     amount: Amount(quantity:  1,   commodity: "BTC")),
+                Posting(accountName: "Expenses:Food", amount: Amount(quantity:  10, commodity: "USD")),
+                Posting(accountName: "Assets:Cash",   amount: Amount(quantity: -10, commodity: "USD")),
             ]
         )
-        XCTAssertEqual(tx.postings.count, 4)
+        #expect(tx.id == fixedID)
+    }
+}
+
+// MARK: - Journal
+
+@Suite("Journal") struct JournalTests {
+
+    @Test("remove returns false when item is not present")
+    func removeAbsent() {
+        var journal = Journal()
+        let removed = journal.remove(.blank)
+        #expect(!removed)
+        #expect(journal.items.isEmpty)
     }
 
-    // MARK: - JournalParser: basic parsing
+    @Test("remove deletes only the first occurrence of a duplicate item")
+    func removeFirstDuplicate() {
+        var journal = Journal(items: [.comment("note"), .comment("note"), .blank])
+        let removed = journal.remove(.comment("note"))
+        #expect(removed)
+        #expect(journal.items.count == 2)
+        #expect(journal.items[0] == .comment("note"))  // second copy remains
+        #expect(journal.items[1] == .blank)
+    }
 
-    func testParseSimpleTransaction() throws {
+    @Test("removing a transaction leaves all other items untouched")
+    func removeTransactionLeavesOthers() throws {
+        let tx = try makeTx(date: makeDate(2024, 1, 1))
+        var journal = Journal(items: [.comment("keep"), .transaction(tx), .blank])
+        let removed = journal.remove(.transaction(tx))
+        #expect(removed)
+        #expect(journal.items.count == 2)
+        #expect(journal.items[0] == .comment("keep"))
+        #expect(journal.items[1] == .blank)
+    }
+}
+
+// MARK: - JournalParser
+
+@Suite("JournalParser") struct JournalParserTests {
+
+    @Test("parses description, date, account names, amounts, and prefix flag")
+    func simpleTransaction() throws {
         let text = """
 2024-01-15 Coffee shop
     Expenses:Food:Coffee  $5.00
     Assets:Checking  $-5.00
 """
-        let parser  = JournalParser()
-        let journal = try parser.parse(text)
-        XCTAssertEqual(journal.transactions.count, 1)
-        let tx = journal.transactions[0]
-        XCTAssertEqual(tx.description, "Coffee shop")
-        XCTAssertEqual(tx.date, try JournalDate(year: 2024, month: 1, day: 15))
-        XCTAssertEqual(tx.postings.count, 2)
-        XCTAssertEqual(tx.postings[0].accountName, "Expenses:Food:Coffee")
-        XCTAssertEqual(tx.postings[0].amount.quantity, Decimal(5))
-        XCTAssertEqual(tx.postings[0].amount.commodity, "$")
-        XCTAssertTrue(tx.postings[0].amount.commodityIsPrefix)
+        let journal = try JournalParser().parse(text)
+        let tx = try #require(journal.transactions.first)
+        #expect(journal.transactions.count == 1)
+        #expect(tx.description == "Coffee shop")
+        #expect(tx.date == (try makeDate(2024, 1, 15)))
+        #expect(tx.postings.count == 2)
+        #expect(tx.postings[0].accountName == "Expenses:Food:Coffee")
+        #expect(tx.postings[0].amount.quantity == Decimal(string: "5.00")!)
+        #expect(tx.postings[0].amount.commodity == "$")
+        #expect(tx.postings[0].amount.commodityIsPrefix == true)
+        #expect(tx.postings[1].accountName == "Assets:Checking")
+        #expect(tx.postings[1].amount.quantity == Decimal(string: "-5.00")!)
     }
 
-    func testParseElided() throws {
+    @Test("elided posting amount is resolved to the negative sum of explicit postings")
+    func elidedPosting() throws {
         let text = """
 2024-01-15 Salary
     Assets:Checking  $3000.00
     Income:Salary
 """
-        let parser  = JournalParser()
-        let journal = try parser.parse(text)
-        let tx = journal.transactions[0]
-        XCTAssertEqual(tx.postings.count, 2)
-        let income = tx.postings.first { $0.accountName == "Income:Salary" }!
-        XCTAssertEqual(income.amount.quantity, Decimal(-3000))
+        let journal = try JournalParser().parse(text)
+        let income  = try #require(journal.transactions.first?.postings.first { $0.accountName == "Income:Salary" })
+        #expect(income.amount.quantity  == Decimal(-3000))
+        #expect(income.amount.commodity == "$")
     }
 
-    func testParseSlashDate() throws {
+    @Test("slash-separated date is accepted and parsed correctly")
+    func slashDate() throws {
         let text = """
 2024/03/10 Test
     Assets:Cash  100 USD
     Expenses:Misc  -100 USD
 """
-        let parser  = JournalParser()
-        let journal = try parser.parse(text)
-        XCTAssertEqual(journal.transactions[0].date, try JournalDate(year: 2024, month: 3, day: 10))
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.first?.date == (try makeDate(2024, 3, 10)))
     }
 
-    func testParseTransactionStatus() throws {
+    @Test("cleared (*) and pending (!) status markers are parsed")
+    func transactionStatus() throws {
         let text = """
-2024-01-01 * Cleared tx
+2024-01-01 * Cleared
     Assets:Cash  100 USD
     Income:Sales  -100 USD
 
-2024-01-02 ! Pending tx
+2024-01-02 ! Pending
     Assets:Cash  50 USD
     Income:Sales  -50 USD
 """
-        let parser  = JournalParser()
-        let journal = try parser.parse(text)
-        XCTAssertEqual(journal.transactions[0].status, .cleared)
-        XCTAssertEqual(journal.transactions[1].status, .pending)
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions[0].status == .cleared)
+        #expect(journal.transactions[1].status == .pending)
     }
 
-    func testParseTransactionCode() throws {
+    @Test("transaction code in parentheses is parsed")
+    func transactionCode() throws {
         let text = """
 2024-01-15 (CHQ1234) Payment
     Assets:Checking  -200 USD
     Liabilities:Visa  200 USD
 """
-        let parser  = JournalParser()
-        let journal = try parser.parse(text)
-        XCTAssertEqual(journal.transactions[0].code, "CHQ1234")
+        let tx = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(tx.code == "CHQ1234")
     }
 
-    func testParseComment() throws {
+    @Test("semicolon comment lines are stored as .comment items with their text")
+    func commentItems() throws {
         let text = """
-; This is a comment
+; Opening note
 2024-01-01 Test
     Assets:Cash  100 USD
     Income:Sales  -100 USD
 """
-        let parser  = JournalParser()
-        let journal = try parser.parse(text)
-        XCTAssertEqual(journal.transactions.count, 1)
-        let comments = journal.items.filter {
-            if case .comment = $0 { return true }
-            return false
+        let journal  = try JournalParser().parse(text)
+        let comments = journal.items.compactMap { item -> String? in
+            if case .comment(let text) = item { return text }
+            return nil
         }
-        XCTAssertFalse(comments.isEmpty)
+        #expect(comments.count == 1)
+        #expect(comments[0] == "; Opening note")
     }
 
-    func testParseAccountDirective() throws {
+    @Test("account directive stores account name")
+    func accountDirective() throws {
         let text = """
 account Assets:Savings
 
 2024-01-01 Test
-    Assets:Cash  100 USD
+    Assets:Cash     100 USD
     Assets:Savings  -100 USD
 """
-        let parser  = JournalParser()
-        let journal = try parser.parse(text)
-        XCTAssertEqual(journal.accountDirectives.count, 1)
-        XCTAssertEqual(journal.accountDirectives[0].name, "Assets:Savings")
+        let journal = try JournalParser().parse(text)
+        #expect(journal.accountDirectives.count == 1)
+        #expect(journal.accountDirectives[0].name == "Assets:Savings")
     }
 
-    func testParseAuxDate() throws {
+    @Test("auxiliary date after = is parsed and stored on the transaction")
+    func auxDate() throws {
         let text = """
 2024-01-01=2024-01-05 Test
     Assets:Cash  100 USD
     Income:Sales  -100 USD
 """
-        let parser  = JournalParser()
-        let journal = try parser.parse(text)
-        XCTAssertNotNil(journal.transactions[0].auxDate)
-        XCTAssertEqual(journal.transactions[0].auxDate, try JournalDate(year: 2024, month: 1, day: 5))
+        let tx = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(tx.auxDate == (try makeDate(2024, 1, 5)))
     }
 
-    func testParseMultipleElidedThrows() throws {
+    @Test("two elided postings in one transaction throws multipleElidedPostings")
+    func multipleElidedThrows() {
         let text = """
 2024-01-01 Bad
     Assets:Cash
     Income:Sales
 """
-        let parser = JournalParser()
-        XCTAssertThrowsError(try parser.parse(text))
+        #expect(throws: LedgerError.multipleElidedPostings) { try JournalParser().parse(text) }
     }
 
-    // MARK: - Amount parsing
+    @Suite("amount parsing") struct AmountParsingTests {
 
-    func testAmountParserPrefixSymbol() throws {
-        let parser = JournalParser()
-        let a = try parser.parseAmount("$100.50", lineNumber: 1)
-        XCTAssertEqual(a.quantity, Decimal(string: "100.50")!)
-        XCTAssertEqual(a.commodity, "$")
-        XCTAssertTrue(a.commodityIsPrefix)
+        @Test("prefix currency symbol with decimal quantity")
+        func prefixSymbol() throws {
+            let a = try JournalParser().parseAmount("$100.50", lineNumber: 1)
+            #expect(a.quantity == Decimal(string: "100.50")!)
+            #expect(a.commodity == "$")
+            #expect(a.commodityIsPrefix == true)
+        }
+
+        @Test("minus sign before prefix symbol negates the quantity")
+        func negativePrefix() throws {
+            let a = try JournalParser().parseAmount("-$50", lineNumber: 1)
+            #expect(a.quantity == -50)
+            #expect(a.commodity == "$")
+        }
+
+        @Test("minus sign between symbol and digits negates the quantity")
+        func innerNegative() throws {
+            let a = try JournalParser().parseAmount("$-50", lineNumber: 1)
+            #expect(a.quantity == -50)
+            #expect(a.commodity == "$")
+        }
+
+        @Test("suffix commodity code follows the quantity")
+        func suffixCommodity() throws {
+            let a = try JournalParser().parseAmount("100.00 USD", lineNumber: 1)
+            #expect(a.quantity == Decimal(string: "100.00")!)
+            #expect(a.commodity == "USD")
+            #expect(a.commodityIsPrefix == false)
+        }
+
+        @Test("thousand separators are stripped from the numeric part")
+        func thousandSeparators() throws {
+            let a = try JournalParser().parseAmount("$1,000.00", lineNumber: 1)
+            #expect(a.quantity == Decimal(string: "1000.00")!)
+        }
+
+        @Test("pound sign is recognised as a prefix commodity symbol")
+        func poundSymbol() throws {
+            let a = try JournalParser().parseAmount("£500", lineNumber: 1)
+            #expect(a.quantity == 500)
+            #expect(a.commodity == "£")
+            #expect(a.commodityIsPrefix == true)
+        }
     }
+}
 
-    func testAmountParserNegativePrefix() throws {
-        let parser = JournalParser()
-        let a = try parser.parseAmount("-$50", lineNumber: 1)
-        XCTAssertEqual(a.quantity, Decimal(-50))
-        XCTAssertEqual(a.commodity, "$")
-    }
+// MARK: - Ledger
 
-    func testAmountParserInnerNegative() throws {
-        let parser = JournalParser()
-        let a = try parser.parseAmount("$-50", lineNumber: 1)
-        XCTAssertEqual(a.quantity, Decimal(-50))
-        XCTAssertEqual(a.commodity, "$")
-    }
+@Suite("Ledger") struct LedgerTests {
 
-    func testAmountParserSuffix() throws {
-        let parser = JournalParser()
-        let a = try parser.parseAmount("100.00 USD", lineNumber: 1)
-        XCTAssertEqual(a.quantity, Decimal(string: "100.00")!)
-        XCTAssertEqual(a.commodity, "USD")
-        XCTAssertFalse(a.commodityIsPrefix)
-    }
-
-    func testAmountParserThousandSeparators() throws {
-        let parser = JournalParser()
-        let a = try parser.parseAmount("$1,000.00", lineNumber: 1)
-        XCTAssertEqual(a.quantity, Decimal(string: "1000.00")!)
-    }
-
-    func testAmountParserPound() throws {
-        let parser = JournalParser()
-        let a = try parser.parseAmount("£500", lineNumber: 1)
-        XCTAssertEqual(a.quantity, Decimal(500))
-        XCTAssertEqual(a.commodity, "£")
-        XCTAssertTrue(a.commodityIsPrefix)
-    }
-
-    // MARK: - Ledger queries
-
-    func testLedgerBalance() throws {
+    @Test("balance returns net amount for exact account name")
+    func balance() throws {
         var ledger = Ledger()
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        let tx = try Transaction(
-            date: d,
-            description: "Groceries",
-            postings: [
-                Posting(accountName: "Expenses:Food", amount: Amount(quantity: 50, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",   amount: Amount(quantity: -50, commodity: "$", commodityIsPrefix: true)),
-            ]
-        )
-        ledger.post(tx)
-
-        let balance = ledger.balance(for: "Expenses:Food")
-        XCTAssertEqual(balance.count, 1)
-        XCTAssertEqual(balance[0].quantity, 50)
-        XCTAssertEqual(balance[0].commodity, "$")
+        let d = try makeDate(2024, 1, 1)
+        try ledger.add(.transaction(makeTx(date: d, debit: "Expenses:Food", credit: "Assets:Cash", amount: 50)))
+        let bal = ledger.balance(for: "Expenses:Food")
+        #expect(bal.count == 1)
+        #expect(bal[0].quantity  == 50)
+        #expect(bal[0].commodity == "USD")
     }
 
-    func testLedgerSubtreeBalance() throws {
+    @Test("subtree balance aggregates amounts across all sub-accounts")
+    func subtreeBalance() throws {
         var ledger = Ledger()
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        ledger.post(try Transaction(
-            date: d, description: "Coffee",
-            postings: [
-                Posting(accountName: "Expenses:Food:Coffee",    amount: Amount(quantity: 5, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",             amount: Amount(quantity: -5, commodity: "$", commodityIsPrefix: true)),
-            ]
-        ))
-        ledger.post(try Transaction(
-            date: d, description: "Groceries",
-            postings: [
-                Posting(accountName: "Expenses:Food:Groceries", amount: Amount(quantity: 30, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",             amount: Amount(quantity: -30, commodity: "$", commodityIsPrefix: true)),
-            ]
-        ))
-        ledger.post(try Transaction(
-            date: d, description: "Rent",
-            postings: [
-                Posting(accountName: "Expenses:Housing",        amount: Amount(quantity: 1000, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",             amount: Amount(quantity: -1000, commodity: "$", commodityIsPrefix: true)),
-            ]
-        ))
-
-        let foodBalance = ledger.subtreeBalance(forPrefix: "Expenses:Food")
-        XCTAssertEqual(foodBalance[0].quantity, 35)
-
-        let expBalance = ledger.subtreeBalance(forPrefix: "Expenses")
-        XCTAssertEqual(expBalance[0].quantity, 1035)
+        let d = try makeDate(2024, 1, 1)
+        try ledger.add(.transaction(makeTx(date: d, debit: "Expenses:Food:Coffee",    credit: "Assets:Cash", amount: 5)))
+        try ledger.add(.transaction(makeTx(date: d, debit: "Expenses:Food:Groceries", credit: "Assets:Cash", amount: 30)))
+        try ledger.add(.transaction(makeTx(date: d, debit: "Expenses:Housing",        credit: "Assets:Cash", amount: 1000)))
+        #expect(ledger.subtreeBalance(forPrefix: "Expenses:Food")[0].quantity == 35)
+        #expect(ledger.subtreeBalance(forPrefix: "Expenses")[0].quantity      == 1035)
     }
 
-    func testLedgerHistoricalBalance() throws {
+    @Test("asOf cutoff excludes transactions dated after the cutoff")
+    func historicalBalance() throws {
         var ledger = Ledger()
-        let d1 = try JournalDate(year: 2024, month: 1, day: 1)
-        let d2 = try JournalDate(year: 2024, month: 6, day: 1)
-        ledger.post(try Transaction(
-            date: d1, description: "Jan",
-            postings: [
-                Posting(accountName: "Expenses:Food", amount: Amount(quantity: 50, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",   amount: Amount(quantity: -50, commodity: "$", commodityIsPrefix: true)),
-            ]
-        ))
-        ledger.post(try Transaction(
-            date: d2, description: "June",
-            postings: [
-                Posting(accountName: "Expenses:Food", amount: Amount(quantity: 75, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",   amount: Amount(quantity: -75, commodity: "$", commodityIsPrefix: true)),
-            ]
-        ))
-
-        let cutoff  = try JournalDate(year: 2024, month: 3, day: 1)
-        let balance = ledger.balance(for: "Expenses:Food", asOf: cutoff)
-        XCTAssertEqual(balance[0].quantity, 50)
+        let jan    = try makeDate(2024, 1, 1)
+        let jun    = try makeDate(2024, 6, 1)
+        let cutoff = try makeDate(2024, 3, 1)
+        try ledger.add(.transaction(makeTx(date: jan, debit: "Expenses:Food", credit: "Assets:Cash", amount: 50)))
+        try ledger.add(.transaction(makeTx(date: jun, debit: "Expenses:Food", credit: "Assets:Cash", amount: 75)))
+        let bal = ledger.balance(for: "Expenses:Food", asOf: cutoff)
+        #expect(bal[0].quantity == 50)  // only the January transaction
     }
 
-    func testLedgerTransactionsForPrefix() throws {
+    @Test("transactions(forPrefix:) returns only transactions that touch that subtree")
+    func transactionsForPrefix() throws {
         var ledger = Ledger()
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        let food = try Transaction(
-            date: d, description: "Food",
-            postings: [
-                Posting(accountName: "Expenses:Food", amount: Amount(quantity: 20, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",   amount: Amount(quantity: -20, commodity: "$", commodityIsPrefix: true)),
-            ]
-        )
-        let rent = try Transaction(
-            date: d, description: "Rent",
-            postings: [
-                Posting(accountName: "Expenses:Housing", amount: Amount(quantity: 1000, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",      amount: Amount(quantity: -1000, commodity: "$", commodityIsPrefix: true)),
-            ]
-        )
-        ledger.post(food)
-        ledger.post(rent)
-
-        let expTxs = ledger.transactions(forPrefix: "Expenses")
-        XCTAssertEqual(expTxs.count, 2)
-
-        let foodTxs = ledger.transactions(forPrefix: "Expenses:Food")
-        XCTAssertEqual(foodTxs.count, 1)
-        XCTAssertEqual(foodTxs[0].description, "Food")
+        let d = try makeDate(2024, 1, 1)
+        let food = try makeTx(date: d, description: "Food",  debit: "Expenses:Food",    credit: "Assets:Cash", amount: 20)
+        let rent = try makeTx(date: d, description: "Rent",  debit: "Expenses:Housing", credit: "Assets:Cash", amount: 1000)
+        ledger.add(.transaction(food))
+        ledger.add(.transaction(rent))
+        #expect(ledger.transactions(forPrefix: "Expenses").count      == 2)
+        #expect(ledger.transactions(forPrefix: "Expenses:Food").count == 1)
+        #expect(ledger.transactions(forPrefix: "Expenses:Food")[0].description == "Food")
     }
 
-    func testLedgerInferredAccounts() throws {
+    @Test("parent accounts are inferred automatically from posting names")
+    func inferredParentAccounts() throws {
         var ledger = Ledger()
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        ledger.post(try Transaction(
-            date: d, description: "Test",
-            postings: [
-                Posting(accountName: "Expenses:Food:Groceries", amount: Amount(quantity: 50, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Checking",         amount: Amount(quantity: -50, commodity: "$", commodityIsPrefix: true)),
-            ]
-        ))
-
+        let d = try makeDate(2024, 1, 1)
+        try ledger.add(.transaction(makeTx(date: d, debit: "Expenses:Food:Groceries", credit: "Assets:Checking", amount: 50)))
         let names = ledger.accounts.map(\.name)
-        XCTAssertTrue(names.contains("Expenses:Food:Groceries"))
-        XCTAssertTrue(names.contains("Expenses:Food"))    // parent auto-inferred
-        XCTAssertTrue(names.contains("Expenses"))          // grandparent auto-inferred
-        XCTAssertTrue(names.contains("Assets:Checking"))
-        XCTAssertTrue(names.contains("Assets"))
+        #expect(names.contains("Expenses:Food:Groceries"))
+        #expect(names.contains("Expenses:Food"))
+        #expect(names.contains("Expenses"))
+        #expect(names.contains("Assets:Checking"))
+        #expect(names.contains("Assets"))
     }
 
-    // MARK: - Serializer round-trip
+    @Test("account directive explicit type overrides name-based type inference")
+    func directiveTypeOverridesInference() throws {
+        var ledger = Ledger()
+        let d = try makeDate(2024, 1, 1)
+        // "Suspense" root would infer .unclassified; directive sets it to .asset
+        ledger.add(.accountDirective(AccountDirective(name: "Suspense", type: .asset)))
+        try ledger.add(.transaction(makeTx(date: d, debit: "Suspense", credit: "Assets:Cash", amount: 100)))
+        let account = try #require(ledger.accounts.first { $0.name == "Suspense" })
+        #expect(account.type == .asset)
+    }
 
-    func testSerializerRoundTrip() throws {
+    @Test("add then remove leaves the ledger without that transaction")
+    func addRemoveRoundTrip() throws {
+        var ledger = Ledger()
+        let tx = try makeTx(date: makeDate(2024, 1, 1))
+        ledger.add(.transaction(tx))
+        #expect(ledger.journal.transactions.count == 1)
+        let removed = ledger.remove(.transaction(tx))
+        #expect(removed)
+        #expect(ledger.journal.transactions.isEmpty)
+    }
+
+    @Test("remove returns false and does not alter the ledger when item is absent")
+    func removeAbsent() throws {
+        var ledger = Ledger()
+        let tx = try makeTx(date: makeDate(2024, 1, 1))
+        let removed = ledger.remove(.transaction(tx))
+        #expect(!removed)
+        #expect(ledger.journal.items.isEmpty)
+    }
+}
+
+// MARK: - JournalSerializer
+
+@Suite("JournalSerializer") struct SerializerTests {
+
+    @Test("serialized output re-parses to a transaction with identical field values")
+    func roundTripSimple() throws {
         let text = """
 2024-01-15 Coffee shop
     Expenses:Food:Coffee  $5.00
     Assets:Checking  $-5.00
 """
         let parser     = JournalParser()
-        let journal    = try parser.parse(text)
         let serializer = JournalSerializer()
-        let output     = serializer.serialize(journal)
-
-        // Re-parse the output and verify the transaction is preserved
-        let journal2   = try parser.parse(output)
-        XCTAssertEqual(journal2.transactions.count, 1)
-        XCTAssertEqual(journal2.transactions[0].description, "Coffee shop")
-        XCTAssertEqual(journal2.transactions[0].postings.count, 2)
+        let journal1   = try parser.parse(text)
+        let journal2   = try parser.parse(serializer.serialize(journal1))
+        let tx1 = try #require(journal1.transactions.first)
+        let tx2 = try #require(journal2.transactions.first)
+        #expect(tx2.date        == tx1.date)
+        #expect(tx2.description == tx1.description)
+        #expect(tx2.postings.count                       == tx1.postings.count)
+        #expect(tx2.postings[0].accountName              == tx1.postings[0].accountName)
+        #expect(tx2.postings[0].amount.quantity          == tx1.postings[0].amount.quantity)
+        #expect(tx2.postings[0].amount.commodity         == tx1.postings[0].amount.commodity)
+        #expect(tx2.postings[0].amount.commodityIsPrefix == tx1.postings[0].amount.commodityIsPrefix)
     }
 
-    func testSerializerPreservesComments() throws {
+    @Test("round-trip preserves status, code, aux date, comments, and account directives")
+    func roundTripFullFidelity() throws {
         let text = """
-; Opening balances
+; Opening comment
+account Assets:Savings
 
-2024-01-01 Opening
-    Assets:Cash  1000 USD
-    Equity:Opening  -1000 USD
+2024-01-01=2024-01-05 * (CHQ001) Salary
+    Assets:Savings   3000 USD
+    Income:Salary   -3000 USD
 """
         let parser     = JournalParser()
-        let journal    = try parser.parse(text)
         let serializer = JournalSerializer()
-        let output     = serializer.serialize(journal)
+        let journal1   = try parser.parse(text)
+        let journal2   = try parser.parse(serializer.serialize(journal1))
 
-        XCTAssertTrue(output.contains("; Opening balances") || output.contains("Opening balances"))
+        let tx = try #require(journal2.transactions.first)
+        #expect(tx.status  == .cleared)
+        #expect(tx.code    == "CHQ001")
+        #expect(tx.auxDate == (try makeDate(2024, 1, 5)))
+
+        // Comments and directives must survive the round-trip
+        let comments1 = journal1.items.filter { if case .comment = $0 { true } else { false } }
+        let comments2 = journal2.items.filter { if case .comment = $0 { true } else { false } }
+        #expect(comments1 == comments2)
+        #expect(journal2.accountDirectives.first?.name == "Assets:Savings")
     }
+}
 
-    // MARK: - PlainTextJournalStore
+// MARK: - PlainTextJournalStore
 
-    func testPlainTextJournalStoreRoundTrip() throws {
-        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+@Suite("PlainTextJournalStore") struct StoreTests {
+
+    @Test("loading a pre-existing file returns transactions with correct field values")
+    func loadPreExistingFile() throws {
+        let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("test-\(UUID().uuidString).ledger")
         defer { try? FileManager.default.removeItem(at: url) }
 
-        // Create initial file content
-        let text = """
+        try """
 2024-01-01 Opening
     Assets:Cash  1000 USD
     Equity:Opening  -1000 USD
-"""
-        try text.write(to: url, atomically: true, encoding: .utf8)
+""".write(to: url, atomically: true, encoding: .utf8)
 
-        let store  = PlainTextJournalStore(url: url)
-        let loaded = try store.load()
-        XCTAssertEqual(loaded.journal.transactions.count, 1)
+        let tx = try #require(try PlainTextJournalStore(url: url).load().journal.transactions.first)
+        #expect(tx.description == "Opening")
+        #expect(tx.postings.count == 2)
+        #expect(tx.postings[0].amount.quantity  == 1000)
+        #expect(tx.postings[0].amount.commodity == "USD")
+    }
 
-        // Save and re-load
-        var ledger = loaded
-        let d = try JournalDate(year: 2024, month: 6, day: 1)
-        ledger.post(try Transaction(
-            date: d, description: "Coffee",
+    @Test("saved ledger is reloaded with all transactions intact and values correct")
+    func saveAndReload() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-\(UUID().uuidString).ledger")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try """
+2024-01-01 Opening
+    Assets:Cash  1000 USD
+    Equity:Opening  -1000 USD
+""".write(to: url, atomically: true, encoding: .utf8)
+
+        let store = PlainTextJournalStore(url: url)
+        var ledger = try store.load()
+        ledger.add(.transaction(try Transaction(
+            date: makeDate(2024, 6, 1), description: "Coffee",
             postings: [
-                Posting(accountName: "Expenses:Food", amount: Amount(quantity: 5,  commodity: "$", commodityIsPrefix: true)),
+                Posting(accountName: "Expenses:Food", amount: Amount(quantity:  5, commodity: "$", commodityIsPrefix: true)),
                 Posting(accountName: "Assets:Cash",   amount: Amount(quantity: -5, commodity: "$", commodityIsPrefix: true)),
             ]
-        ))
+        )))
         try store.save(ledger)
 
         let reloaded = try store.load()
-        XCTAssertEqual(reloaded.journal.transactions.count, 2)
+        #expect(reloaded.journal.transactions.count == 2)
+        let coffee = try #require(reloaded.journal.transactions.first { $0.description == "Coffee" })
+        #expect(coffee.postings[0].amount.quantity  == 5)
+        #expect(coffee.postings[0].amount.commodity == "$")
+    }
+}
+
+// MARK: - BalanceSheet
+
+@Suite("BalanceSheet") struct BalanceSheetTests {
+
+    @Test("any well-formed double-entry journal satisfies isBalanced")
+    func isBalanced() throws {
+        var ledger = Ledger()
+        let d = try makeDate(2024, 1, 1)
+        try ledger.add(.transaction(makeTx(date: d, description: "Salary", debit: "Assets:Checking", credit: "Income:Salary", amount: 3000, commodity: "USD")))
+        #expect(BalanceSheet(ledger: ledger).isBalanced)
     }
 
-    // MARK: - BalanceSheet
-
-    func testBalanceSheetIsBalanced() throws {
+    @Test("asset account balance matches its posting amounts")
+    func assetAmounts() throws {
         var ledger = Ledger()
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        ledger.post(try Transaction(
+        let d = try makeDate(2024, 1, 1)
+        try ledger.add(.transaction(makeTx(date: d, description: "Salary", debit: "Assets:Checking", credit: "Income:Salary", amount: 3000, commodity: "USD")))
+        let bs       = BalanceSheet(ledger: ledger)
+        let checking = try #require(bs.assets.first { $0.account.name == "Assets:Checking" })
+        #expect(checking.amounts[0].quantity  == 3000)
+        #expect(checking.amounts[0].commodity == "USD")
+    }
+}
+
+// MARK: - IncomeStatement
+
+@Suite("IncomeStatement") struct IncomeStatementTests {
+
+    private func ledgerWithSalaryAndRent() throws -> Ledger {
+        var ledger = Ledger()
+        let d = try makeDate(2024, 1, 1)
+        ledger.add(.transaction(try Transaction(
             date: d, description: "Salary",
             postings: [
                 Posting(accountName: "Assets:Checking", amount: Amount(quantity:  3000, commodity: "USD")),
                 Posting(accountName: "Income:Salary",   amount: Amount(quantity: -3000, commodity: "USD")),
             ]
-        ))
-        let bs = BalanceSheet(ledger: ledger)
-        XCTAssertTrue(bs.isBalanced)
-        XCTAssertFalse(bs.assets.isEmpty)
-    }
-
-    // MARK: - IncomeStatement
-
-    func testIncomeStatement() throws {
-        var ledger = Ledger()
-        let d1 = try JournalDate(year: 2024, month: 1, day: 1)
-        let d2 = try JournalDate(year: 2024, month: 6, day: 1)
-        ledger.post(try Transaction(
-            date: d1, description: "Salary",
-            postings: [
-                Posting(accountName: "Assets:Checking", amount: Amount(quantity:  3000, commodity: "USD")),
-                Posting(accountName: "Income:Salary",   amount: Amount(quantity: -3000, commodity: "USD")),
-            ]
-        ))
-        ledger.post(try Transaction(
-            date: d1, description: "Rent",
+        )))
+        ledger.add(.transaction(try Transaction(
+            date: d, description: "Rent",
             postings: [
                 Posting(accountName: "Expenses:Rent",   amount: Amount(quantity:  1000, commodity: "USD")),
                 Posting(accountName: "Assets:Checking", amount: Amount(quantity: -1000, commodity: "USD")),
             ]
-        ))
-
-        let cutoff = try JournalDate(year: 2024, month: 3, day: 1)
-        let is1    = IncomeStatement(ledger: ledger, to: cutoff)
-        XCTAssertFalse(is1.revenues.isEmpty)
-        XCTAssertFalse(is1.expenses.isEmpty)
-
-        let afterCutoff = IncomeStatement(ledger: ledger, from: d2)
-        XCTAssertTrue(afterCutoff.revenues.isEmpty)
+        )))
+        return ledger
     }
 
-    // MARK: - AccountStatement
+    @Test("revenue and expense account balances are correct")
+    func revenueAndExpenseAmounts() throws {
+        let stmt   = IncomeStatement(ledger: try ledgerWithSalaryAndRent())
+        let salary = try #require(stmt.revenues.first { $0.account.name == "Income:Salary" })
+        let rent   = try #require(stmt.expenses.first { $0.account.name == "Expenses:Rent" })
+        #expect(salary.amounts[0].quantity == -3000)  // revenue carried as negative
+        #expect(rent.amounts[0].quantity   ==  1000)
+    }
 
-    func testAccountStatement() throws {
+    @Test("from/to date range excludes transactions outside the range")
+    func dateRangeFilter() throws {
+        let afterAll = try makeDate(2024, 6, 1)
+        let stmt = IncomeStatement(ledger: try ledgerWithSalaryAndRent(), from: afterAll)
+        #expect(stmt.revenues.isEmpty)
+        #expect(stmt.expenses.isEmpty)
+    }
+
+    @Test("netIncome is revenue added to expenses (revenue negative + expense positive)")
+    func netIncome() throws {
+        let stmt = IncomeStatement(ledger: try ledgerWithSalaryAndRent())
+        let net  = try #require(stmt.netIncome.first { $0.commodity == "USD" })
+        // -3000 (revenue) + 1000 (expense) = -2000
+        #expect(net.quantity == -2000)
+    }
+}
+
+// MARK: - AccountStatement
+
+@Suite("AccountStatement") struct AccountStatementTests {
+
+    @Test("lines appear in journal order with correct running balance after each posting")
+    func linesAndRunningBalance() throws {
         var ledger = Ledger()
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        ledger.post(try Transaction(
+        let d = try makeDate(2024, 1, 1)
+        ledger.add(.transaction(try Transaction(
             date: d, description: "Deposit",
             postings: [
                 Posting(accountName: "Assets:Checking", amount: Amount(quantity:  1000, commodity: "USD")),
                 Posting(accountName: "Equity:Opening",  amount: Amount(quantity: -1000, commodity: "USD")),
             ]
-        ))
-        ledger.post(try Transaction(
+        )))
+        ledger.add(.transaction(try Transaction(
             date: d, description: "Coffee",
             postings: [
-                Posting(accountName: "Expenses:Food",   amount: Amount(quantity:  5, commodity: "USD")),
-                Posting(accountName: "Assets:Checking", amount: Amount(quantity: -5, commodity: "USD")),
+                Posting(accountName: "Expenses:Food",   amount: Amount(quantity:    5, commodity: "USD")),
+                Posting(accountName: "Assets:Checking", amount: Amount(quantity:   -5, commodity: "USD")),
             ]
-        ))
-
+        )))
         let stmt = AccountStatement(ledger: ledger, accountName: "Assets:Checking")
-        XCTAssertEqual(stmt.lines.count, 2)
-        XCTAssertEqual(stmt.lines[0].runningBalance[0].quantity, 1000)
-        XCTAssertEqual(stmt.lines[1].runningBalance[0].quantity, 995)
+        #expect(stmt.lines.count == 2)
+        #expect(stmt.lines[0].transaction.description        == "Deposit")
+        #expect(stmt.lines[0].runningBalance[0].quantity     == 1000)
+        #expect(stmt.lines[1].transaction.description        == "Coffee")
+        #expect(stmt.lines[1].runningBalance[0].quantity     == 995)
     }
 
-    // MARK: - LedgerManager
+    @Test("to: date filter restricts statement lines to within the given range")
+    func dateFilter() throws {
+        var ledger = Ledger()
+        let jan = try makeDate(2024, 1, 1)
+        let jun = try makeDate(2024, 6, 1)
+        let mar = try makeDate(2024, 3, 1)
+        ledger.add(.transaction(try Transaction(
+            date: jan, description: "Jan",
+            postings: [
+                Posting(accountName: "Assets:Cash", amount: Amount(quantity:  100, commodity: "USD")),
+                Posting(accountName: "Income:A",    amount: Amount(quantity: -100, commodity: "USD")),
+            ]
+        )))
+        ledger.add(.transaction(try Transaction(
+            date: jun, description: "Jun",
+            postings: [
+                Posting(accountName: "Assets:Cash", amount: Amount(quantity:  200, commodity: "USD")),
+                Posting(accountName: "Income:A",    amount: Amount(quantity: -200, commodity: "USD")),
+            ]
+        )))
+        let stmt = AccountStatement(ledger: ledger, accountName: "Assets:Cash", to: mar)
+        #expect(stmt.lines.count == 1)
+        #expect(stmt.lines[0].transaction.description == "Jan")
+    }
+}
 
-    func testLedgerManagerPost() async throws {
+// MARK: - LedgerManager
+
+@Suite("LedgerManager") struct LedgerManagerTests {
+
+    @Test("added transaction is reflected in ledger queries")
+    func addTransaction() async throws {
         let manager = try LedgerManager()
-        let d = try JournalDate(year: 2024, month: 1, day: 1)
-        try await manager.post(Transaction(
-            date: d, description: "Test",
+        let tx = try Transaction(
+            date: makeDate(2024, 1, 1), description: "Salary",
             postings: [
                 Posting(accountName: "Assets:Cash",   amount: Amount(quantity:  100, commodity: "USD")),
                 Posting(accountName: "Income:Salary", amount: Amount(quantity: -100, commodity: "USD")),
             ]
-        ))
+        )
+        try await manager.add(.transaction(tx))
         let txs = await manager.transactions(for: "Assets:Cash")
-        XCTAssertEqual(txs.count, 1)
+        #expect(txs.count == 1)
+        #expect(txs[0].description == "Salary")
+        #expect(txs[0].postings[0].amount.quantity == 100)
     }
+
+    @Test("removed transaction is no longer returned by queries")
+    func removeTransaction() async throws {
+        let manager = try LedgerManager()
+        let tx = try Transaction(
+            date: makeDate(2024, 1, 1), description: "Salary",
+            postings: [
+                Posting(accountName: "Assets:Cash",   amount: Amount(quantity:  100, commodity: "USD")),
+                Posting(accountName: "Income:Salary", amount: Amount(quantity: -100, commodity: "USD")),
+            ]
+        )
+        try await manager.add(.transaction(tx))
+        #expect(try await manager.remove(.transaction(tx)))
+        #expect(await manager.transactions(for: "Assets:Cash").isEmpty)
+    }
+
+    @Test("remove returns false and does not call save when item is absent")
+    func removeAbsentDoesNotSave() async throws {
+        let store   = MockLedgerStore()
+        let manager = try LedgerManager(store: store)
+        let tx = try Transaction(
+            date: makeDate(2024, 1, 1), description: "Ghost",
+            postings: [
+                Posting(accountName: "Assets:Cash",   amount: Amount(quantity:  1, commodity: "USD")),
+                Posting(accountName: "Income:Salary", amount: Amount(quantity: -1, commodity: "USD")),
+            ]
+        )
+        #expect(try await manager.remove(.transaction(tx)) == false)
+        #expect(store.saveCallCount == 0)
+    }
+}
+
+// MARK: - Test doubles
+
+private final class MockLedgerStore: LedgerStore, @unchecked Sendable {
+    nonisolated(unsafe) private(set) var saveCallCount = 0
+    func load() throws -> Ledger { Ledger() }
+    func save(_ ledger: Ledger) throws { saveCallCount += 1 }
 }

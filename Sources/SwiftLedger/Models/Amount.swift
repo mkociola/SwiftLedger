@@ -30,8 +30,7 @@ public struct Amount: Sendable, Codable, Hashable, CustomStringConvertible {
     }
 
     public var description: String {
-        let q = formatDecimal(quantity)
-        return commodityIsPrefix ? "\(commodity)\(q)" : "\(q) \(commodity)"
+        commodityIsPrefix ? "\(commodity)\(quantity)" : "\(quantity) \(commodity)"
     }
 }
 
@@ -64,18 +63,6 @@ extension Amount {
                commodity: lhs.commodity,
                commodityIsPrefix: lhs.commodityIsPrefix)
     }
-}
-
-// MARK: - Helpers
-
-/// Formats a `Decimal` without trailing zeros, but with at least 2 decimal
-/// places for typical currency display.
-internal func formatDecimal(_ d: Decimal) -> String {
-    // Decimal.description gives minimal form ("100", "10.5").
-    // Show as-is; callers may override for UI.
-    let s = d.description
-    // If no decimal point and value looks like currency, leave plain.
-    return s
 }
 
 extension Collection where Element == Amount {

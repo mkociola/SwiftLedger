@@ -1,7 +1,7 @@
 import Foundation
 
 /// Errors thrown by the SwiftLedger library.
-public enum LedgerError: Error, Sendable {
+public enum LedgerError: Error, Sendable, Equatable {
     // MARK: - Parsing
     case parseError(line: Int, message: String)
     case invalidDate(String)
