@@ -11,8 +11,13 @@ public struct Money: Sendable, Codable, Hashable, CustomStringConvertible {
     public let currency: CurrencyCode
 
     public init(_ amount: Decimal, _ currency: CurrencyCode) {
+        let upper = currency.uppercased()
+        precondition(
+            upper.count == 3 && upper.allSatisfy(\.isLetter),
+            "Invalid currency code '\(currency)': must be a 3-letter ISO 4217 code (e.g. \"USD\")"
+        )
         self.amount = amount
-        self.currency = currency.uppercased()
+        self.currency = upper
     }
 
     public var isZero: Bool { amount == .zero }
@@ -51,8 +56,14 @@ extension Money {
 // MARK: - Comparable
 
 extension Money: Comparable {
+    /// Compares two monetary amounts.
+    /// - Precondition: Both values must share the same currency.
     public static func < (lhs: Money, rhs: Money) -> Bool {
-        lhs.amount < rhs.amount
+        precondition(
+            lhs.currency == rhs.currency,
+            "Cannot compare Money values of different currencies: \(lhs.currency) vs \(rhs.currency)"
+        )
+        return lhs.amount < rhs.amount
     }
 }
 

@@ -24,6 +24,19 @@ public struct Ledger: Sendable, Codable, Hashable {
         try chartOfAccounts.add(account)
     }
 
+    /// Removes an account from the chart of accounts.
+    ///
+    /// - Throws: `LedgerError.accountNotFound` if the account does not exist.
+    /// - Throws: `LedgerError.accountHasTransactions` if any posted transaction references this account.
+    public mutating func removeAccount(id: UUID) throws {
+        let account = try chartOfAccounts.account(id: id)
+        let hasTransactions = journal.transactions.contains { tx in
+            tx.entries.contains { $0.account.id == id }
+        }
+        guard !hasTransactions else { throw LedgerError.accountHasTransactions(account) }
+        chartOfAccounts.remove(id: id)
+    }
+
     // MARK: - Posting
 
     /// Validates and posts a transaction to the journal.
@@ -39,6 +52,21 @@ public struct Ledger: Sendable, Codable, Hashable {
         journal.append(transaction)
     }
 
+    /// Posts a reversing transaction for `transaction`.
+    ///
+    /// - Parameters:
+    ///   - transaction: The transaction to reverse. Must already be posted to this ledger.
+    ///   - memo: Override memo for the reversing entry.
+    ///   - date: Date of the reversing transaction; defaults to today.
+    public mutating func reverse(
+        _ transaction: Transaction,
+        memo: String? = nil,
+        date: Date = Date()
+    ) throws {
+        let reversed = try transaction.reversed(memo: memo, date: date)
+        try post(reversed)
+    }
+
     // MARK: - Balance queries
 
     /// Computes the current balance for a single account.
@@ -46,6 +74,13 @@ public struct Ledger: Sendable, Codable, Hashable {
     public func balance(for accountID: UUID) throws -> AccountBalance {
         let account = try chartOfAccounts.account(id: accountID)
         return computeBalance(for: account, in: journal.transactions)
+    }
+
+    /// Computes the balance for a single account as of a historical date (inclusive).
+    /// - Throws: `LedgerError.accountNotFound` if the account is not in the chart.
+    public func balance(for accountID: UUID, asOf date: Date) throws -> AccountBalance {
+        let account = try chartOfAccounts.account(id: accountID)
+        return computeBalance(for: account, in: journal.transactions, upTo: date)
     }
 
     /// Returns individual balances for every account whose name falls under `prefix`.
@@ -63,11 +98,21 @@ public struct Ledger: Sendable, Codable, Hashable {
         }
     }
 
+    /// Returns subtree balances as of a historical date (inclusive).
+    public func subtreeBalances(forPrefix prefix: String, asOf date: Date) -> [AccountBalance] {
+        chartOfAccounts.accounts(withPrefix: prefix).map {
+            computeBalance(for: $0, in: journal.transactions, upTo: date)
+        }
+    }
+
     /// Returns balances for every account in the chart.
     public func allBalances() -> [AccountBalance] {
-        chartOfAccounts.all.map { account in
-            computeBalance(for: account, in: journal.transactions)
-        }
+        chartOfAccounts.all.map { computeBalance(for: $0, in: journal.transactions) }
+    }
+
+    /// Returns balances for every account in the chart as of a historical date (inclusive).
+    public func allBalances(asOf date: Date) -> [AccountBalance] {
+        chartOfAccounts.all.map { computeBalance(for: $0, in: journal.transactions, upTo: date) }
     }
 
     /// Computes a trial balance: all account balances grouped and validated.
@@ -95,10 +140,26 @@ public struct Ledger: Sendable, Codable, Hashable {
         return journal.transactions(for: accountID)
     }
 
+    /// All transactions that touch any account in the subtree rooted at `prefix`.
+    ///
+    /// Each transaction is returned at most once, even if it touches multiple
+    /// accounts in the subtree.
+    public func transactions(forPrefix prefix: String) -> [Transaction] {
+        let ids = Set(chartOfAccounts.accounts(withPrefix: prefix).map(\.id))
+        return journal.transactions.filter { tx in
+            tx.entries.contains { ids.contains($0.account.id) }
+        }
+    }
+
     // MARK: - Private helpers
 
-    private func computeBalance(for account: Account, in transactions: [Transaction]) -> AccountBalance {
-        let relevantEntries = transactions
+    private func computeBalance(
+        for account: Account,
+        in transactions: [Transaction],
+        upTo date: Date? = nil
+    ) -> AccountBalance {
+        let filtered = date.map { d in transactions.filter { $0.date <= d } } ?? transactions
+        let relevantEntries = filtered
             .flatMap(\.entries)
             .filter { $0.account.id == account.id }
 

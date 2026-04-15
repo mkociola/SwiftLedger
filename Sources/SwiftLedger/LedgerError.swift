@@ -12,6 +12,10 @@ public enum LedgerError: Error, Sendable {
     case duplicateAccount(Account)
     /// No account matching the given identifier was found.
     case accountNotFound(UUID)
+    /// An entry amount is zero or negative; amounts must be strictly positive.
+    case invalidAmount(Money)
+    /// An account cannot be removed because it has posted transactions.
+    case accountHasTransactions(Account)
 }
 
 extension LedgerError: LocalizedError {
@@ -27,6 +31,10 @@ extension LedgerError: LocalizedError {
             "Account '\(a.name)' (\(a.id)) already exists"
         case .accountNotFound(let id):
             "No account found with id \(id)"
+        case .invalidAmount(let m):
+            "Entry amount must be positive, got \(m)"
+        case .accountHasTransactions(let a):
+            "Cannot remove account '\(a.name)': it has posted transactions"
         }
     }
 }

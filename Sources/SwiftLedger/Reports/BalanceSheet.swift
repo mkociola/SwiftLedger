@@ -39,7 +39,7 @@ public struct BalanceSheet: Sendable, Codable {
         self.date = date
         self.currency = currency.uppercased()
 
-        let balances = ledger.allBalances().filter { $0.account.currency == currency.uppercased() }
+        let balances = ledger.allBalances(asOf: date).filter { $0.account.currency == currency.uppercased() }
         self.assets      = balances.filter { $0.account.type == .asset }
         self.liabilities = balances.filter { $0.account.type == .liability }
         self.equity      = balances.filter { $0.account.type == .equity }

@@ -55,8 +55,8 @@ import Foundation
         let tx = try Transaction(
             memo: "Sale",
             entries: [
-                .debit(account: cash, amount: Money(100, "USD")),
-                .credit(account: revenue, amount: Money(100, "USD")),
+                try .debit(account: cash, amount: Money(100, "USD")),
+                try .credit(account: revenue, amount: Money(100, "USD")),
             ]
         )
         #expect(tx.entries.count == 2)
@@ -68,8 +68,8 @@ import Foundation
             _ = try Transaction(
                 memo: "Bad",
                 entries: [
-                    .debit(account: cash, amount: Money(100, "USD")),
-                    .credit(account: revenue, amount: Money(50, "USD")),
+                    try .debit(account: cash, amount: Money(100, "USD")),
+                    try .credit(account: revenue, amount: Money(50, "USD")),
                 ]
             )
         }
@@ -86,8 +86,8 @@ import Foundation
             _ = try Transaction(
                 memo: "Multi-currency",
                 entries: [
-                    .debit(account: cash, amount: Money(100, "USD")),
-                    .credit(account: revenue, amount: Money(100, "EUR")),
+                    try .debit(account: cash, amount: Money(100, "USD")),
+                    try .credit(account: revenue, amount: Money(100, "EUR")),
                 ]
             )
         }
@@ -113,8 +113,8 @@ import Foundation
         let tx = try Transaction(
             memo: "Sale",
             entries: [
-                .debit(account: cash, amount: Money(200, "USD")),
-                .credit(account: revenue, amount: Money(200, "USD")),
+                try .debit(account: cash, amount: Money(200, "USD")),
+                try .credit(account: revenue, amount: Money(200, "USD")),
             ]
         )
         try ledger.post(tx)
@@ -131,8 +131,8 @@ import Foundation
         let tx = try Transaction(
             memo: "Sale",
             entries: [
-                .debit(account: cash, amount: Money(500, "USD")),
-                .credit(account: revenue, amount: Money(500, "USD")),
+                try .debit(account: cash, amount: Money(500, "USD")),
+                try .credit(account: revenue, amount: Money(500, "USD")),
             ]
         )
         try ledger.post(tx)
@@ -160,8 +160,8 @@ import Foundation
         let tx = try Transaction(
             memo: "Sale",
             entries: [
-                .debit(account: cash, amount: Money(100, "USD")),
-                .credit(account: revenue, amount: Money(100, "USD")),
+                try .debit(account: cash, amount: Money(100, "USD")),
+                try .credit(account: revenue, amount: Money(100, "USD")),
             ]
         )
         try ledger.post(tx)
@@ -189,24 +189,24 @@ import Foundation
         try ledger.post(Transaction(
             memo: "Owner investment",
             entries: [
-                .debit(account: cash, amount: Money(1000, "USD")),
-                .credit(account: equity, amount: Money(1000, "USD")),
+                try .debit(account: cash, amount: Money(1000, "USD")),
+                try .credit(account: equity, amount: Money(1000, "USD")),
             ]
         ))
         // Earn $300 revenue
         try ledger.post(Transaction(
             memo: "Service revenue",
             entries: [
-                .debit(account: cash, amount: Money(300, "USD")),
-                .credit(account: revenue, amount: Money(300, "USD")),
+                try .debit(account: cash, amount: Money(300, "USD")),
+                try .credit(account: revenue, amount: Money(300, "USD")),
             ]
         ))
         // Spend $100 on expense
         try ledger.post(Transaction(
             memo: "Rent",
             entries: [
-                .credit(account: cash, amount: Money(100, "USD")),
-                .debit(account: expense, amount: Money(100, "USD")),
+                try .credit(account: cash, amount: Money(100, "USD")),
+                try .debit(account: expense, amount: Money(100, "USD")),
             ]
         ))
         return ledger
@@ -272,16 +272,16 @@ import Foundation
         try ledger.addAccount(rent)
 
         try ledger.post(Transaction(memo: "Groceries", entries: [
-            .debit(account: groceries, amount: Money(80, "USD")),
-            .credit(account: cash,     amount: Money(80, "USD")),
+            try .debit(account: groceries, amount: Money(80, "USD")),
+            try .credit(account: cash,     amount: Money(80, "USD")),
         ]))
         try ledger.post(Transaction(memo: "Dinner", entries: [
-            .debit(account: dining, amount: Money(45, "USD")),
-            .credit(account: cash,  amount: Money(45, "USD")),
+            try .debit(account: dining, amount: Money(45, "USD")),
+            try .credit(account: cash,  amount: Money(45, "USD")),
         ]))
         try ledger.post(Transaction(memo: "Rent", entries: [
-            .debit(account: rent, amount: Money(1200, "USD")),
-            .credit(account: cash, amount: Money(1200, "USD")),
+            try .debit(account: rent, amount: Money(1200, "USD")),
+            try .credit(account: cash, amount: Money(1200, "USD")),
         ]))
         return ledger
     }
@@ -327,5 +327,154 @@ import Foundation
         let accounts = ledger.chartOfAccounts.accounts(withPrefix: "Expenses:Food")
         #expect(accounts.count == 2)
         #expect(accounts.allSatisfy { $0.name.hasPrefix("Expenses:Food") })
+    }
+}
+
+// MARK: - Entry Validation Tests
+
+@Suite("Entry Validation") struct EntryValidationTests {
+    let cash = Account(name: "Cash", type: .asset, currency: "USD")
+    let revenue = Account(name: "Revenue", type: .revenue, currency: "USD")
+
+    @Test func zeroAmountThrows() {
+        #expect(throws: LedgerError.self) {
+            _ = try Entry.debit(account: cash, amount: Money(.zero, "USD"))
+        }
+    }
+
+    @Test func negativeAmountThrows() {
+        #expect(throws: LedgerError.self) {
+            _ = try Entry.debit(account: cash, amount: Money(-10, "USD"))
+        }
+    }
+
+    @Test func currencyMismatchThrows() {
+        #expect(throws: LedgerError.self) {
+            _ = try Entry.debit(account: cash, amount: Money(10, "EUR"))
+        }
+    }
+}
+
+// MARK: - Reversal Tests
+
+@Suite("Transaction Reversal") struct ReversalTests {
+    @Test func reversalPostsEqualOppositeEntries() throws {
+        var ledger = Ledger()
+        let cash    = Account(name: "Cash",    type: .asset,   currency: "USD")
+        let revenue = Account(name: "Revenue", type: .revenue, currency: "USD")
+        try ledger.addAccount(cash)
+        try ledger.addAccount(revenue)
+
+        let tx = try Transaction(memo: "Sale", entries: [
+            try .debit(account: cash,    amount: Money(100, "USD")),
+            try .credit(account: revenue, amount: Money(100, "USD")),
+        ])
+        try ledger.post(tx)
+        try ledger.reverse(tx)
+
+        // After reversal both accounts should be back to zero
+        #expect(try ledger.balance(for: cash.id).netBalance.amount == 0)
+        #expect(try ledger.balance(for: revenue.id).netBalance.amount == 0)
+        #expect(ledger.trialBalance().isBalanced)
+    }
+
+    @Test func reversedTransactionHasDefaultMemo() throws {
+        let cash    = Account(name: "Cash",    type: .asset,   currency: "USD")
+        let revenue = Account(name: "Revenue", type: .revenue, currency: "USD")
+        let tx = try Transaction(memo: "Sale", entries: [
+            try .debit(account: cash,    amount: Money(100, "USD")),
+            try .credit(account: revenue, amount: Money(100, "USD")),
+        ])
+        let reversed = try tx.reversed()
+        #expect(reversed.memo == "Reversal of: Sale")
+    }
+}
+
+// MARK: - Historical Balance Tests
+
+@Suite("Historical Balances") struct HistoricalBalanceTests {
+    @Test func balanceAsOfExcludesFutureTransactions() throws {
+        var ledger = Ledger()
+        let cash    = Account(name: "Cash",    type: .asset,   currency: "USD")
+        let revenue = Account(name: "Revenue", type: .revenue, currency: "USD")
+        try ledger.addAccount(cash)
+        try ledger.addAccount(revenue)
+
+        let past   = Date(timeIntervalSinceNow: -86400 * 30) // 30 days ago
+        let future = Date(timeIntervalSinceNow:  86400 * 30) // 30 days from now
+        let cutoff = Date(timeIntervalSinceNow: -86400 * 10) // 10 days ago
+
+        let oldTx = try Transaction(date: past, memo: "Old sale", entries: [
+            try .debit(account: cash,    amount: Money(500, "USD")),
+            try .credit(account: revenue, amount: Money(500, "USD")),
+        ])
+        let newTx = try Transaction(date: future, memo: "Future sale", entries: [
+            try .debit(account: cash,    amount: Money(200, "USD")),
+            try .credit(account: revenue, amount: Money(200, "USD")),
+        ])
+        try ledger.post(oldTx)
+        try ledger.post(newTx)
+
+        let balanceAtCutoff = try ledger.balance(for: cash.id, asOf: cutoff)
+        #expect(balanceAtCutoff.netBalance.amount == 500)
+
+        let currentBalance = try ledger.balance(for: cash.id)
+        #expect(currentBalance.netBalance.amount == 700)
+    }
+}
+
+// MARK: - Account Removal Tests
+
+@Suite("Account Removal") struct AccountRemovalTests {
+    @Test func canRemoveUnusedAccount() throws {
+        var ledger = Ledger()
+        let acc = Account(name: "Unused", type: .asset, currency: "USD")
+        try ledger.addAccount(acc)
+        try ledger.removeAccount(id: acc.id)
+        #expect(ledger.chartOfAccounts.count == 0)
+    }
+
+    @Test func cannotRemoveAccountWithTransactions() throws {
+        var ledger = Ledger()
+        let cash    = Account(name: "Cash",    type: .asset,   currency: "USD")
+        let revenue = Account(name: "Revenue", type: .revenue, currency: "USD")
+        try ledger.addAccount(cash)
+        try ledger.addAccount(revenue)
+        try ledger.post(Transaction(memo: "Sale", entries: [
+            try .debit(account: cash,    amount: Money(100, "USD")),
+            try .credit(account: revenue, amount: Money(100, "USD")),
+        ]))
+        #expect(throws: LedgerError.self) {
+            try ledger.removeAccount(id: cash.id)
+        }
+    }
+}
+
+// MARK: - FileLedgerStore Tests
+
+@Suite("FileLedgerStore") struct FileLedgerStoreTests {
+    @Test func saveAndLoadRoundTrip() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "test-ledger-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = FileLedgerStore(url: url)
+
+        var ledger = Ledger()
+        let cash = Account(name: "Cash", type: .asset, currency: "USD")
+        try ledger.addAccount(cash)
+        try await store.save(ledger)
+
+        let loaded = try await store.load()
+        #expect(loaded.chartOfAccounts.count == 1)
+        #expect(loaded.chartOfAccounts.all.first?.name == "Cash")
+    }
+
+    @Test func loadMissingFileReturnsEmptyLedger() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "nonexistent-\(UUID()).json")
+        let store = FileLedgerStore(url: url)
+        let ledger = try await store.load()
+        #expect(ledger.chartOfAccounts.isEmpty)
     }
 }
