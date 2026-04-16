@@ -18,8 +18,8 @@ public final class PlainTextJournalStore: LedgerStore {
             let text = try String(contentsOf: url, encoding: .utf8)
             let journal = try parser.parse(text)
             return Ledger(journal: journal)
-        } catch let e as LedgerError {
-            throw e
+        } catch let ledgerError as LedgerError {
+            throw ledgerError
         } catch {
             throw LedgerError.storeError("Failed to read \(url.lastPathComponent): \(error.localizedDescription)")
         }

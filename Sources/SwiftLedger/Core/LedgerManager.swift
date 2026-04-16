@@ -1,7 +1,7 @@
 /// Manages a `Ledger` and optional persistence.
 public final class LedgerManager {
     private var ledger: Ledger
-    private let store:  (any LedgerStore)?
+    private let store: (any LedgerStore)?
 
     public init(store: (any LedgerStore)? = nil) throws {
         self.store  = store
@@ -54,6 +54,7 @@ public final class LedgerManager {
         ledger.transactions(forPrefix: prefix)
     }
 
+    // swiftlint:disable:next identifier_name
     public func transactions(from: JournalDate? = nil, to: JournalDate? = nil) -> [Transaction] {
         ledger.transactions(from: from, to: to)
     }
@@ -62,17 +63,23 @@ public final class LedgerManager {
         BalanceSheet(ledger: ledger, asOf: asOf)
     }
 
+    // swiftlint:disable:next identifier_name
     public func incomeStatement(from: JournalDate? = nil, to: JournalDate? = nil) -> IncomeStatement {
         IncomeStatement(ledger: ledger, from: from, to: to)
     }
 
-    public func accountStatement(for accountName: String, from: JournalDate? = nil, to: JournalDate? = nil) -> AccountStatement {
+    public func accountStatement(
+        for accountName: String,
+        from: JournalDate? = nil,
+        // swiftlint:disable:next identifier_name
+        to: JournalDate? = nil
+    ) -> AccountStatement {
         AccountStatement(ledger: ledger, accountName: accountName, from: from, to: to)
     }
 
     /// Reloads from the store if one is present.
     public func reload() throws {
-        guard let s = store else { return }
-        ledger = try s.load()
+        guard let activeStore = store else { return }
+        ledger = try activeStore.load()
     }
 }

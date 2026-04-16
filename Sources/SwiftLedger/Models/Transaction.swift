@@ -56,8 +56,8 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
 
     private static func validateBalance(_ postings: [Posting]) throws {
         var sums: [String: Decimal] = [:]
-        for p in postings {
-            sums[p.amount.commodity, default: .zero] += p.amount.quantity
+        for posting in postings {
+            sums[posting.amount.commodity, default: .zero] += posting.amount.quantity
         }
         for (commodity, sum) in sums where sum != .zero {
             throw LedgerError.unbalancedTransaction(commodity: commodity, imbalance: sum)

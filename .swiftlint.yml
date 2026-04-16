@@ -1,0 +1,8 @@
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+
+reporter: "xcode"

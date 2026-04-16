@@ -25,20 +25,20 @@ extension LedgerError: LocalizedError {
         switch self {
         case .parseError(let line, let msg):
             "Parse error on line \(line): \(msg)"
-        case .invalidDate(let s):
-            "Invalid date: '\(s)'"
-        case .invalidAmount(let s):
-            "Invalid amount: '\(s)'"
+        case .invalidDate(let string):
+            "Invalid date: '\(string)'"
+        case .invalidAmount(let string):
+            "Invalid amount: '\(string)'"
         case .multipleElidedPostings:
             "A transaction may have at most one posting with an elided amount"
         case .cannotResolveElision:
             "Cannot resolve elided amount: remaining postings span multiple commodities"
         case .emptyTransaction:
             "A transaction must contain at least two postings"
-        case .unbalancedTransaction(let c, let imbalance):
-            "Transaction is unbalanced in \(c): off by \(imbalance)"
-        case .commodityMismatch(let a, let b):
-            "Commodity mismatch: '\(a)' vs '\(b)'"
+        case .unbalancedTransaction(let commodity, let imbalance):
+            "Transaction is unbalanced in \(commodity): off by \(imbalance)"
+        case .commodityMismatch(let first, let second):
+            "Commodity mismatch: '\(first)' vs '\(second)'"
         case .storeError(let msg):
             "Store error: \(msg)"
         }

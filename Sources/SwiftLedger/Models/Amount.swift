@@ -68,9 +68,9 @@ extension Collection where Element == Amount {
     /// Zero-value amounts are included.
     public func netByCommodity() -> [Amount] {
         var sums: [String: (Decimal, Bool)] = [:]
-        for a in self {
-            let current = sums[a.commodity, default: (.zero, a.commodityIsPrefix)]
-            sums[a.commodity] = (current.0 + a.quantity, a.commodityIsPrefix)
+        for amount in self {
+            let current = sums[amount.commodity, default: (.zero, amount.commodityIsPrefix)]
+            sums[amount.commodity] = (current.0 + amount.quantity, amount.commodityIsPrefix)
         }
         return sums
             .map { Amount(quantity: $0.value.0, commodity: $0.key, commodityIsPrefix: $0.value.1) }

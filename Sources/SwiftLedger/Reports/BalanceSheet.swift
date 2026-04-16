@@ -5,9 +5,9 @@
 /// which is always true for a well-formed double-entry journal.
 public struct BalanceSheet: Sendable {
     public let asOf: JournalDate
-    public let assets:      [AccountBalance]
+    public let assets: [AccountBalance]
     public let liabilities: [AccountBalance]
-    public let equity:      [AccountBalance]
+    public let equity: [AccountBalance]
 
     /// `true` when the entire journal balances (sum of all postings = 0 per commodity).
     public let isBalanced: Bool

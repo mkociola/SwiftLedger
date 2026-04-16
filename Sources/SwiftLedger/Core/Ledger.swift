@@ -34,17 +34,15 @@ public struct Ledger: Sendable {
         var seen: [String: Account] = [:]
 
         // Explicit directives take precedence for type metadata.
-        for d in journal.accountDirectives {
-            let a = Account(name: d.name, type: d.type)
-            seen[d.name] = a
+        for directive in journal.accountDirectives {
+            let account = Account(name: directive.name, type: directive.type)
+            seen[directive.name] = account
         }
 
         // Infer from postings.
-        for t in journal.transactions {
-            for p in t.postings {
-                if seen[p.accountName] == nil {
-                    seen[p.accountName] = Account(name: p.accountName)
-                }
+        for transaction in journal.transactions {
+            for posting in transaction.postings where seen[posting.accountName] == nil {
+                seen[posting.accountName] = Account(name: posting.accountName)
             }
         }
 
@@ -99,24 +97,26 @@ public struct Ledger: Sendable {
     /// Returns transactions that contain at least one posting for an exact
     /// account name, sorted by date then by original document order.
     public func transactions(for accountName: String) -> [Transaction] {
-        filteredTransactions { t in
-            t.postings.contains { $0.accountName == accountName }
+        filteredTransactions { transaction in
+            transaction.postings.contains { $0.accountName == accountName }
         }
     }
 
     /// Returns transactions that contain at least one posting in the account
     /// subtree rooted at `prefix`.
     public func transactions(forPrefix prefix: String) -> [Transaction] {
-        filteredTransactions { t in
-            t.postings.contains { isInSubtree($0.accountName, prefix: prefix) }
+        filteredTransactions { transaction in
+            transaction.postings.contains { isInSubtree($0.accountName, prefix: prefix) }
         }
     }
 
     /// Returns all transactions within an optional date range (inclusive).
-    public func transactions(from: JournalDate? = nil, to: JournalDate? = nil) -> [Transaction] {
-        filteredTransactions { t in
-            if let from = from, t.date < from { return false }
-            if let to   = to,   t.date > to   { return false }
+    public func transactions(
+        from: JournalDate? = nil, to: JournalDate? = nil // swiftlint:disable:this identifier_name
+    ) -> [Transaction] {
+        filteredTransactions { transaction in
+            if let from = from, transaction.date < from { return false }
+            if let toDate = to, transaction.date > toDate { return false }
             return true
         }
     }
@@ -129,14 +129,14 @@ public struct Ledger: Sendable {
 
     private func postings(for accountName: String, asOf: JournalDate?) -> [Posting] {
         journal.transactions
-            .filter { asOf == nil || $0.date <= asOf! }
+            .filter { transaction in asOf.map { transaction.date <= $0 } ?? true }
             .flatMap(\.postings)
             .filter { $0.accountName == accountName }
     }
 
     private func postingsInSubtree(prefix: String, asOf: JournalDate?) -> [Posting] {
         journal.transactions
-            .filter { asOf == nil || $0.date <= asOf! }
+            .filter { transaction in asOf.map { transaction.date <= $0 } ?? true }
             .flatMap(\.postings)
             .filter { isInSubtree($0.accountName, prefix: prefix) }
     }

@@ -13,6 +13,7 @@ public struct AccountStatement: Sendable {
     public let accountName: String
     public let lines: [Line]
 
+    // swiftlint:disable:next identifier_name
     public init(ledger: Ledger, accountName: String, from: JournalDate? = nil, to: JournalDate? = nil) {
         self.accountName = accountName
 
@@ -22,22 +23,22 @@ public struct AccountStatement: Sendable {
 
         let txs = ledger.journal.transactions
             .filter {
-                if let f = from, $0.date < f { return false }
-                if let t = to,   $0.date > t { return false }
+                if let fromDate = from, $0.date < fromDate { return false }
+                if let toDate = to, $0.date > toDate { return false }
                 return $0.postings.contains { $0.accountName == accountName }
             }
 
-        for tx in txs {
-            for posting in tx.postings where posting.accountName == accountName {
-                let c = posting.amount.commodity
-                balances[c, default: .zero] += posting.amount.quantity
-                prefixFlags[c] = posting.amount.commodityIsPrefix
+        for transaction in txs {
+            for posting in transaction.postings where posting.accountName == accountName {
+                let commodity = posting.amount.commodity
+                balances[commodity, default: .zero] += posting.amount.quantity
+                prefixFlags[commodity] = posting.amount.commodityIsPrefix
 
                 let runningBalance = balances.map { (commodity, qty) in
                     Amount(quantity: qty, commodity: commodity, commodityIsPrefix: prefixFlags[commodity] ?? false)
                 }.sorted { $0.commodity < $1.commodity }
 
-                resultLines.append(Line(transaction: tx, posting: posting, runningBalance: runningBalance))
+                resultLines.append(Line(transaction: transaction, posting: posting, runningBalance: runningBalance))
             }
         }
 

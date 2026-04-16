@@ -33,11 +33,11 @@ extension AccountType {
     public static func inferred(from accountName: String) -> AccountType {
         let root = accountName.split(separator: ":").first.map { $0.lowercased() } ?? ""
         switch root {
-        case "assets",      "asset":                return .asset
+        case "assets", "asset":                return .asset
         case "liabilities", "liability":            return .liability
-        case "equity",      "equities":             return .equity
-        case "income",      "revenue", "revenues":  return .revenue
-        case "expenses",    "expense":              return .expense
+        case "equity", "equities":             return .equity
+        case "income", "revenue", "revenues":  return .revenue
+        case "expenses", "expense":              return .expense
         default:                                    return .unclassified
         }
     }

@@ -1,10 +1,12 @@
 /// An income statement (profit & loss) for a date range.
 public struct IncomeStatement: Sendable {
     public let from: JournalDate?
-    public let to:   JournalDate?
+    // swiftlint:disable:next identifier_name
+    public let to: JournalDate?
     public let revenues: [AccountBalance]
     public let expenses: [AccountBalance]
 
+    // swiftlint:disable:next identifier_name
     public init(ledger: Ledger, from: JournalDate? = nil, to: JournalDate? = nil) {
         self.from = from
         self.to   = to

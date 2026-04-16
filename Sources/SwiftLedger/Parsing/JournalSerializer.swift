@@ -23,10 +23,10 @@ public struct JournalSerializer {
                 lines.append("")
             case .comment(let text):
                 lines.append(text.hasPrefix(";") || text.hasPrefix("#") ? text : "; \(text)")
-            case .accountDirective(let d):
-                lines.append("account \(d.name)")
-            case .transaction(let t):
-                lines.append(contentsOf: serializeTransaction(t))
+            case .accountDirective(let directive):
+                lines.append("account \(directive.name)")
+            case .transaction(let transaction):
+                lines.append(contentsOf: serializeTransaction(transaction))
             }
         }
         return lines.joined(separator: "\n")
@@ -34,47 +34,47 @@ public struct JournalSerializer {
 
     // MARK: - Transaction serialisation
 
-    private func serializeTransaction(_ t: Transaction) -> [String] {
+    private func serializeTransaction(_ transaction: Transaction) -> [String] {
         var lines: [String] = []
 
         // Header line
-        var header = t.date.description
-        if let aux = t.auxDate {
+        var header = transaction.date.description
+        if let aux = transaction.auxDate {
             header += "=\(aux.description)"
         }
-        if t.status != .unmarked {
-            header += " \(t.status.rawValue)"
+        if transaction.status != .unmarked {
+            header += " \(transaction.status.rawValue)"
         }
-        if let code = t.code {
+        if let code = transaction.code {
             header += " (\(code))"
         }
-        header += " \(t.description)"
-        if let c = t.comment {
-            header += "  ; \(c)"
+        header += " \(transaction.description)"
+        if let comment = transaction.comment {
+            header += "  ; \(comment)"
         }
         lines.append(header)
 
         // Posting lines
-        for p in t.postings {
-            lines.append(serializePosting(p))
+        for posting in transaction.postings {
+            lines.append(serializePosting(posting))
         }
 
         return lines
     }
 
-    private func serializePosting(_ p: Posting) -> String {
+    private func serializePosting(_ posting: Posting) -> String {
         var line = "    "
 
-        if let s = p.status, s != .unmarked {
-            line += "\(s.rawValue) "
+        if let postingStatus = posting.status, postingStatus != .unmarked {
+            line += "\(postingStatus.rawValue) "
         }
 
-        line += p.accountName
+        line += posting.accountName
 
-        let amountStr = formatAmount(p.amount)
+        let amountStr = formatAmount(posting.amount)
         // Right-align amount at column 52
-        let accountFieldWidth = 52 - 4 - (p.status != nil && p.status != .unmarked ? 2 : 0)
-        let padding = accountFieldWidth - p.accountName.count
+        let accountFieldWidth = 52 - 4 - (posting.status != nil && posting.status != .unmarked ? 2 : 0)
+        let padding = accountFieldWidth - posting.accountName.count
         if padding >= 2 {
             line += String(repeating: " ", count: padding)
             line += amountStr
@@ -82,20 +82,20 @@ public struct JournalSerializer {
             line += "  \(amountStr)"
         }
 
-        if let c = p.comment {
-            line += "  ; \(c)"
+        if let comment = posting.comment {
+            line += "  ; \(comment)"
         }
 
         return line
     }
 
-    private func formatAmount(_ a: Amount) -> String {
-        let q = abs(a.quantity).description
-        let sign = a.quantity < 0 ? "-" : ""
-        if a.commodityIsPrefix {
-            return "\(sign)\(a.commodity)\(q)"
+    private func formatAmount(_ amount: Amount) -> String {
+        let absValue = abs(amount.quantity).description
+        let sign = amount.quantity < 0 ? "-" : ""
+        if amount.commodityIsPrefix {
+            return "\(sign)\(amount.commodity)\(absValue)"
         } else {
-            return "\(sign)\(q) \(a.commodity)"
+            return "\(sign)\(absValue) \(amount.commodity)"
         }
     }
 }

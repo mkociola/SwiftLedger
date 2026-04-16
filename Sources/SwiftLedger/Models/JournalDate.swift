@@ -23,9 +23,12 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
     /// Creates a `JournalDate` from a `Foundation.Date` in the given calendar.
     public init(_ date: Date, calendar: Calendar = .current) {
         let comps = calendar.dateComponents([.year, .month, .day], from: date)
-        self.year  = comps.year!
-        self.month = comps.month!
-        self.day   = comps.day!
+        guard let year = comps.year, let month = comps.month, let day = comps.day else {
+            preconditionFailure("Calendar failed to extract year/month/day from date")
+        }
+        self.year  = year
+        self.month = month
+        self.day   = day
     }
 
     /// Today's date using the current calendar.
@@ -35,7 +38,11 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
     public func date(timeZone: TimeZone = .current) -> Date {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = timeZone
-        return cal.date(from: DateComponents(year: year, month: month, day: day))!
+        let components = DateComponents(year: year, month: month, day: day)
+        guard let result = cal.date(from: components) else {
+            preconditionFailure("Calendar failed to construct date from \(self)")
+        }
+        return result
     }
 
     public var description: String {
@@ -43,7 +50,7 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
     }
 
     public static func < (lhs: JournalDate, rhs: JournalDate) -> Bool {
-        if lhs.year  != rhs.year  { return lhs.year  < rhs.year  }
+        if lhs.year  != rhs.year { return lhs.year  < rhs.year  }
         if lhs.month != rhs.month { return lhs.month < rhs.month }
         return lhs.day < rhs.day
     }
