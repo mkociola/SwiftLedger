@@ -6,7 +6,7 @@ import Foundation
 /// an atomic write to protect against partial writes.
 public final class PlainTextJournalStore: LedgerStore {
     private let url: URL
-    private let parser     = JournalParser()
+    private let parser = JournalParser()
     private let serializer = JournalSerializer()
 
     public init(url: URL) {

@@ -11,13 +11,14 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
 
     public init(year: Int, month: Int, day: Int) throws {
         guard year > 0,
-              (1...12).contains(month),
-              (1...31).contains(day) else {
+              (1 ... 12).contains(month),
+              (1 ... 31).contains(day)
+        else {
             throw LedgerError.invalidDate(String(format: "%04d-%02d-%02d", year, month, day))
         }
-        self.year  = year
+        self.year = year
         self.month = month
-        self.day   = day
+        self.day = day
     }
 
     /// Creates a `JournalDate` from a `Foundation.Date` in the given calendar.
@@ -26,13 +27,15 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
         guard let year = comps.year, let month = comps.month, let day = comps.day else {
             preconditionFailure("Calendar failed to extract year/month/day from date")
         }
-        self.year  = year
+        self.year = year
         self.month = month
-        self.day   = day
+        self.day = day
     }
 
     /// Today's date using the current calendar.
-    public static var today: JournalDate { JournalDate(Date()) }
+    public static var today: JournalDate {
+        JournalDate(Date())
+    }
 
     /// Returns a `Foundation.Date` at midnight in the given timezone.
     public func date(timeZone: TimeZone = .current) -> Date {
@@ -50,7 +53,7 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
     }
 
     public static func < (lhs: JournalDate, rhs: JournalDate) -> Bool {
-        if lhs.year  != rhs.year { return lhs.year  < rhs.year  }
+        if lhs.year != rhs.year { return lhs.year < rhs.year }
         if lhs.month != rhs.month { return lhs.month < rhs.month }
         return lhs.day < rhs.day
     }

@@ -115,7 +115,7 @@ public struct Ledger: Sendable {
         from: JournalDate? = nil, to: JournalDate? = nil // swiftlint:disable:this identifier_name
     ) -> [Transaction] {
         filteredTransactions { transaction in
-            if let from = from, transaction.date < from { return false }
+            if let from, transaction.date < from { return false }
             if let toDate = to, transaction.date > toDate { return false }
             return true
         }

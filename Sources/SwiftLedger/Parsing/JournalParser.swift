@@ -16,7 +16,6 @@ import Foundation
 /// - `account NAME` directives
 /// - Blank lines and full-line comments are preserved in the AST.
 public struct JournalParser {
-
     public init() {}
 
     // MARK: - Public API
@@ -28,7 +27,7 @@ public struct JournalParser {
         var index = 0
 
         while index < lines.count {
-            let raw  = lines[index]
+            let raw = lines[index]
             let line = raw
 
             // Blank line
@@ -93,7 +92,7 @@ public struct JournalParser {
         while index < lines.count {
             let currentLine = lines[index]
             if currentLine.isEmpty || currentLine.trimmingCharacters(in: .whitespaces).isEmpty {
-                break  // blank line ends the transaction
+                break // blank line ends the transaction
             }
             let first = currentLine.unicodeScalars.first
             guard first == " " || first == "\t" else { break }
@@ -101,7 +100,7 @@ public struct JournalParser {
             index += 1
         }
 
-        let postings = try resolveElisions(try postingLines.map { try parsePosting($0.0, lineNumber: $0.1) })
+        let postings = try resolveElisions(postingLines.map { try parsePosting($0.0, lineNumber: $0.1) })
         let transaction = try Transaction(
             date: header.date,
             auxDate: header.auxDate,
@@ -120,7 +119,6 @@ public struct JournalParser {
         _ line: String,
         lineNumber: Int
     ) throws -> ParsedHeader {
-
         var rest = line
 
         // Extract inline comment
@@ -154,7 +152,7 @@ public struct JournalParser {
         var code: String?
         if rest.hasPrefix("(") {
             if let closeIdx = rest.firstIndex(of: ")") {
-                code = String(rest[rest.index(after: rest.startIndex)..<closeIdx])
+                code = String(rest[rest.index(after: rest.startIndex) ..< closeIdx])
                 rest = String(rest[rest.index(after: closeIdx)...]).trimmingCharacters(in: .whitespaces)
             }
         }
@@ -212,7 +210,7 @@ public struct JournalParser {
     // MARK: - Elision resolution
 
     private func resolveElisions(_ rawPostings: [RawPosting]) throws -> [Posting] {
-        let elidedCount = rawPostings.filter { $0.amount == nil }.count
+        let elidedCount = rawPostings.count(where: { $0.amount == nil })
         guard elidedCount <= 1 else { throw LedgerError.multipleElidedPostings }
 
         if elidedCount == 0 {
@@ -223,15 +221,15 @@ public struct JournalParser {
         }
 
         // Exactly one elided posting: compute its amount
-        let explicitAmounts = rawPostings.compactMap { $0.amount }
-        let commodities = Set(explicitAmounts.map { $0.commodity })
+        let explicitAmounts = rawPostings.compactMap(\.amount)
+        let commodities = Set(explicitAmounts.map(\.commodity))
         guard commodities.count == 1,
               let commodity = commodities.first,
               let firstAmount = explicitAmounts.first else { throw LedgerError.cannotResolveElision }
 
-        let isPrefix     = firstAmount.commodityIsPrefix
-        let sum          = explicitAmounts.reduce(Decimal.zero) { $0 + $1.quantity }
-        let elidedAmount     = Amount(quantity: -sum, commodity: commodity, commodityIsPrefix: isPrefix)
+        let isPrefix = firstAmount.commodityIsPrefix
+        let sum = explicitAmounts.reduce(Decimal.zero) { $0 + $1.quantity }
+        let elidedAmount = Amount(quantity: -sum, commodity: commodity, commodityIsPrefix: isPrefix)
 
         return rawPostings.map { raw in
             let amt = raw.amount ?? elidedAmount
@@ -242,7 +240,7 @@ public struct JournalParser {
     // MARK: - Amount parsing
 
     /// Parses an amount string such as `$100`, `-$50`, `$-50`, `100 USD`, `100.00`.
-    func parseAmount(_ raw: String, lineNumber: Int) throws -> Amount {
+    func parseAmount(_ raw: String, lineNumber _: Int) throws -> Amount {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { throw LedgerError.invalidAmount(raw) }
 

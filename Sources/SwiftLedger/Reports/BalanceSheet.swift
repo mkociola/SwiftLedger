@@ -13,10 +13,10 @@ public struct BalanceSheet: Sendable {
     public let isBalanced: Bool
 
     public init(ledger: Ledger, asOf: JournalDate? = nil) {
-        let date       = asOf ?? JournalDate.today
-        self.asOf      = date
-        let balances   = ledger.allBalances(asOf: date)
-        let accounts   = ledger.accounts
+        let date = asOf ?? JournalDate.today
+        self.asOf = date
+        let balances = ledger.allBalances(asOf: date)
+        let accounts = ledger.accounts
 
         func accountBalances(for type: AccountType) -> [AccountBalance] {
             accounts
@@ -28,15 +28,15 @@ public struct BalanceSheet: Sendable {
                 }
         }
 
-        self.assets      = accountBalances(for: .asset)
-        self.liabilities = accountBalances(for: .liability)
-        self.equity      = accountBalances(for: .equity)
+        assets = accountBalances(for: .asset)
+        liabilities = accountBalances(for: .liability)
+        equity = accountBalances(for: .equity)
 
         // Balance check: all raw posting amounts should net to zero per commodity
         let allAmounts = ledger.journal.transactions
             .flatMap(\.postings)
             .map(\.amount)
         let nets = allAmounts.netByCommodity()
-        self.isBalanced = nets.allSatisfy(\.isZero)
+        isBalanced = nets.allSatisfy(\.isZero)
     }
 }

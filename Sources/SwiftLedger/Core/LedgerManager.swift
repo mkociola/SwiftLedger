@@ -4,8 +4,8 @@ public final class LedgerManager {
     private let store: (any LedgerStore)?
 
     public init(store: (any LedgerStore)? = nil) throws {
-        self.store  = store
-        self.ledger = try store?.load() ?? Ledger()
+        self.store = store
+        ledger = try store?.load() ?? Ledger()
     }
 
     // MARK: - Mutations

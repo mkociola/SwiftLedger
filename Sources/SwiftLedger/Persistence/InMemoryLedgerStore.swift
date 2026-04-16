@@ -6,6 +6,11 @@ public final class InMemoryLedgerStore: LedgerStore {
         self.ledger = ledger
     }
 
-    public func load() throws -> Ledger { ledger }
-    public func save(_ ledger: Ledger) throws { self.ledger = ledger }
+    public func load() throws -> Ledger {
+        ledger
+    }
+
+    public func save(_ ledger: Ledger) throws {
+        self.ledger = ledger
+    }
 }

@@ -9,7 +9,6 @@ import Foundation
 /// - Postings are indented with 4 spaces.
 /// - Amounts are right-aligned at column 52 (same as ledger-cli default).
 public struct JournalSerializer {
-
     public init() {}
 
     // MARK: - Public API
@@ -21,11 +20,11 @@ public struct JournalSerializer {
             switch item {
             case .blank:
                 lines.append("")
-            case .comment(let text):
+            case let .comment(text):
                 lines.append(text.hasPrefix(";") || text.hasPrefix("#") ? text : "; \(text)")
-            case .accountDirective(let directive):
+            case let .accountDirective(directive):
                 lines.append("account \(directive.name)")
-            case .transaction(let transaction):
+            case let .transaction(transaction):
                 lines.append(contentsOf: serializeTransaction(transaction))
             }
         }

@@ -17,7 +17,7 @@ public enum AccountType: String, Sendable, Codable, Hashable, CaseIterable {
     case unclassified
 }
 
-extension AccountType {
+public extension AccountType {
     /// Infers the account type from the top-level segment of the account name.
     ///
     /// Matching is case-insensitive and covers common English conventions:
@@ -30,15 +30,15 @@ extension AccountType {
     /// | income / revenue         | `.revenue`    |
     /// | expenses / expense       | `.expense`    |
     /// | (anything else)          | `.unclassified` |
-    public static func inferred(from accountName: String) -> AccountType {
+    static func inferred(from accountName: String) -> AccountType {
         let root = accountName.split(separator: ":").first.map { $0.lowercased() } ?? ""
         switch root {
-        case "assets", "asset":                return .asset
-        case "liabilities", "liability":            return .liability
-        case "equity", "equities":             return .equity
-        case "income", "revenue", "revenues":  return .revenue
-        case "expenses", "expense":              return .expense
-        default:                                    return .unclassified
+        case "assets", "asset": return .asset
+        case "liabilities", "liability": return .liability
+        case "equity", "equities": return .equity
+        case "income", "revenue", "revenues": return .revenue
+        case "expenses", "expense": return .expense
+        default: return .unclassified
         }
     }
 
@@ -46,10 +46,10 @@ extension AccountType {
     ///
     /// - `+1`: display at face value (assets, expenses)
     /// - `-1`: negate for display (liabilities, equity, revenue)
-    public var displaySign: Decimal {
+    var displaySign: Decimal {
         switch self {
-        case .asset, .expense, .unclassified: return 1
-        case .liability, .equity, .revenue:   return -1
+        case .asset, .expense, .unclassified: 1
+        case .liability, .equity, .revenue: -1
         }
     }
 }

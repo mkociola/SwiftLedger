@@ -18,8 +18,8 @@ public struct AccountStatement: Sendable {
         self.accountName = accountName
 
         var balances: [String: Decimal] = [:]
-        var prefixFlags: [String: Bool]  = [:]
-        var resultLines: [Line]          = []
+        var prefixFlags: [String: Bool] = [:]
+        var resultLines: [Line] = []
 
         let txs = ledger.journal.transactions
             .filter {
@@ -34,7 +34,7 @@ public struct AccountStatement: Sendable {
                 balances[commodity, default: .zero] += posting.amount.quantity
                 prefixFlags[commodity] = posting.amount.commodityIsPrefix
 
-                let runningBalance = balances.map { (commodity, qty) in
+                let runningBalance = balances.map { commodity, qty in
                     Amount(quantity: qty, commodity: commodity, commodityIsPrefix: prefixFlags[commodity] ?? false)
                 }.sorted { $0.commodity < $1.commodity }
 
@@ -42,6 +42,6 @@ public struct AccountStatement: Sendable {
             }
         }
 
-        self.lines = resultLines
+        lines = resultLines
     }
 }

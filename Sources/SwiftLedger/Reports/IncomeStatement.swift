@@ -9,10 +9,10 @@ public struct IncomeStatement: Sendable {
     // swiftlint:disable:next identifier_name
     public init(ledger: Ledger, from: JournalDate? = nil, to: JournalDate? = nil) {
         self.from = from
-        self.to   = to
+        self.to = to
 
         let transactions = ledger.transactions(from: from, to: to)
-        let accounts     = ledger.accounts
+        let accounts = ledger.accounts
 
         func balances(for type: AccountType) -> [AccountBalance] {
             accounts
@@ -29,8 +29,8 @@ public struct IncomeStatement: Sendable {
                 }
         }
 
-        self.revenues = balances(for: .revenue)
-        self.expenses = balances(for: .expense)
+        revenues = balances(for: .revenue)
+        expenses = balances(for: .expense)
     }
 
     /// Net income (revenues – expenses) per commodity.

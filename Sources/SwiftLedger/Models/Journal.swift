@@ -39,7 +39,7 @@ public struct Journal: Sendable, Codable {
     /// All transactions in document order.
     public var transactions: [Transaction] {
         items.compactMap {
-            if case .transaction(let transaction) = $0 { return transaction }
+            if case let .transaction(transaction) = $0 { return transaction }
             return nil
         }
     }
@@ -47,7 +47,7 @@ public struct Journal: Sendable, Codable {
     /// All `account` directives in document order.
     public var accountDirectives: [AccountDirective] {
         items.compactMap {
-            if case .accountDirective(let directive) = $0 { return directive }
+            if case let .accountDirective(directive) = $0 { return directive }
             return nil
         }
     }

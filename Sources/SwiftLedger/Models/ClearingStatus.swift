@@ -3,7 +3,7 @@ public enum ClearingStatus: String, Sendable, Codable, Hashable {
     /// No mark — not yet reviewed.
     case unmarked = ""
     /// `!` — flagged / pending review.
-    case pending  = "!"
+    case pending = "!"
     /// `*` — cleared / reconciled.
-    case cleared  = "*"
+    case cleared = "*"
 }

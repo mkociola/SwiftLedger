@@ -42,14 +42,14 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     ) throws {
         guard postings.count >= 2 else { throw LedgerError.emptyTransaction }
         try Self.validateBalance(postings)
-        self.id          = id
-        self.date        = date
-        self.auxDate     = auxDate
-        self.status      = status
-        self.code        = code
+        self.id = id
+        self.date = date
+        self.auxDate = auxDate
+        self.status = status
+        self.code = code
         self.description = description
-        self.postings    = postings
-        self.comment     = comment
+        self.postings = postings
+        self.comment = comment
     }
 
     // MARK: - Private

@@ -18,12 +18,14 @@ public struct Amount: Sendable, Codable, Hashable, CustomStringConvertible {
     public let commodityIsPrefix: Bool
 
     public init(quantity: Decimal, commodity: String, commodityIsPrefix: Bool = false) {
-        self.quantity          = quantity
-        self.commodity         = commodity
+        self.quantity = quantity
+        self.commodity = commodity
         self.commodityIsPrefix = commodityIsPrefix
     }
 
-    public var isZero: Bool { quantity == .zero }
+    public var isZero: Bool {
+        quantity == .zero
+    }
 
     public var negated: Amount {
         Amount(quantity: -quantity, commodity: commodity, commodityIsPrefix: commodityIsPrefix)
@@ -36,9 +38,9 @@ public struct Amount: Sendable, Codable, Hashable, CustomStringConvertible {
 
 // MARK: - Arithmetic
 
-extension Amount {
+public extension Amount {
     /// Adds two amounts. Precondition: commodities must match.
-    public static func + (lhs: Amount, rhs: Amount) -> Amount {
+    static func + (lhs: Amount, rhs: Amount) -> Amount {
         precondition(lhs.commodity == rhs.commodity,
                      "Cannot add amounts with different commodities: \(lhs.commodity) + \(rhs.commodity)")
         return Amount(quantity: lhs.quantity + rhs.quantity,
@@ -47,7 +49,7 @@ extension Amount {
     }
 
     /// Subtracts two amounts. Precondition: commodities must match.
-    public static func - (lhs: Amount, rhs: Amount) -> Amount {
+    static func - (lhs: Amount, rhs: Amount) -> Amount {
         precondition(lhs.commodity == rhs.commodity,
                      "Cannot subtract amounts with different commodities: \(lhs.commodity) - \(rhs.commodity)")
         return Amount(quantity: lhs.quantity - rhs.quantity,
@@ -56,17 +58,17 @@ extension Amount {
     }
 
     /// Multiplies by a scalar.
-    public static func * (lhs: Amount, rhs: Decimal) -> Amount {
+    static func * (lhs: Amount, rhs: Decimal) -> Amount {
         Amount(quantity: lhs.quantity * rhs,
                commodity: lhs.commodity,
                commodityIsPrefix: lhs.commodityIsPrefix)
     }
 }
 
-extension Collection where Element == Amount {
+public extension Collection<Amount> {
     /// Groups amounts by commodity and returns one net `Amount` per commodity.
     /// Zero-value amounts are included.
-    public func netByCommodity() -> [Amount] {
+    func netByCommodity() -> [Amount] {
         var sums: [String: (Decimal, Bool)] = [:]
         for amount in self {
             let current = sums[amount.commodity, default: (.zero, amount.commodityIsPrefix)]

@@ -21,8 +21,8 @@ public struct Posting: Sendable, Codable, Hashable {
         comment: String? = nil
     ) {
         self.accountName = accountName
-        self.amount      = amount
-        self.status      = status
-        self.comment     = comment
+        self.amount = amount
+        self.status = status
+        self.comment = comment
     }
 }

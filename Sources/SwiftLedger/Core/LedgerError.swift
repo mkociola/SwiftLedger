@@ -3,6 +3,7 @@ import Foundation
 /// Errors thrown by the SwiftLedger library.
 public enum LedgerError: Error, Sendable, Equatable {
     // MARK: - Parsing
+
     case parseError(line: Int, message: String)
     case invalidDate(String)
     case invalidAmount(String)
@@ -10,24 +11,27 @@ public enum LedgerError: Error, Sendable, Equatable {
     case cannotResolveElision
 
     // MARK: - Transaction
+
     case emptyTransaction
     case unbalancedTransaction(commodity: String, imbalance: Decimal)
 
     // MARK: - Commodity
+
     case commodityMismatch(String, String)
 
     // MARK: - Store
+
     case storeError(String)
 }
 
 extension LedgerError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .parseError(let line, let msg):
+        case let .parseError(line, msg):
             "Parse error on line \(line): \(msg)"
-        case .invalidDate(let string):
+        case let .invalidDate(string):
             "Invalid date: '\(string)'"
-        case .invalidAmount(let string):
+        case let .invalidAmount(string):
             "Invalid amount: '\(string)'"
         case .multipleElidedPostings:
             "A transaction may have at most one posting with an elided amount"
@@ -35,11 +39,11 @@ extension LedgerError: LocalizedError {
             "Cannot resolve elided amount: remaining postings span multiple commodities"
         case .emptyTransaction:
             "A transaction must contain at least two postings"
-        case .unbalancedTransaction(let commodity, let imbalance):
+        case let .unbalancedTransaction(commodity, imbalance):
             "Transaction is unbalanced in \(commodity): off by \(imbalance)"
-        case .commodityMismatch(let first, let second):
+        case let .commodityMismatch(first, second):
             "Commodity mismatch: '\(first)' vs '\(second)'"
-        case .storeError(let msg):
+        case let .storeError(msg):
             "Store error: \(msg)"
         }
     }
