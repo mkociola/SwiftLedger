@@ -2,6 +2,7 @@
 
 [![Build & Test](https://github.com/mkociola/SwiftLedger/actions/workflows/ci.yml/badge.svg)](https://github.com/mkociola/SwiftLedger/actions/workflows/ci.yml)
 [![Lint & Format](https://github.com/mkociola/SwiftLedger/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/mkociola/SwiftLedger/actions/workflows/pre-commit.yml)
+[![Conventional Commits](https://github.com/mkociola/SwiftLedger/actions/workflows/conventional-commits.yml/badge.svg)](https://github.com/mkociola/SwiftLedger/actions/workflows/conventional-commits.yml)
 
 A plain-text accounting library for Swift, implementing the [plain-text accounting](https://plaintextaccounting.org) (PTA) model popularised by [ledger-cli](https://ledger-cli.org) and [hledger](https://hledger.org).
 
