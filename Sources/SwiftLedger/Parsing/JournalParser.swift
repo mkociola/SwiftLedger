@@ -108,7 +108,7 @@ public struct JournalParser {
             code: header.code,
             description: header.description,
             postings: postings,
-            comment: header.comment
+            comment: header.comment,
         )
         return (transaction, index - start)
     }
@@ -117,7 +117,7 @@ public struct JournalParser {
 
     private func parseHeader(
         _ line: String,
-        lineNumber: Int
+        lineNumber: Int,
     ) throws -> ParsedHeader {
         var rest = line
 
@@ -164,7 +164,7 @@ public struct JournalParser {
             status: txStatus,
             code: code,
             description: description,
-            comment: comment?.trimmingCharacters(in: .whitespaces)
+            comment: comment?.trimmingCharacters(in: .whitespaces),
         )
     }
 
@@ -203,7 +203,7 @@ public struct JournalParser {
             accountName: accountName,
             amount: amount,
             status: postingStatus,
-            comment: comment?.trimmingCharacters(in: .whitespaces)
+            comment: comment?.trimmingCharacters(in: .whitespaces),
         )
     }
 

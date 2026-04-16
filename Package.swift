@@ -13,7 +13,7 @@ let package = Package(
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "SwiftLedger",
-            targets: ["SwiftLedger"]
+            targets: ["SwiftLedger"],
         ),
     ],
     dependencies: [
@@ -27,15 +27,15 @@ let package = Package(
             name: "SwiftLedger",
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
-            ]
+            ],
         ),
         .testTarget(
             name: "SwiftLedgerTests",
             dependencies: ["SwiftLedger"],
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
-            ]
+            ],
         ),
     ],
-    swiftLanguageModes: [.v6]
+    swiftLanguageModes: [.v6],
 )

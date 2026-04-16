@@ -1,5 +1,8 @@
 # SwiftLedger
 
+[![Build & Test](https://github.com/mkociola/SwiftLedger/actions/workflows/ci.yml/badge.svg)](https://github.com/mkociola/SwiftLedger/actions/workflows/ci.yml)
+[![Lint & Format](https://github.com/mkociola/SwiftLedger/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/mkociola/SwiftLedger/actions/workflows/pre-commit.yml)
+
 A plain-text accounting library for Swift, implementing the [plain-text accounting](https://plaintextaccounting.org) (PTA) model popularised by [ledger-cli](https://ledger-cli.org) and [hledger](https://hledger.org).
 
 SwiftLedger parses `.ledger` / `.journal` files, enforces double-entry balance rules, and provides balance queries, reports, and persistence — designed to be embedded in iOS and macOS apps.

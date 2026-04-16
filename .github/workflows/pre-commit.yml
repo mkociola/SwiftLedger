@@ -1,0 +1,19 @@
+name: ✨ Lint & Format
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: 🔍 Run pre-commit hooks
+        uses: tox-dev/action-pre-commit-uv@v1

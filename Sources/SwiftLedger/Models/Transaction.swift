@@ -38,7 +38,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         code: String? = nil,
         description: String,
         postings: [Posting],
-        comment: String? = nil
+        comment: String? = nil,
     ) throws {
         guard postings.count >= 2 else { throw LedgerError.emptyTransaction }
         try Self.validateBalance(postings)

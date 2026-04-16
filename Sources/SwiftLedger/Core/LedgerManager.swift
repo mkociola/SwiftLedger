@@ -72,7 +72,7 @@ public final class LedgerManager {
         for accountName: String,
         from: JournalDate? = nil,
         // swiftlint:disable:next identifier_name
-        to: JournalDate? = nil
+        to: JournalDate? = nil,
     ) -> AccountStatement {
         AccountStatement(ledger: ledger, accountName: accountName, from: from, to: to)
     }

@@ -18,7 +18,7 @@ public struct Posting: Sendable, Codable, Hashable {
         accountName: String,
         amount: Amount,
         status: ClearingStatus? = nil,
-        comment: String? = nil
+        comment: String? = nil,
     ) {
         self.accountName = accountName
         self.amount = amount

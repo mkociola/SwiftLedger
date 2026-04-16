@@ -112,7 +112,7 @@ public struct Ledger: Sendable {
 
     /// Returns all transactions within an optional date range (inclusive).
     public func transactions(
-        from: JournalDate? = nil, to: JournalDate? = nil // swiftlint:disable:this identifier_name
+        from: JournalDate? = nil, to: JournalDate? = nil, // swiftlint:disable:this identifier_name
     ) -> [Transaction] {
         filteredTransactions { transaction in
             if let from, transaction.date < from { return false }
