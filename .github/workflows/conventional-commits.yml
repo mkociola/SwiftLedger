@@ -1,0 +1,32 @@
+name: 📝 Conventional Commits
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  check-commits:
+    name: 🔍 Check Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check all commit messages
+        uses: webiny/action-conventional-commits@v1.3.1
+
+  validate-pr-title:
+    name: 🏷️ Validate PR Title + Labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conventional Commit PR Title
+        uses: ytanikin/pr-conventional-commits@1.5.2
+        with:
+          task_types: '["feat","fix","docs","test","ci","refactor","perf","chore","revert"]'
+          add_label: 'true'
+          add_scope_label: 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
