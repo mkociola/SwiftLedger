@@ -5,4 +5,7 @@ included:
 excluded:
   - .build
 
+disabled_rules:
+  - trailing_comma
+
 reporter: "xcode"

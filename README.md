@@ -363,6 +363,10 @@ The same API is available as non-`async` methods on `Ledger` for synchronous use
 swift test
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup (pre-commit hooks, etc.).
+
 ## License
 
 MIT
