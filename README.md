@@ -341,25 +341,25 @@ actor SwiftDataStore: LedgerStore {
 
 ## Concurrency
 
-`LedgerManager` is a Swift actor — it serialises all access and persists changes automatically after each mutation.
+`LedgerManager` is a `final class` — it owns a `Ledger` and an optional store, persisting changes automatically after each mutation.
 
 ```swift
-// init is synchronous (throws if store.load() fails)
+// init throws if store.load() fails
 let manager = try LedgerManager(store: PlainTextJournalStore(url: fileURL))
 
-// queries — await only
-let txs = await manager.transactions(forPrefix: "Expenses")
-let bs  = await manager.balanceSheet()
+// queries — synchronous
+let txs = manager.transactions(forPrefix: "Expenses")
+let bs  = manager.balanceSheet()
 
-// mutations — try await (store.save can throw)
-try await manager.add(.transaction(tx))
-try await manager.remove(.transaction(tx))
+// mutations — throws if store.save fails
+try manager.add(.transaction(tx))
+try manager.remove(.transaction(tx))
 
 // reload from disk (e.g. after external edit)
-try await manager.reload()
+try manager.reload()
 ```
 
-The same API is available as non-`async` methods on `Ledger` for synchronous use cases (e.g. inside another actor or when persistence is not needed).
+The same query API is available directly on `Ledger` for cases where persistence is not needed.
 
 ## Running the tests
 
