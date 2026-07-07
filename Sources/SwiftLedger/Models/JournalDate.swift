@@ -22,7 +22,11 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
     }
 
     /// Creates a `JournalDate` from a `Foundation.Date` in the given calendar.
-    public init(_ date: Date, calendar: Calendar = .current) {
+    ///
+    /// Defaults to Gregorian: journal dates are Gregorian by ledger-format
+    /// convention, matching `date(timeZone:)`, regardless of the device
+    /// calendar. Pass a calendar explicitly to override.
+    public init(_ date: Date, calendar: Calendar = Calendar(identifier: .gregorian)) {
         let comps = calendar.dateComponents([.year, .month, .day], from: date)
         guard let year = comps.year, let month = comps.month, let day = comps.day else {
             preconditionFailure("Calendar failed to extract year/month/day from date")
@@ -32,7 +36,7 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
         self.day = day
     }
 
-    /// Today's date using the current calendar.
+    /// Today's date in the Gregorian calendar.
     public static var today: JournalDate {
         JournalDate(Date())
     }
