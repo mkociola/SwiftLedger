@@ -128,7 +128,9 @@ private func makeTx(
 
     @Test
     func `description places commodity after number when not commodityIsPrefix`() {
-        #expect(Amount(quantity: 42, commodity: "USD", commodityIsPrefix: false).description == "42 USD")
+        #expect(
+            Amount(quantity: 42, commodity: "USD", commodityIsPrefix: false).description == "42 USD",
+        )
     }
 
     @Test
@@ -255,7 +257,9 @@ private func makeTx(
         #expect(throws: LedgerError.emptyTransaction) {
             try Transaction(
                 date: date, description: "Single",
-                postings: [Posting(accountName: "Assets:Cash", amount: Amount(quantity: 100, commodity: "USD"))],
+                postings: [
+                    Posting(accountName: "Assets:Cash", amount: Amount(quantity: 100, commodity: "USD")),
+                ],
             )
         }
     }
@@ -272,8 +276,10 @@ private func makeTx(
                 Posting(accountName: "Income:Gain", amount: Amount(quantity: -100, commodity: "USD")),
             ],
         )
-        let btcNet = transaction.postings.filter { $0.amount.commodity == "BTC" }.map(\.amount.quantity).reduce(0, +)
-        let usdNet = transaction.postings.filter { $0.amount.commodity == "USD" }.map(\.amount.quantity).reduce(0, +)
+        let btcNet = transaction.postings.filter { $0.amount.commodity == "BTC" }.map(\.amount.quantity)
+            .reduce(0, +)
+        let usdNet = transaction.postings.filter { $0.amount.commodity == "USD" }.map(\.amount.quantity)
+            .reduce(0, +)
         #expect(btcNet == 0)
         #expect(usdNet == 0)
     }
@@ -372,7 +378,9 @@ private func makeTx(
             Income:Salary
         """
         let journal = try JournalParser().parse(text)
-        let income = try #require(journal.transactions.first?.postings.first { $0.accountName == "Income:Salary" })
+        let income = try #require(
+            journal.transactions.first?.postings.first { $0.accountName == "Income:Salary" },
+        )
         #expect(income.amount.quantity == Decimal(-3000))
         #expect(income.amount.commodity == "$")
     }
@@ -524,7 +532,9 @@ private func makeTx(
     func `balance returns net amount for exact account name`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
-        try ledger.add(.transaction(makeTx(date: date, debit: "Expenses:Food", credit: "Assets:Cash", amount: 50)))
+        try ledger.add(
+            .transaction(makeTx(date: date, debit: "Expenses:Food", credit: "Assets:Cash", amount: 50)),
+        )
         let bal = ledger.balance(for: "Expenses:Food")
         #expect(bal.count == 1)
         #expect(bal[0].quantity == 50)
@@ -535,13 +545,25 @@ private func makeTx(
     func `subtree balance aggregates amounts across all sub-accounts`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
-        try ledger.add(.transaction(makeTx(
-            date: date, debit: "Expenses:Food:Coffee", credit: "Assets:Cash", amount: 5,
-        )))
-        try ledger.add(.transaction(makeTx(
-            date: date, debit: "Expenses:Food:Groceries", credit: "Assets:Cash", amount: 30,
-        )))
-        try ledger.add(.transaction(makeTx(date: date, debit: "Expenses:Housing", credit: "Assets:Cash", amount: 1000)))
+        try ledger.add(
+            .transaction(
+                makeTx(
+                    date: date, debit: "Expenses:Food:Coffee", credit: "Assets:Cash", amount: 5,
+                ),
+            ),
+        )
+        try ledger.add(
+            .transaction(
+                makeTx(
+                    date: date, debit: "Expenses:Food:Groceries", credit: "Assets:Cash", amount: 30,
+                ),
+            ),
+        )
+        try ledger.add(
+            .transaction(
+                makeTx(date: date, debit: "Expenses:Housing", credit: "Assets:Cash", amount: 1000),
+            ),
+        )
         #expect(ledger.subtreeBalance(forPrefix: "Expenses:Food")[0].quantity == 35)
         #expect(ledger.subtreeBalance(forPrefix: "Expenses")[0].quantity == 1035)
     }
@@ -552,8 +574,12 @@ private func makeTx(
         let jan = try makeDate(2024, 1, 1)
         let jun = try makeDate(2024, 6, 1)
         let cutoff = try makeDate(2024, 3, 1)
-        try ledger.add(.transaction(makeTx(date: jan, debit: "Expenses:Food", credit: "Assets:Cash", amount: 50)))
-        try ledger.add(.transaction(makeTx(date: jun, debit: "Expenses:Food", credit: "Assets:Cash", amount: 75)))
+        try ledger.add(
+            .transaction(makeTx(date: jan, debit: "Expenses:Food", credit: "Assets:Cash", amount: 50)),
+        )
+        try ledger.add(
+            .transaction(makeTx(date: jun, debit: "Expenses:Food", credit: "Assets:Cash", amount: 75)),
+        )
         let bal = ledger.balance(for: "Expenses:Food", asOf: cutoff)
         #expect(bal[0].quantity == 50) // only the January transaction
     }
@@ -566,7 +592,8 @@ private func makeTx(
             date: date, description: "Food", debit: "Expenses:Food", credit: "Assets:Cash", amount: 20,
         )
         let rent = try makeTx(
-            date: date, description: "Rent", debit: "Expenses:Housing", credit: "Assets:Cash", amount: 1000,
+            date: date, description: "Rent", debit: "Expenses:Housing", credit: "Assets:Cash",
+            amount: 1000,
         )
         ledger.add(.transaction(food))
         ledger.add(.transaction(rent))
@@ -579,9 +606,13 @@ private func makeTx(
     func `parent accounts are inferred automatically from posting names`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
-        try ledger.add(.transaction(makeTx(
-            date: date, debit: "Expenses:Food:Groceries", credit: "Assets:Checking", amount: 50,
-        )))
+        try ledger.add(
+            .transaction(
+                makeTx(
+                    date: date, debit: "Expenses:Food:Groceries", credit: "Assets:Checking", amount: 50,
+                ),
+            ),
+        )
         let names = ledger.accounts.map(\.name)
         #expect(names.contains("Expenses:Food:Groceries"))
         #expect(names.contains("Expenses:Food"))
@@ -596,7 +627,9 @@ private func makeTx(
         let date = try makeDate(2024, 1, 1)
         // "Suspense" root would infer .unclassified; directive sets it to .asset
         ledger.add(.accountDirective(AccountDirective(name: "Suspense", type: .asset)))
-        try ledger.add(.transaction(makeTx(date: date, debit: "Suspense", credit: "Assets:Cash", amount: 100)))
+        try ledger.add(
+            .transaction(makeTx(date: date, debit: "Suspense", credit: "Assets:Cash", amount: 100)),
+        )
         let account = try #require(ledger.accounts.first { $0.name == "Suspense" })
         #expect(account.type == .asset)
     }
@@ -644,7 +677,10 @@ private func makeTx(
         #expect(transaction2.postings[0].accountName == transaction1.postings[0].accountName)
         #expect(transaction2.postings[0].amount.quantity == transaction1.postings[0].amount.quantity)
         #expect(transaction2.postings[0].amount.commodity == transaction1.postings[0].amount.commodity)
-        #expect(transaction2.postings[0].amount.commodityIsPrefix == transaction1.postings[0].amount.commodityIsPrefix)
+        #expect(
+            transaction2.postings[0].amount.commodityIsPrefix
+                == transaction1.postings[0].amount.commodityIsPrefix,
+        )
     }
 
     @Test
@@ -690,7 +726,9 @@ private func makeTx(
             Equity:Opening  -1000 USD
         """.write(to: url, atomically: true, encoding: .utf8)
 
-        let transaction = try #require(try PlainTextJournalStore(url: url).load().journal.transactions.first)
+        let transaction = try #require(
+            try PlainTextJournalStore(url: url).load().journal.transactions.first,
+        )
         #expect(transaction.description == "Opening")
         #expect(transaction.postings.count == 2)
         #expect(transaction.postings[0].amount.quantity == 1000)
@@ -711,15 +749,23 @@ private func makeTx(
 
         let store = PlainTextJournalStore(url: url)
         var ledger = try store.load()
-        try ledger.add(.transaction(Transaction(
-            date: makeDate(2024, 6, 1), description: "Coffee",
-            postings: [
-                Posting(accountName: "Expenses:Food",
-                        amount: Amount(quantity: 5, commodity: "$", commodityIsPrefix: true)),
-                Posting(accountName: "Assets:Cash",
-                        amount: Amount(quantity: -5, commodity: "$", commodityIsPrefix: true)),
-            ],
-        )))
+        try ledger.add(
+            .transaction(
+                Transaction(
+                    date: makeDate(2024, 6, 1), description: "Coffee",
+                    postings: [
+                        Posting(
+                            accountName: "Expenses:Food",
+                            amount: Amount(quantity: 5, commodity: "$", commodityIsPrefix: true),
+                        ),
+                        Posting(
+                            accountName: "Assets:Cash",
+                            amount: Amount(quantity: -5, commodity: "$", commodityIsPrefix: true),
+                        ),
+                    ],
+                ),
+            ),
+        )
         try store.save(ledger)
 
         let reloaded = try store.load()
@@ -737,10 +783,14 @@ private func makeTx(
     func `any well-formed double-entry journal satisfies isBalanced`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
-        try ledger.add(.transaction(makeTx(
-            date: date, description: "Salary", debit: "Assets:Checking",
-            credit: "Income:Salary", amount: 3000, commodity: "USD",
-        )))
+        try ledger.add(
+            .transaction(
+                makeTx(
+                    date: date, description: "Salary", debit: "Assets:Checking",
+                    credit: "Income:Salary", amount: 3000, commodity: "USD",
+                ),
+            ),
+        )
         #expect(BalanceSheet(ledger: ledger).isBalanced)
     }
 
@@ -748,10 +798,14 @@ private func makeTx(
     func `asset account balance matches its posting amounts`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
-        try ledger.add(.transaction(makeTx(
-            date: date, description: "Salary", debit: "Assets:Checking",
-            credit: "Income:Salary", amount: 3000, commodity: "USD",
-        )))
+        try ledger.add(
+            .transaction(
+                makeTx(
+                    date: date, description: "Salary", debit: "Assets:Checking",
+                    credit: "Income:Salary", amount: 3000, commodity: "USD",
+                ),
+            ),
+        )
         let sheet = BalanceSheet(ledger: ledger)
         let checking = try #require(sheet.assets.first { $0.account.name == "Assets:Checking" })
         #expect(checking.amounts[0].quantity == 3000)
@@ -765,20 +819,34 @@ private func makeTx(
     private func ledgerWithSalaryAndRent() throws -> Ledger {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
-        try ledger.add(.transaction(Transaction(
-            date: date, description: "Salary",
-            postings: [
-                Posting(accountName: "Assets:Checking", amount: Amount(quantity: 3000, commodity: "USD")),
-                Posting(accountName: "Income:Salary", amount: Amount(quantity: -3000, commodity: "USD")),
-            ],
-        )))
-        try ledger.add(.transaction(Transaction(
-            date: date, description: "Rent",
-            postings: [
-                Posting(accountName: "Expenses:Rent", amount: Amount(quantity: 1000, commodity: "USD")),
-                Posting(accountName: "Assets:Checking", amount: Amount(quantity: -1000, commodity: "USD")),
-            ],
-        )))
+        try ledger.add(
+            .transaction(
+                Transaction(
+                    date: date, description: "Salary",
+                    postings: [
+                        Posting(
+                            accountName: "Assets:Checking", amount: Amount(quantity: 3000, commodity: "USD"),
+                        ),
+                        Posting(
+                            accountName: "Income:Salary", amount: Amount(quantity: -3000, commodity: "USD"),
+                        ),
+                    ],
+                ),
+            ),
+        )
+        try ledger.add(
+            .transaction(
+                Transaction(
+                    date: date, description: "Rent",
+                    postings: [
+                        Posting(accountName: "Expenses:Rent", amount: Amount(quantity: 1000, commodity: "USD")),
+                        Posting(
+                            accountName: "Assets:Checking", amount: Amount(quantity: -1000, commodity: "USD"),
+                        ),
+                    ],
+                ),
+            ),
+        )
         return ledger
     }
 
@@ -815,20 +883,32 @@ private func makeTx(
     func `lines appear in journal order with correct running balance after each posting`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
-        try ledger.add(.transaction(Transaction(
-            date: date, description: "Deposit",
-            postings: [
-                Posting(accountName: "Assets:Checking", amount: Amount(quantity: 1000, commodity: "USD")),
-                Posting(accountName: "Equity:Opening", amount: Amount(quantity: -1000, commodity: "USD")),
-            ],
-        )))
-        try ledger.add(.transaction(Transaction(
-            date: date, description: "Coffee",
-            postings: [
-                Posting(accountName: "Expenses:Food", amount: Amount(quantity: 5, commodity: "USD")),
-                Posting(accountName: "Assets:Checking", amount: Amount(quantity: -5, commodity: "USD")),
-            ],
-        )))
+        try ledger.add(
+            .transaction(
+                Transaction(
+                    date: date, description: "Deposit",
+                    postings: [
+                        Posting(
+                            accountName: "Assets:Checking", amount: Amount(quantity: 1000, commodity: "USD"),
+                        ),
+                        Posting(
+                            accountName: "Equity:Opening", amount: Amount(quantity: -1000, commodity: "USD"),
+                        ),
+                    ],
+                ),
+            ),
+        )
+        try ledger.add(
+            .transaction(
+                Transaction(
+                    date: date, description: "Coffee",
+                    postings: [
+                        Posting(accountName: "Expenses:Food", amount: Amount(quantity: 5, commodity: "USD")),
+                        Posting(accountName: "Assets:Checking", amount: Amount(quantity: -5, commodity: "USD")),
+                    ],
+                ),
+            ),
+        )
         let stmt = AccountStatement(ledger: ledger, accountName: "Assets:Checking")
         #expect(stmt.lines.count == 2)
         #expect(stmt.lines[0].transaction.description == "Deposit")
@@ -843,20 +923,28 @@ private func makeTx(
         let jan = try makeDate(2024, 1, 1)
         let jun = try makeDate(2024, 6, 1)
         let mar = try makeDate(2024, 3, 1)
-        try ledger.add(.transaction(Transaction(
-            date: jan, description: "Jan",
-            postings: [
-                Posting(accountName: "Assets:Cash", amount: Amount(quantity: 100, commodity: "USD")),
-                Posting(accountName: "Income:A", amount: Amount(quantity: -100, commodity: "USD")),
-            ],
-        )))
-        try ledger.add(.transaction(Transaction(
-            date: jun, description: "Jun",
-            postings: [
-                Posting(accountName: "Assets:Cash", amount: Amount(quantity: 200, commodity: "USD")),
-                Posting(accountName: "Income:A", amount: Amount(quantity: -200, commodity: "USD")),
-            ],
-        )))
+        try ledger.add(
+            .transaction(
+                Transaction(
+                    date: jan, description: "Jan",
+                    postings: [
+                        Posting(accountName: "Assets:Cash", amount: Amount(quantity: 100, commodity: "USD")),
+                        Posting(accountName: "Income:A", amount: Amount(quantity: -100, commodity: "USD")),
+                    ],
+                ),
+            ),
+        )
+        try ledger.add(
+            .transaction(
+                Transaction(
+                    date: jun, description: "Jun",
+                    postings: [
+                        Posting(accountName: "Assets:Cash", amount: Amount(quantity: 200, commodity: "USD")),
+                        Posting(accountName: "Income:A", amount: Amount(quantity: -200, commodity: "USD")),
+                    ],
+                ),
+            ),
+        )
         let stmt = AccountStatement(ledger: ledger, accountName: "Assets:Cash", to: mar)
         #expect(stmt.lines.count == 1)
         #expect(stmt.lines[0].transaction.description == "Jan")
@@ -912,17 +1000,39 @@ private func makeTx(
         #expect(try manager.remove(.transaction(transaction)) == false)
         #expect(store.saveCallCount == 0)
     }
+
+    @Test
+    func `add leaves ledger unchanged when save throws, so retry writes a single copy`() throws {
+        let store = MockLedgerStore()
+        let manager = try LedgerManager(store: store)
+        let transaction = try Transaction(
+            date: makeDate(2024, 1, 1), description: "Salary",
+            postings: [
+                Posting(accountName: "Assets:Cash", amount: Amount(quantity: 100, commodity: "USD")),
+                Posting(accountName: "Income:Salary", amount: Amount(quantity: -100, commodity: "USD")),
+            ],
+        )
+        store.saveError = CocoaError(.fileWriteOutOfSpace)
+        #expect(throws: CocoaError.self) { try manager.add(.transaction(transaction)) }
+        #expect(manager.transactions(for: "Assets:Cash").isEmpty)
+
+        store.saveError = nil
+        try manager.add(.transaction(transaction))
+        #expect(manager.transactions(for: "Assets:Cash").count == 1)
+    }
 }
 
 // MARK: - Test doubles
 
 private final class MockLedgerStore: LedgerStore {
     private(set) var saveCallCount = 0
+    var saveError: Error?
     func load() throws -> Ledger {
         Ledger()
     }
 
     func save(_: Ledger) throws {
+        if let saveError { throw saveError }
         saveCallCount += 1
     }
 }

@@ -10,9 +10,15 @@ public final class LedgerManager {
 
     // MARK: - Mutations
 
+    /// Adds `item` and persists the result.
+    ///
+    /// Atomic: if the store's `save` throws, the in-memory ledger is
+    /// left unchanged, so callers can safely retry.
     public func add(_ item: JournalItem) throws {
-        ledger.add(item)
-        try store?.save(ledger)
+        var updated = ledger
+        updated.add(item)
+        try store?.save(updated)
+        ledger = updated
     }
 
     /// Removes the first occurrence of `item` from the journal.
