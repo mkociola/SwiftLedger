@@ -1,3 +1,5 @@
+import Foundation
+
 /// The plain-text accounting query engine.
 ///
 /// `Ledger` wraps a `Journal` and provides balance queries, account
@@ -77,6 +79,131 @@ public struct Ledger: Sendable {
         postingsInSubtree(prefix: prefix, asOf: asOf)
             .map(\.amount)
             .netByCommodity()
+    }
+
+    /// Returns daily closing subtree balances for `prefix`, one entry per
+    /// Gregorian day from `from` through `to` inclusive.
+    ///
+    /// Each entry matches what `subtreeBalance(forPrefix:asOf:)` returns for
+    /// that day (netted by commodity, zeros included, sorted by commodity),
+    /// but the whole series is computed in one pass over the journal instead
+    /// of one full scan per day. Returns `[]` when `from > to`.
+    public func subtreeBalanceSeries(
+        forPrefix prefix: String,
+        from: JournalDate,
+        to: JournalDate, // swiftlint:disable:this identifier_name
+    ) -> [[Amount]] {
+        guard from <= to else { return [] }
+
+        // Running balance per commodity; seeded with everything before the
+        // window, then advanced day by day through the window itself.
+        var running: CommoditySums = [:]
+        func fold(_ transaction: Transaction) {
+            for posting in transaction.postings {
+                guard isInSubtree(posting.accountName, prefix: prefix) else { continue }
+                Self.accumulate(posting.amount, into: &running)
+            }
+        }
+
+        var window: [Transaction] = []
+        for transaction in journal.transactions where transaction.date <= to {
+            if transaction.date < from {
+                fold(transaction)
+            } else {
+                window.append(transaction)
+            }
+        }
+        window.sort { $0.date < $1.date }
+
+        let calendar = Calendar(identifier: .gregorian)
+        let fromDate = from.date()
+        let dayCount =
+            (calendar.dateComponents([.day], from: fromDate, to: to.date()).day ?? 0) + 1
+
+        var series: [[Amount]] = []
+        series.reserveCapacity(dayCount)
+        var index = window.startIndex
+        for offset in 0 ..< dayCount {
+            let day = JournalDate(calendar.date(byAdding: .day, value: offset, to: fromDate)!)
+            while index < window.endIndex, window[index].date <= day {
+                fold(window[index])
+                index = window.index(after: index)
+            }
+            series.append(Self.amounts(from: running))
+        }
+        return series
+    }
+
+    /// Returns per-bucket revenue and expense totals over consecutive date
+    /// buckets, netted by commodity with zero-net entries dropped.
+    ///
+    /// `bucketStarts` are ascending bucket start dates: bucket `i` covers
+    /// `bucketStarts[i]` through the day before `bucketStarts[i + 1]`, and
+    /// the last bucket runs through `to`. Totals match what building an
+    /// `IncomeStatement` per bucket produces (explicit account directives
+    /// override name-based type inference), in one pass over the journal.
+    public func incomeStatementSeries(
+        bucketStarts: [JournalDate],
+        to: JournalDate, // swiftlint:disable:this identifier_name
+    ) -> [(revenues: [Amount], expenses: [Amount])] {
+        guard let firstStart = bucketStarts.first else { return [] }
+
+        var directiveTypes: [String: AccountType] = [:]
+        for directive in journal.accountDirectives {
+            if let type = directive.type { directiveTypes[directive.name] = type }
+        }
+
+        var revenueSums = [CommoditySums](repeating: [:], count: bucketStarts.count)
+        var expenseSums = revenueSums
+        for transaction in journal.transactions {
+            guard transaction.date >= firstStart, transaction.date <= to else { continue }
+            // Last bucket whose start is on or before the date. Bucket
+            // counts are small (chart columns), so a linear scan is fine.
+            guard let bucket = bucketStarts.lastIndex(where: { $0 <= transaction.date })
+            else { continue }
+            for posting in transaction.postings {
+                let type =
+                    directiveTypes[posting.accountName]
+                        ?? AccountType.inferred(from: posting.accountName)
+                guard type == .revenue || type == .expense else { continue }
+                if type == .revenue {
+                    Self.accumulate(posting.amount, into: &revenueSums[bucket])
+                } else {
+                    Self.accumulate(posting.amount, into: &expenseSums[bucket])
+                }
+            }
+        }
+
+        return zip(revenueSums, expenseSums).map { revenues, expenses in
+            (
+                revenues: Self.amounts(from: revenues, dropZeros: true),
+                expenses: Self.amounts(from: expenses, dropZeros: true),
+            )
+        }
+    }
+
+    /// Running per-commodity sums; the Bool is the commodity's display-prefix
+    /// flag, carried through like `netByCommodity()`.
+    private typealias CommoditySums = [String: (quantity: Decimal, isPrefix: Bool)]
+
+    /// Adds `amount` into the running per-commodity sums.
+    private static func accumulate(_ amount: Amount, into sums: inout CommoditySums) {
+        let current = sums[amount.commodity, default: (.zero, amount.commodityIsPrefix)]
+        sums[amount.commodity] = (current.quantity + amount.quantity, amount.commodityIsPrefix)
+    }
+
+    /// Converts running per-commodity sums into `Amount`s sorted by commodity.
+    private static func amounts(from sums: CommoditySums, dropZeros: Bool = false) -> [Amount] {
+        sums
+            .map {
+                Amount(
+                    quantity: $0.value.quantity,
+                    commodity: $0.key,
+                    commodityIsPrefix: $0.value.isPrefix,
+                )
+            }
+            .filter { !dropZeros || !$0.isZero }
+            .sorted { $0.commodity < $1.commodity }
     }
 
     /// Returns all account balances as a dictionary keyed by account name.

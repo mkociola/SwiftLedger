@@ -52,6 +52,21 @@ public final class LedgerManager {
         ledger.subtreeBalance(forPrefix: prefix, asOf: asOf)
     }
 
+    public func subtreeBalanceSeries(
+        forPrefix prefix: String,
+        from: JournalDate,
+        to: JournalDate, // swiftlint:disable:this identifier_name
+    ) -> [[Amount]] {
+        ledger.subtreeBalanceSeries(forPrefix: prefix, from: from, to: to)
+    }
+
+    public func incomeStatementSeries(
+        bucketStarts: [JournalDate],
+        to: JournalDate, // swiftlint:disable:this identifier_name
+    ) -> [(revenues: [Amount], expenses: [Amount])] {
+        ledger.incomeStatementSeries(bucketStarts: bucketStarts, to: to)
+    }
+
     public func transactions(for accountName: String) -> [Transaction] {
         ledger.transactions(for: accountName)
     }

@@ -1022,6 +1022,103 @@ private func makeTx(
     }
 }
 
+// MARK: - Series queries
+
+@Suite("SeriesQueries") struct SeriesQueriesTests {
+    private func makeLedger() throws -> Ledger {
+        var ledger = Ledger()
+        // Pre-window history, in-window activity with gaps, multi-commodity.
+        try ledger.add(.transaction(makeTx(date: makeDate(2024, 1, 10), amount: 100)))
+        try ledger.add(.transaction(makeTx(date: makeDate(2024, 3, 2), amount: 25)))
+        try ledger.add(.transaction(makeTx(date: makeDate(2024, 3, 2), amount: 5)))
+        try ledger.add(.transaction(makeTx(date: makeDate(2024, 3, 5), amount: 40, commodity: "EUR")))
+        try ledger.add(
+            .transaction(
+                makeTx(
+                    date: makeDate(2024, 4, 1), description: "Salary",
+                    debit: "Assets:Cash", credit: "Income:Salary", amount: 500,
+                ),
+            ),
+        )
+        return ledger
+    }
+
+    @Test
+    func `subtreeBalanceSeries matches per-day subtreeBalance across the window`() throws {
+        let ledger = try makeLedger()
+        let from = try makeDate(2024, 3, 1)
+        let windowEnd = try makeDate(2024, 4, 3)
+        let series = ledger.subtreeBalanceSeries(forPrefix: "Assets", from: from, to: windowEnd)
+
+        let calendar = Calendar(identifier: .gregorian)
+        let dayCount =
+            (calendar.dateComponents([.day], from: from.date(), to: windowEnd.date()).day ?? 0) + 1
+        #expect(series.count == dayCount)
+
+        for offset in 0 ..< dayCount {
+            let day = try JournalDate(#require(calendar.date(byAdding: .day, value: offset, to: from.date())))
+            let expected = ledger.subtreeBalance(forPrefix: "Assets", asOf: day)
+                .sorted { $0.commodity < $1.commodity }
+            #expect(series[offset] == expected, "mismatch at \(day)")
+        }
+    }
+
+    @Test
+    func `subtreeBalanceSeries is empty when from is after to`() throws {
+        let ledger = try makeLedger()
+        let series = try ledger.subtreeBalanceSeries(
+            forPrefix: "Assets", from: makeDate(2024, 4, 3), to: makeDate(2024, 3, 1),
+        )
+        #expect(series.isEmpty)
+    }
+
+    @Test
+    func `incomeStatementSeries matches per-bucket IncomeStatement totals`() throws {
+        let ledger = try makeLedger()
+        let starts = try [makeDate(2024, 1, 1), makeDate(2024, 3, 1), makeDate(2024, 4, 1)]
+        let windowEnd = try makeDate(2024, 4, 30)
+        let series = ledger.incomeStatementSeries(bucketStarts: starts, to: windowEnd)
+        #expect(series.count == starts.count)
+
+        for (index, bucket) in series.enumerated() {
+            let bucketTo: JournalDate
+            if index + 1 < starts.count {
+                let next = starts[index + 1].date()
+                let calendar = Calendar(identifier: .gregorian)
+                bucketTo = try JournalDate(#require(calendar.date(byAdding: .day, value: -1, to: next)))
+            } else {
+                bucketTo = windowEnd
+            }
+            let statement = IncomeStatement(ledger: ledger, from: starts[index], to: bucketTo)
+            let expectedRevenues = statement.revenues.flatMap(\.amounts).netByCommodity()
+                .filter { !$0.isZero }
+            let expectedExpenses = statement.expenses.flatMap(\.amounts).netByCommodity()
+                .filter { !$0.isZero }
+            #expect(bucket.revenues == expectedRevenues, "revenues mismatch in bucket \(index)")
+            #expect(bucket.expenses == expectedExpenses, "expenses mismatch in bucket \(index)")
+        }
+    }
+
+    @Test
+    func `incomeStatementSeries assigns bucket-start-day transactions to that bucket`() throws {
+        var ledger = Ledger()
+        try ledger.add(
+            .transaction(
+                makeTx(
+                    date: makeDate(2024, 2, 1), description: "OnBoundary",
+                    debit: "Expenses:Rent", credit: "Assets:Cash", amount: 900,
+                ),
+            ),
+        )
+        let series = try ledger.incomeStatementSeries(
+            bucketStarts: [makeDate(2024, 1, 1), makeDate(2024, 2, 1)],
+            to: makeDate(2024, 2, 28),
+        )
+        #expect(series[0].expenses.isEmpty)
+        #expect(series[1].expenses == [Amount(quantity: 900, commodity: "USD")])
+    }
+}
+
 // MARK: - Test doubles
 
 private final class MockLedgerStore: LedgerStore {
