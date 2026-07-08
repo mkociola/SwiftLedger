@@ -25,7 +25,7 @@ jobs:
       - name: Conventional Commit PR Title
         uses: ytanikin/pr-conventional-commits@1.5.2
         with:
-          task_types: '["feat","fix","docs","test","ci","refactor","perf","chore","revert"]'
+          task_types: '["feat","fix","docs","test","ci","refactor","perf","chore","revert","style"]'
           add_label: 'true'
           add_scope_label: 'true'
         env:
