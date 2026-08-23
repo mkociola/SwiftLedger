@@ -466,6 +466,37 @@ private func makeTx(
     }
 
     @Test
+    func `unsupported directives are kept verbatim, not turned into comments`() throws {
+        let text = """
+        include accounts.ledger
+        !include prices/2024.ledger
+        P 2024-01-01 AAPL $185.00
+        commodity USD
+            format $1,000.00
+        alias Chk=Assets:Checking
+        D $1,000.00
+        year 2024
+        apply account Personal
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.items.allSatisfy { if case .directive = $0 { true } else { false } })
+        #expect(journal.directives == text.components(separatedBy: "\n"))
+    }
+
+    @Test
+    func `an indented sub-directive keeps its indentation`() throws {
+        let journal = try JournalParser().parse("account Assets:Checking\n    note Main account")
+        #expect(journal.accountDirectives.map(\.name) == ["Assets:Checking"])
+        #expect(journal.directives == ["    note Main account"])
+    }
+
+    @Test
+    func `an indented comment line keeps its original indentation`() throws {
+        let journal = try JournalParser().parse("    ; indented note")
+        #expect(journal.items == [.comment("    ; indented note")])
+    }
+
+    @Test
     func `two elided postings in one transaction throws multipleElidedPostings`() {
         let text = """
         2024-01-01 Bad
@@ -709,6 +740,36 @@ private func makeTx(
         #expect(comments1 == comments2)
         #expect(journal2.accountDirectives.first?.name == "Assets:Savings")
     }
+
+    @Test
+    func `a directive-only journal round-trips byte-for-byte`() throws {
+        let text = """
+        ; ledger-cli directives SwiftLedger does not model
+        include accounts.ledger
+        !include prices/2024.ledger
+
+        P 2024-01-01 AAPL $185.00
+        commodity USD
+            format $1,000.00
+        alias Chk=Assets:Checking
+        D $1,000.00
+        year 2024
+        apply account Personal
+            ; an indented comment
+        end apply account
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `a comment built in code without a marker is given one`() throws {
+        let journal = Journal(items: [.comment("reviewed"), .comment("; already marked")])
+        let text = JournalSerializer().serialize(journal)
+        #expect(text == "; reviewed\n; already marked")
+        // …and the marker-less text must not come back as anything but a comment.
+        #expect(try JournalParser().parse(text).items == [.comment("; reviewed"), .comment("; already marked")])
+    }
 }
 
 // MARK: - PlainTextJournalStore
@@ -773,6 +834,45 @@ private func makeTx(
         let coffee = try #require(reloaded.journal.transactions.first { $0.description == "Coffee" })
         #expect(coffee.postings[0].amount.quantity == 5)
         #expect(coffee.postings[0].amount.commodity == "$")
+    }
+
+    @Test
+    func `saving a multi-file journal leaves its include directives intact`() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-\(UUID().uuidString).ledger")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try """
+        include accounts.ledger
+        include 2023.ledger
+        P 2024-01-01 AAPL $185.00
+
+        2024-01-01 Opening
+            Assets:Cash     1000 USD
+            Equity:Opening  -1000 USD
+        """.write(to: url, atomically: true, encoding: .utf8)
+
+        let store = PlainTextJournalStore(url: url)
+        var ledger = try store.load()
+        try ledger.add(
+            .transaction(
+                Transaction(
+                    date: makeDate(2024, 6, 1), description: "Coffee",
+                    postings: [
+                        Posting(accountName: "Expenses:Food", amount: Amount(quantity: 5, commodity: "USD")),
+                        Posting(accountName: "Assets:Cash", amount: Amount(quantity: -5, commodity: "USD")),
+                    ],
+                ),
+            ),
+        )
+        try store.save(ledger)
+
+        let written = try String(contentsOf: url, encoding: .utf8)
+        #expect(written.contains("include accounts.ledger"))
+        #expect(written.contains("include 2023.ledger"))
+        #expect(written.contains("P 2024-01-01 AAPL $185.00"))
+        #expect(!written.contains("; include"))
+        #expect(try store.load().journal.transactions.count == 2)
     }
 }
 
