@@ -4,6 +4,8 @@ import Foundation
 ///
 /// Round-trip fidelity goals:
 /// - Preserves blank lines, comments, and account directives.
+/// - Lines the parser does not model (`include`, `P`, `commodity`, `alias`,
+///   `D`, `year`, indented sub-directives, …) are written back verbatim.
 /// - Elided postings (resolved during parsing) are written with explicit amounts.
 /// - Amounts are formatted using the stored `commodityIsPrefix` flag.
 /// - Postings are indented with 4 spaces.
@@ -21,7 +23,9 @@ public struct JournalSerializer {
             case .blank:
                 lines.append("")
             case let .comment(text):
-                lines.append(text.hasPrefix(";") || text.hasPrefix("#") ? text : "; \(text)")
+                lines.append(isCommentLine(text) ? text : "; \(text)")
+            case let .directive(raw):
+                lines.append(raw)
             case let .accountDirective(directive):
                 lines.append("account \(directive.name)")
             case let .transaction(transaction):
@@ -29,6 +33,19 @@ public struct JournalSerializer {
             }
         }
         return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Comments
+
+    /// Whether `text` already reads as a full-line comment and can be written
+    /// back untouched.
+    ///
+    /// Text that does not — a programmatically supplied `.comment("reviewed")`,
+    /// say — is given a `; ` marker, so serialising never emits a line the
+    /// parser would read back as something other than a comment.
+    private func isCommentLine(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix(";") || trimmed.hasPrefix("#") || trimmed.hasPrefix("*")
     }
 
     // MARK: - Transaction serialisation

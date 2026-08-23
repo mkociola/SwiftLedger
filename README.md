@@ -8,7 +8,7 @@ A plain-text accounting library for Swift, implementing the [plain-text accounti
 
 SwiftLedger parses `.ledger` / `.journal` files, enforces double-entry balance rules, and provides balance queries, reports, and persistence — designed to be embedded in iOS and macOS apps.
 
-> **Compatibility:** SwiftLedger supports a useful subset of the ledger-cli file format. Round-tripping preserves blank lines, comments, and directives, but elided posting amounts are written back as explicit values and formatting is normalised.
+> **Compatibility:** SwiftLedger supports a useful subset of the ledger-cli file format. Anything outside that subset — `include`, `P`, `commodity`, `alias`, `D`, `year`, indented sub-directives — is preserved verbatim rather than interpreted, so saving a journal never rewrites what SwiftLedger cannot read. Within the supported subset, elided posting amounts are written back as explicit values and amount formatting is normalised.
 
 ## Requirements
 
@@ -112,6 +112,27 @@ Supported:
 - One elided posting per transaction (amount computed to balance)
 - `account NAME` directives (with optional type)
 - Inline comments after two or more spaces + `;`
+
+### Unsupported directives
+
+Every other line is kept as a `JournalItem.directive`, holding the source line
+verbatim — indentation included — and is written back byte-for-byte:
+
+```ledger
+include accounts.ledger
+P 2024-01-01 AAPL $185.00
+commodity USD
+    format $1,000.00
+```
+
+```swift
+journal.directives  // ["include accounts.ledger", "P 2024-01-01 AAPL $185.00", …]
+```
+
+> **`include` is preserved, not followed.** `PlainTextJournalStore` reads and
+> writes one file. Transactions in included files are invisible to `Ledger`
+> queries, and the `include` lines themselves survive a save untouched.
+
 
 ## Core concepts
 

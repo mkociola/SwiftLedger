@@ -21,6 +21,14 @@ public enum JournalItem: Sendable, Codable, Hashable {
     case transaction(Transaction)
     case accountDirective(AccountDirective)
     case comment(String)
+    /// A line SwiftLedger does not model: an unsupported directive such as
+    /// `include`, `P`, `commodity`, `alias`, `D` or `year`, an indented
+    /// sub-directive, or any other content outside the supported grammar.
+    ///
+    /// The payload is the source line **verbatim**, including its original
+    /// indentation, and is written back byte-for-byte. Content SwiftLedger
+    /// cannot interpret is never reinterpreted, commented out, or dropped.
+    case directive(String)
     case blank
 }
 
@@ -48,6 +56,18 @@ public struct Journal: Sendable, Codable {
     public var accountDirectives: [AccountDirective] {
         items.compactMap {
             if case let .accountDirective(directive) = $0 { return directive }
+            return nil
+        }
+    }
+
+    /// The verbatim text of every unmodelled directive line, in document order.
+    ///
+    /// Use this to detect constructs SwiftLedger preserves but does not
+    /// interpret — most notably `include`, whose referenced files are neither
+    /// read nor written by `PlainTextJournalStore`.
+    public var directives: [String] {
+        items.compactMap {
+            if case let .directive(text) = $0 { return text }
             return nil
         }
     }

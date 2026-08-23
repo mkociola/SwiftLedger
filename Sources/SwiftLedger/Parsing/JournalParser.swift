@@ -15,6 +15,11 @@ import Foundation
 /// - Comments: `;` or `#` at line start; inline `  ;` after 2+ spaces
 /// - `account NAME` directives
 /// - Blank lines and full-line comments are preserved in the AST.
+///
+/// Any line outside this grammar — `include`, `P`, `commodity`, `alias`, `D`,
+/// `year`, an indented sub-directive, or anything else — is kept verbatim as a
+/// `.directive` item and written back unchanged by `JournalSerializer`. The
+/// parser never reinterprets what it does not understand.
 public struct JournalParser {
     public init() {}
 
@@ -37,10 +42,10 @@ public struct JournalParser {
                 continue
             }
 
-            // Full-line comment
+            // Full-line comment — stored verbatim so indentation survives a round-trip.
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix(";") || trimmed.hasPrefix("#") || trimmed.hasPrefix("*") && !startsWithDate(trimmed) {
-                items.append(.comment(trimmed))
+                items.append(.comment(line))
                 index += 1
                 continue
             }
@@ -61,8 +66,10 @@ public struct JournalParser {
                 continue
             }
 
-            // Unknown line — treat as comment for forward compatibility
-            items.append(.comment(trimmed))
+            // Anything else — an unsupported directive (`include`, `P`, `commodity`,
+            // `alias`, `D`, `year`, an indented sub-directive) or malformed content.
+            // Kept verbatim so serialising never rewrites what we cannot interpret.
+            items.append(.directive(line))
             index += 1
         }
 
