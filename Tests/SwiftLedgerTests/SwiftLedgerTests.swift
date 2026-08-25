@@ -506,6 +506,33 @@ private func makeTx(
         #expect(throws: LedgerError.multipleElidedPostings) { try JournalParser().parse(text) }
     }
 
+    @Test
+    func `account directive keeps its inline comment out of the account name`() throws {
+        let text = "account Expenses:Rent  ; declared but unused so far"
+        let journal = try JournalParser().parse(text)
+        let directive = try #require(journal.accountDirectives.first)
+        #expect(directive.name == "Expenses:Rent")
+        #expect(directive.comment == "declared but unused so far")
+        // The declared account must match the name postings actually use.
+        #expect(Ledger(journal: journal).accounts.map(\.name) == ["Expenses", "Expenses:Rent"])
+    }
+
+    @Test
+    func `an account directive without a comment keeps its whole name`() throws {
+        let journal = try JournalParser().parse("account Assets:Checking")
+        let directive = try #require(journal.accountDirectives.first)
+        #expect(directive.name == "Assets:Checking")
+        #expect(directive.comment == nil)
+    }
+
+    @Test
+    func `an account line with no name is kept verbatim as a directive`() throws {
+        let text = "account   ; nothing declared here"
+        let journal = try JournalParser().parse(text)
+        #expect(journal.accountDirectives.isEmpty)
+        #expect(journal.directives == [text])
+    }
+
     @Suite("amount parsing") struct AmountParsingTests {
         // swiftlint:disable identifier_name
 
@@ -553,6 +580,143 @@ private func makeTx(
             #expect(a.commodityIsPrefix == true)
         }
         // swiftlint:enable identifier_name
+    }
+}
+
+// MARK: - JournalParser: in-transaction comments
+
+@Suite("in-transaction comments") struct InTransactionCommentTests {
+    @Test
+    func `an indented comment line is commentary, not a posting`() throws {
+        let text = """
+        2026-08-14 * Day trip — outbound
+            Expenses:Transport  18.75 EUR
+            ; TODO: split into Expenses:Misc:Fees later?
+            Assets:Checking  -18.75 EUR
+        """
+        let journal = try JournalParser().parse(text)
+        let transaction = try #require(journal.transactions.first)
+        #expect(transaction.postings.count == 2)
+        #expect(transaction.postings.map(\.accountName) == ["Expenses:Transport", "Assets:Checking"])
+        // No phantom account — nor a phantom parent per ":" — is invented
+        // from the comment text.
+        let names = Ledger(journal: journal).accounts.map(\.name)
+        #expect(!names.contains(where: { $0.contains(";") }))
+        #expect(names == ["Assets", "Assets:Checking", "Expenses", "Expenses:Transport"])
+    }
+
+    @Test
+    func `two comment lines in one transaction parse instead of throwing`() throws {
+        let text = """
+        2026-01-01 * Opening balances
+            ; imported from the old spreadsheet
+            ; amounts reconciled against statements
+            Assets:Cash  100.00 EUR
+            Equity:Opening  -100.00 EUR
+        """
+        let journal = try JournalParser().parse(text)
+        let transaction = try #require(journal.transactions.first)
+        #expect(transaction.postings.count == 2)
+        #expect(transaction.leadingComments == [
+            "    ; imported from the old spreadsheet",
+            "    ; amounts reconciled against statements",
+        ])
+    }
+
+    @Test
+    func `a comment before the first posting is kept on the transaction`() throws {
+        let text = """
+        2026-08-14 * Day trip — outbound
+            ; paid in cash
+            Expenses:Transport  18.75 EUR
+            Assets:Checking  -18.75 EUR
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.leadingComments == ["    ; paid in cash"])
+        #expect(transaction.postings.flatMap(\.trailingComments).isEmpty)
+    }
+
+    @Test
+    func `a comment between two postings is kept on the posting above it`() throws {
+        let text = """
+        2026-08-14 * Day trip — outbound
+            Expenses:Transport  18.75 EUR
+            ; needs a category
+            Assets:Checking  -18.75 EUR
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.leadingComments.isEmpty)
+        #expect(transaction.postings[0].trailingComments == ["    ; needs a category"])
+        #expect(transaction.postings[1].trailingComments.isEmpty)
+    }
+
+    @Test
+    func `a single elided posting resolves to the balancing amount`() throws {
+        let text = """
+        2026-02-01 Salary
+            Assets:Checking  3000.00 EUR
+            Income:Salary
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.count == 2)
+        #expect(transaction.postings[1].accountName == "Income:Salary")
+        #expect(transaction.postings[1].amount.quantity == Decimal(-3000))
+        #expect(transaction.postings[1].amount.commodity == "EUR")
+    }
+
+    @Test
+    func `an elided posting resolves when a comment shares the transaction`() throws {
+        let text = """
+        2026-08-14 * Day trip — outbound
+            Expenses:Transport  18.75 EUR
+            ; unlabelled entry — needs a category
+            Assets:Checking
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.count == 2)
+        #expect(transaction.postings[1].accountName == "Assets:Checking")
+        #expect(transaction.postings[1].amount.quantity == Decimal(string: "-18.75")!)
+        #expect(transaction.postings[0].trailingComments.count == 1)
+    }
+
+    @Test
+    func `an indented status marker starts a posting, not a comment`() throws {
+        let text = """
+        2026-03-01 Rent
+            * Assets:Checking  -1200.00 EUR
+            ! Expenses:Rent  1200.00 EUR
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.map(\.status) == [.cleared, .pending])
+        #expect(transaction.postings.map(\.accountName) == ["Assets:Checking", "Expenses:Rent"])
+        #expect(transaction.postings.flatMap(\.trailingComments).isEmpty)
+    }
+
+    @Test
+    func `tab indentation and the hash marker are preserved verbatim`() throws {
+        let text = "2026-03-01 Rent\n"
+            + "\t; tab-indented note\n"
+            + "    Assets:Checking  -1200.00 EUR\n"
+            + "        # deeply indented, hash-marked\n"
+            + "    Expenses:Rent  1200.00 EUR"
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.leadingComments == ["\t; tab-indented note"])
+        #expect(transaction.postings[0].trailingComments == ["        # deeply indented, hash-marked"])
+    }
+
+    @Test
+    func `a comment after the blank line ending a transaction stays top-level`() throws {
+        let text = """
+        2026-03-01 Rent
+            Assets:Checking  -1200.00 EUR
+            Expenses:Rent  1200.00 EUR
+
+            ; not part of the transaction above
+        """
+        let journal = try JournalParser().parse(text)
+        let transaction = try #require(journal.transactions.first)
+        #expect(transaction.postings.flatMap(\.trailingComments).isEmpty)
+        #expect(journal.items.last == .comment("    ; not part of the transaction above"))
     }
 }
 
@@ -769,6 +933,121 @@ private func makeTx(
         #expect(text == "; reviewed\n; already marked")
         // …and the marker-less text must not come back as anything but a comment.
         #expect(try JournalParser().parse(text).items == [.comment("; reviewed"), .comment("; already marked")])
+    }
+
+    @Test
+    func `a journal with every comment form round-trips byte-for-byte`() throws {
+        let text = """
+        ; a journal exercising every comment form SwiftLedger models
+        account Expenses:Rent  ; declared but unused so far
+
+        2026-08-14 * Day trip — outbound  ; two people
+            ; paid in cash
+            Expenses:Transport                              18.75 EUR
+            ; TODO: split into Expenses:Misc:Fees later?
+            # hash-marked comments survive too
+            Assets:Checking                                 -18.75 EUR
+
+        2026-08-15 ! (REF-1) Groceries
+            Expenses:Food                                   20.5 EUR
+            ; the last posting can carry a comment as well
+            Assets:Cash                                     -20.5 EUR
+
+        include other.ledger
+        """
+        #expect(try JournalSerializer().serialize(JournalParser().parse(text)) == text)
+    }
+
+    @Test
+    func `re-serialising a non-canonical journal is stable`() throws {
+        let text = "; leading note\n"
+            + "account Expenses:Rent  ; declared but unused so far\n"
+            + "\n"
+            + "2026-08-14 * Day trip — outbound\n"
+            + "\t; tab-indented, before the first posting\n"
+            + "  Expenses:Transport  18.75 EUR\n"
+            + "      # oddly indented, hash-marked\n"
+            + "  Assets:Checking\n"
+        let serializer = JournalSerializer()
+        let parser = JournalParser()
+        let once = try serializer.serialize(parser.parse(text))
+        let twice = try serializer.serialize(parser.parse(once))
+        #expect(once == twice)
+        // The comment lines keep their own indentation and marker.
+        #expect(once.contains("\t; tab-indented, before the first posting"))
+        #expect(once.contains("      # oddly indented, hash-marked"))
+    }
+
+    @Test
+    func `an in-transaction comment built in code is indented and marked`() throws {
+        let transaction = try Transaction(
+            date: makeDate(2026, 4, 1),
+            description: "Coffee",
+            postings: [
+                Posting(
+                    accountName: "Expenses:Food:Coffee",
+                    amount: Amount(quantity: 5, commodity: "USD"),
+                    trailingComments: ["reviewed"],
+                ),
+                Posting(accountName: "Assets:Cash", amount: Amount(quantity: -5, commodity: "USD")),
+            ],
+            leadingComments: ["; no indentation"],
+        )
+        let text = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+        let lines = text.components(separatedBy: "\n")
+        #expect(lines[1] == "    ; no indentation")
+        #expect(lines[3] == "    ; reviewed")
+        // …and both must come back where they were, not as top-level comments.
+        let reparsed = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(reparsed.leadingComments == ["    ; no indentation"])
+        #expect(reparsed.postings[0].trailingComments == ["    ; reviewed"])
+    }
+}
+
+// MARK: - Codable
+
+@Suite("Codable") struct CodableTests {
+    @Test
+    func `a posting encoded before trailingComments existed still decodes`() throws {
+        let json = """
+        {"accountName":"Assets:Cash",
+         "amount":{"quantity":5,"commodity":"USD","commodityIsPrefix":false}}
+        """
+        let posting = try JSONDecoder().decode(Posting.self, from: Data(json.utf8))
+        #expect(posting.accountName == "Assets:Cash")
+        #expect(posting.trailingComments.isEmpty)
+    }
+
+    @Test
+    func `a transaction encoded before leadingComments existed still decodes`() throws {
+        let transaction = try makeTx(date: makeDate(2026, 5, 1))
+        let encoded = try JSONEncoder().encode(transaction)
+        var object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "leadingComments")
+        let legacy = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(Transaction.self, from: legacy)
+        #expect(decoded.id == transaction.id)
+        #expect(decoded.postings == transaction.postings)
+        #expect(decoded.leadingComments.isEmpty)
+    }
+
+    @Test
+    func `an account directive encoded before comment existed still decodes`() throws {
+        let json = #"{"name":"Assets:Cash"}"#
+        let directive = try JSONDecoder().decode(AccountDirective.self, from: Data(json.utf8))
+        #expect(directive.name == "Assets:Cash")
+        #expect(directive.comment == nil)
+    }
+
+    @Test
+    func `a round-tripped posting keeps its trailing comments`() throws {
+        let posting = Posting(
+            accountName: "Expenses:Transport",
+            amount: Amount(quantity: 47, commodity: "EUR"),
+            trailingComments: ["    ; needs a category"],
+        )
+        let decoded = try JSONDecoder().decode(Posting.self, from: JSONEncoder().encode(posting))
+        #expect(decoded == posting)
     }
 }
 

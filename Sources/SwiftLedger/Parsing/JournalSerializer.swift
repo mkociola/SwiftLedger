@@ -4,6 +4,8 @@ import Foundation
 ///
 /// Round-trip fidelity goals:
 /// - Preserves blank lines, comments, and account directives.
+/// - Full-line comments inside a transaction are written back verbatim, in
+///   place, from `Transaction.leadingComments` and `Posting.trailingComments`.
 /// - Lines the parser does not model (`include`, `P`, `commodity`, `alias`,
 ///   `D`, `year`, indented sub-directives, …) are written back verbatim.
 /// - Elided postings (resolved during parsing) are written with explicit amounts.
@@ -27,7 +29,11 @@ public struct JournalSerializer {
             case let .directive(raw):
                 lines.append(raw)
             case let .accountDirective(directive):
-                lines.append("account \(directive.name)")
+                var line = "account \(directive.name)"
+                if let comment = directive.comment {
+                    line += "  ; \(comment)"
+                }
+                lines.append(line)
             case let .transaction(transaction):
                 lines.append(contentsOf: serializeTransaction(transaction))
             }
@@ -46,6 +52,23 @@ public struct JournalSerializer {
     private func isCommentLine(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         return trimmed.hasPrefix(";") || trimmed.hasPrefix("#") || trimmed.hasPrefix("*")
+    }
+
+    /// Renders one full-line comment belonging to a transaction body.
+    ///
+    /// A line that already reads as an in-transaction comment — indented, and
+    /// marked with `;` or `#` — is written back untouched. Anything else is
+    /// indented and given a `; ` marker, so serialising never emits a line the
+    /// parser would read back as a posting, a status-marked line, or a
+    /// top-level comment outside the transaction.
+    private func transactionCommentLine(_ text: String) -> String {
+        let isIndented = text.first == " " || text.first == "\t"
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        let isMarked = trimmed.hasPrefix(";") || trimmed.hasPrefix("#")
+        if isIndented, isMarked {
+            return text
+        }
+        return "    " + (isMarked ? trimmed : "; \(trimmed)")
     }
 
     // MARK: - Transaction serialisation
@@ -70,9 +93,17 @@ public struct JournalSerializer {
         }
         lines.append(header)
 
-        // Posting lines
+        // Comment lines written before the first posting
+        for comment in transaction.leadingComments {
+            lines.append(transactionCommentLine(comment))
+        }
+
+        // Posting lines, each followed by the comment lines written below it
         for posting in transaction.postings {
             lines.append(serializePosting(posting))
+            for comment in posting.trailingComments {
+                lines.append(transactionCommentLine(comment))
+            }
         }
 
         return lines

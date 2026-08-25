@@ -100,6 +100,7 @@ account Income:Salary
     Expenses:Food:Restaurants
 
 2024-02-10 (REF-042) Freelance payment
+    ; an indented full-line comment is commentary, not a posting
     Assets:Checking        800 USD
     Income:Freelance
 ```
@@ -110,8 +111,11 @@ Supported:
 - Status: `*` cleared, `!` pending
 - Codes: `(REF-042)`
 - One elided posting per transaction (amount computed to balance)
-- `account NAME` directives (with optional type)
+- `account NAME` directives (with optional type), optionally followed by `  ; comment`
 - Inline comments after two or more spaces + `;`
+- Indented full-line comments inside a transaction, kept verbatim on the
+  posting above them (`Posting.trailingComments`) or on the transaction when
+  they precede the first posting (`Transaction.leadingComments`)
 
 ### Unsupported directives
 
@@ -199,6 +203,26 @@ let bad = try Transaction(
 ```
 
 **Signs:** amounts are signed `Decimal` values. Positive = value flowing *into* an account; negative = value flowing *out*.
+
+**Comments:** `Posting.comment` and `Transaction.comment` hold the *inline*
+comment text of their own line. Full-line comments written inside a transaction
+are separate: they are stored verbatim — indentation and `;`/`#` marker
+included — on `Posting.trailingComments` (comments below that posting) or
+`Transaction.leadingComments` (comments above the first posting), and are
+written back in place.
+
+```swift
+let tx = try JournalParser().parse("""
+2024-02-10 Freelance payment
+    ; invoice 42, paid late
+    Assets:Checking        800 USD
+    ; the client withheld nothing this time
+    Income:Freelance      -800 USD
+""").transactions[0]
+
+tx.leadingComments             // ["    ; invoice 42, paid late"]
+tx.postings[0].trailingComments // ["    ; the client withheld nothing this time"]
+```
 
 `Transaction` conforms to `Identifiable` (stable `id: UUID`) for safe use in SwiftUI lists.
 

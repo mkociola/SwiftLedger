@@ -6,10 +6,13 @@
 public struct AccountDirective: Sendable, Codable, Hashable {
     public let name: String
     public let type: AccountType?
+    /// Inline comment text following the account name (the part after `; `).
+    public let comment: String?
 
-    public init(name: String, type: AccountType? = nil) {
+    public init(name: String, type: AccountType? = nil, comment: String? = nil) {
         self.name = name
         self.type = type
+        self.comment = comment
     }
 }
 
