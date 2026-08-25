@@ -75,6 +75,21 @@ public struct Journal: Sendable, Codable {
         }
     }
 
+    /// The `account` directive declaring `name`, or `nil` when no line declares
+    /// it — an account inferred from postings alone has none.
+    ///
+    /// A directive's identity is the account name it declares; `type` and
+    /// `comment` are data it carries. Look one up by name rather than
+    /// reconstructing an equal value: a directive parsed from
+    /// `account NAME  ; note` carries that comment, and a value built without
+    /// it does not compare equal.
+    public func accountDirective(named name: String) -> AccountDirective? {
+        for case let .accountDirective(directive) in items where directive.name == name {
+            return directive
+        }
+        return nil
+    }
+
     /// Appends an item to the journal.
     public mutating func append(_ item: JournalItem) {
         items.append(item)
@@ -92,5 +107,26 @@ public struct Journal: Sendable, Codable {
         guard let idx = items.firstIndex(of: item) else { return false }
         items.remove(at: idx)
         return true
+    }
+
+    /// Removes the `account` directive declaring `name` and returns it.
+    ///
+    /// Keyed by name, so the caller neither has to know the directive's `type`
+    /// and `comment` to remove it, nor loses them by removing it: handed back
+    /// to `append(_:)`, the returned value reproduces the line verbatim — at
+    /// the end of the journal, as every append is, not at its old position.
+    /// Removing by value through `remove(_:)` can do neither.
+    ///
+    /// If two lines declare the same account, only the first is removed.
+    ///
+    /// - Returns: The directive removed, or `nil` if nothing declared `name`.
+    @discardableResult
+    public mutating func removeAccountDirective(named name: String) -> AccountDirective? {
+        for (index, item) in items.enumerated() {
+            guard case let .accountDirective(directive) = item, directive.name == name else { continue }
+            items.remove(at: index)
+            return directive
+        }
+        return nil
     }
 }
