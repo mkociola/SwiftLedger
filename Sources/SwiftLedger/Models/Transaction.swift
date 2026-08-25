@@ -24,6 +24,14 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     public let postings: [Posting]
     /// Inline comment on the transaction header line.
     public let comment: String?
+    /// Full-line comments written between the header line and the first
+    /// posting.
+    ///
+    /// Each element is the source line **verbatim**, indentation and `;`/`#`
+    /// marker included, so the original layout survives a serialisation
+    /// round-trip. Comments appearing lower down are attached to the posting
+    /// above them as `Posting.trailingComments`.
+    public let leadingComments: [String]
 
     /// Creates a validated transaction.
     ///
@@ -39,6 +47,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         description: String,
         postings: [Posting],
         comment: String? = nil,
+        leadingComments: [String] = [],
     ) throws {
         guard postings.count >= 2 else { throw LedgerError.emptyTransaction }
         try Self.validateBalance(postings)
@@ -50,6 +59,22 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         self.description = description
         self.postings = postings
         self.comment = comment
+        self.leadingComments = leadingComments
+    }
+
+    /// Decodes a transaction, treating a missing `leadingComments` key as no
+    /// comments so that JSON written before the key existed still decodes.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        date = try container.decode(JournalDate.self, forKey: .date)
+        auxDate = try container.decodeIfPresent(JournalDate.self, forKey: .auxDate)
+        status = try container.decode(ClearingStatus.self, forKey: .status)
+        code = try container.decodeIfPresent(String.self, forKey: .code)
+        description = try container.decode(String.self, forKey: .description)
+        postings = try container.decode([Posting].self, forKey: .postings)
+        comment = try container.decodeIfPresent(String.self, forKey: .comment)
+        leadingComments = try container.decodeIfPresent([String].self, forKey: .leadingComments) ?? []
     }
 
     // MARK: - Private

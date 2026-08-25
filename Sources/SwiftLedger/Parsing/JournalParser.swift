@@ -13,8 +13,11 @@ import Foundation
 /// - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `100.00 EUR`, `£500`
 /// - Status: `*` = cleared, `!` = pending
 /// - Comments: `;` or `#` at line start; inline `  ;` after 2+ spaces
-/// - `account NAME` directives
+/// - `account NAME` directives, with an optional inline comment
 /// - Blank lines and full-line comments are preserved in the AST.
+/// - Indented full-line comments inside a transaction are commentary, not
+///   postings: they are preserved verbatim on the posting above them, or on
+///   the transaction when they precede the first posting.
 ///
 /// Any line outside this grammar — `include`, `P`, `commodity`, `alias`, `D`,
 /// `year`, an indented sub-directive, or anything else — is kept verbatim as a
@@ -50,12 +53,22 @@ public struct JournalParser {
                 continue
             }
 
-            // account directive
+            // account directive, with its inline comment split off so the
+            // comment text never becomes part of the declared account name.
             if trimmed.lowercased().hasPrefix("account ") {
-                let name = String(trimmed.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
-                items.append(.accountDirective(AccountDirective(name: name)))
-                index += 1
-                continue
+                let (mainPart, comment) = splitInlineComment(trimmed)
+                let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
+                if !name.isEmpty {
+                    let directive = AccountDirective(
+                        name: name,
+                        comment: comment?.trimmingCharacters(in: .whitespaces),
+                    )
+                    items.append(.accountDirective(directive))
+                    index += 1
+                    continue
+                }
+                // A nameless `account` line is not a directive we can model;
+                // fall through and keep it verbatim.
             }
 
             // Transaction header (starts with a date)
@@ -93,8 +106,12 @@ public struct JournalParser {
 
         let header = try parseHeader(headerLine, lineNumber: lineNumber)
 
-        // Collect posting lines (lines that begin with whitespace)
-        var postingLines: [(String, Int)] = []
+        // Collect the transaction body: the indented lines below the header.
+        // A full-line comment among them is commentary rather than a posting —
+        // it is kept verbatim on the posting above it, or on the transaction
+        // itself when it comes before the first posting.
+        var rawPostings: [RawPosting] = []
+        var leadingComments: [String] = []
         var index = start + 1
         while index < lines.count {
             let currentLine = lines[index]
@@ -103,11 +120,19 @@ public struct JournalParser {
             }
             let first = currentLine.unicodeScalars.first
             guard first == " " || first == "\t" else { break }
-            postingLines.append((currentLine, index + 1))
+            if isTransactionComment(currentLine) {
+                if rawPostings.isEmpty {
+                    leadingComments.append(currentLine)
+                } else {
+                    rawPostings[rawPostings.count - 1].trailingComments.append(currentLine)
+                }
+            } else {
+                try rawPostings.append(parsePosting(currentLine, lineNumber: index + 1))
+            }
             index += 1
         }
 
-        let postings = try resolveElisions(postingLines.map { try parsePosting($0.0, lineNumber: $0.1) })
+        let postings = try resolveElisions(rawPostings)
         let transaction = try Transaction(
             date: header.date,
             auxDate: header.auxDate,
@@ -116,6 +141,7 @@ public struct JournalParser {
             description: header.description,
             postings: postings,
             comment: header.comment,
+            leadingComments: leadingComments,
         )
         return (transaction, index - start)
     }
@@ -182,6 +208,8 @@ public struct JournalParser {
         var amount: Amount?
         var status: ClearingStatus?
         var comment: String?
+        /// Full-line comments written below this posting, verbatim.
+        var trailingComments: [String] = []
     }
 
     private func parsePosting(_ line: String, lineNumber: Int) throws -> RawPosting {
@@ -223,7 +251,13 @@ public struct JournalParser {
         if elidedCount == 0 {
             return try rawPostings.map { raw in
                 guard let amount = raw.amount else { throw LedgerError.cannotResolveElision }
-                return Posting(accountName: raw.accountName, amount: amount, status: raw.status, comment: raw.comment)
+                return Posting(
+                    accountName: raw.accountName,
+                    amount: amount,
+                    status: raw.status,
+                    comment: raw.comment,
+                    trailingComments: raw.trailingComments,
+                )
             }
         }
 
@@ -240,7 +274,13 @@ public struct JournalParser {
 
         return rawPostings.map { raw in
             let amt = raw.amount ?? elidedAmount
-            return Posting(accountName: raw.accountName, amount: amt, status: raw.status, comment: raw.comment)
+            return Posting(
+                accountName: raw.accountName,
+                amount: amt,
+                status: raw.status,
+                comment: raw.comment,
+                trailingComments: raw.trailingComments,
+            )
         }
     }
 

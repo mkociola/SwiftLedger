@@ -16,6 +16,17 @@ extension JournalParser {
             chars[8].isNumber && chars[9].isNumber
     }
 
+    /// Whether an indented line inside a transaction is a full-line comment
+    /// rather than a posting.
+    ///
+    /// Only `;` and `#` mark a comment here: a leading `*` or `!` inside a
+    /// transaction is a posting status marker, unlike at the top level where
+    /// `*` starts a comment too.
+    func isTransactionComment(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix(";") || trimmed.hasPrefix("#")
+    }
+
     func consumeDate(_ str: String, lineNumber: Int) throws -> (JournalDate, String) {
         guard str.count >= 10 else {
             throw LedgerError.parseError(line: lineNumber, message: "Expected date, got '\(str)'")
