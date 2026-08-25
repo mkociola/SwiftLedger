@@ -38,7 +38,32 @@ public final class LedgerManager {
         return true
     }
 
+    /// Removes the `account` directive declaring `name` and persists the result.
+    ///
+    /// Atomic in the same way as `remove(_:)`: nothing is written when no line
+    /// declares `name`, and if the store's `save` throws the in-memory ledger is
+    /// left unchanged, so callers can safely retry.
+    ///
+    /// - Returns: The directive removed — `type` and `comment` included, ready
+    ///   to hand back to `add(_:)` as an undo step — or `nil` if `name` was not
+    ///   declared.
+    /// - Throws: Any error raised by the store's `save` method.
+    @discardableResult
+    public func removeAccountDirective(named name: String) throws -> AccountDirective? {
+        var updated = ledger
+        guard let removed = updated.removeAccountDirective(named: name) else { return nil }
+        try store?.save(updated)
+        ledger = updated
+        return removed
+    }
+
     // MARK: - Queries
+
+    /// The `account` directive declaring `name`, or `nil` when the account is
+    /// inferred from postings rather than declared.
+    public func accountDirective(named name: String) -> AccountDirective? {
+        ledger.accountDirective(named: name)
+    }
 
     public func accounts() -> [Account] {
         ledger.accounts

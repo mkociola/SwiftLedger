@@ -335,6 +335,64 @@ private func makeTx(
     }
 
     @Test
+    func `accountDirective(named:) finds a declaration whatever it carries`() throws {
+        let journal = try JournalParser().parse("""
+        account Expenses:Rent  ; declared but unused so far
+        account Assets:Checking
+        """)
+        let found = try #require(journal.accountDirective(named: "Expenses:Rent"))
+        #expect(found.comment == "declared but unused so far")
+        #expect(journal.accountDirective(named: "Assets:Checking")?.comment == nil)
+        // An account that only exists through its postings is not declared.
+        #expect(journal.accountDirective(named: "Expenses:Food") == nil)
+    }
+
+    @Test
+    func `removeAccountDirective(named:) removes a directive the caller cannot reconstruct`() throws {
+        var journal = try JournalParser().parse("account Expenses:Rent  ; declared but unused so far")
+        // Removing by value fails: the caller does not know the comment.
+        let removedByValue = journal.remove(.accountDirective(AccountDirective(name: "Expenses:Rent")))
+        #expect(!removedByValue)
+        let directive = journal.removeAccountDirective(named: "Expenses:Rent")
+        #expect(try #require(directive).comment == "declared but unused so far")
+        #expect(journal.accountDirectives.isEmpty)
+    }
+
+    @Test
+    func `removeAccountDirective(named:) returns nil and changes nothing when undeclared`() throws {
+        var journal = try JournalParser().parse("account Assets:Checking")
+        let removed = journal.removeAccountDirective(named: "Expenses:Rent")
+        #expect(removed == nil)
+        #expect(journal.items.count == 1)
+    }
+
+    @Test
+    func `removeAccountDirective(named:) removes only the first of two declarations`() throws {
+        var journal = try JournalParser().parse("""
+        account Assets:Checking  ; first
+        account Assets:Checking  ; second
+        """)
+        let removed = journal.removeAccountDirective(named: "Assets:Checking")
+        #expect(removed?.comment == "first")
+        #expect(journal.accountDirectives.map(\.comment) == ["second"])
+    }
+
+    @Test
+    func `re-adding the removed directive restores the line exactly`() throws {
+        let text = """
+        account Expenses:Rent  ; declared but unused so far
+        account Assets:Checking
+        """
+        var journal = try JournalParser().parse(text)
+        let directive = journal.removeAccountDirective(named: "Expenses:Rent")
+        try journal.append(.accountDirective(#require(directive)))
+        #expect(JournalSerializer().serialize(journal) == """
+        account Assets:Checking
+        account Expenses:Rent  ; declared but unused so far
+        """)
+    }
+
+    @Test
     func `removing a transaction leaves all other items untouched`() throws {
         let transaction = try makeTx(date: makeDate(2024, 1, 1))
         var journal = Journal(items: [.comment("keep"), .transaction(transaction), .blank])
@@ -827,6 +885,23 @@ private func makeTx(
         )
         let account = try #require(ledger.accounts.first { $0.name == "Suspense" })
         #expect(account.type == .asset)
+    }
+
+    @Test
+    func `removeAccountDirective(named:) drops the declaration but keeps the account`() throws {
+        var ledger = try Ledger(journal: JournalParser().parse("""
+        account Expenses:Rent  ; declared but unused so far
+
+        2026-03-01 Rent
+            Expenses:Rent  1200.00 EUR
+            Assets:Checking  -1200.00 EUR
+        """))
+        let directive = ledger.removeAccountDirective(named: "Expenses:Rent")
+        let removed = try #require(directive)
+        #expect(removed.comment == "declared but unused so far")
+        #expect(ledger.accountDirective(named: "Expenses:Rent") == nil)
+        // The account itself survives: its postings still name it.
+        #expect(ledger.accounts.map(\.name).contains("Expenses:Rent"))
     }
 
     @Test
@@ -1378,6 +1453,38 @@ private func makeTx(
         )
         #expect(try manager.remove(.transaction(transaction)) == false)
         #expect(store.saveCallCount == 0)
+    }
+
+    @Test
+    func `removeAccountDirective(named:) returns the directive and persists once`() throws {
+        let store = MockLedgerStore()
+        let manager = try LedgerManager(store: store)
+        try manager.add(.accountDirective(AccountDirective(name: "Expenses:Rent", comment: "unused")))
+        #expect(store.saveCallCount == 1)
+        let removed = try #require(try manager.removeAccountDirective(named: "Expenses:Rent"))
+        #expect(removed.comment == "unused")
+        #expect(store.saveCallCount == 2)
+        #expect(manager.accountDirective(named: "Expenses:Rent") == nil)
+    }
+
+    @Test
+    func `removeAccountDirective(named:) returns nil and does not save when undeclared`() throws {
+        let store = MockLedgerStore()
+        let manager = try LedgerManager(store: store)
+        #expect(try manager.removeAccountDirective(named: "Expenses:Rent") == nil)
+        #expect(store.saveCallCount == 0)
+    }
+
+    @Test
+    func `removeAccountDirective(named:) keeps the directive when save throws`() throws {
+        let store = MockLedgerStore()
+        let manager = try LedgerManager(store: store)
+        try manager.add(.accountDirective(AccountDirective(name: "Expenses:Rent", comment: "unused")))
+        store.saveError = CocoaError(.fileWriteOutOfSpace)
+        #expect(throws: CocoaError.self) { try manager.removeAccountDirective(named: "Expenses:Rent") }
+        store.saveError = nil
+        // The failed removal left the declaration in place, so a retry finds it.
+        #expect(try manager.removeAccountDirective(named: "Expenses:Rent")?.comment == "unused")
     }
 
     @Test

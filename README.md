@@ -163,6 +163,24 @@ account Cash
   ; With explicit type (not yet parsed from directives) use Account(name:type:) programmatically.
 ```
 
+An `account` directive is identified by the account name it declares, not by
+the whole value — a directive parsed from `account NAME  ; note` carries that
+comment, so a value rebuilt without it will not compare equal. Look one up, or
+remove it, by name:
+
+```swift
+journal.accountDirective(named: "Expenses:Rent")        // AccountDirective?
+let removed = journal.removeAccountDirective(named: "Expenses:Rent")
+// `removed` carries the directive's type and comment, so appending it back
+// reproduces the line verbatim — which is what an undo step needs. Like any
+// append it lands at the end of the journal, not at the line's old position.
+journal.append(.accountDirective(removed!))
+```
+
+`Ledger` and `LedgerManager` expose the same pair; the manager's removal is
+atomic like `remove(_:)` — nothing is written when the account is not declared,
+and a failed save leaves the in-memory ledger untouched.
+
 `Account` exposes helpers useful for SwiftUI tree views:
 
 ```swift

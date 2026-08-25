@@ -28,7 +28,22 @@ public struct Ledger: Sendable {
         journal.remove(item)
     }
 
+    /// Removes the `account` directive declaring `name` and returns it, with
+    /// its `type` and `comment` intact.
+    ///
+    /// - Returns: The directive removed, or `nil` if nothing declared `name`.
+    @discardableResult
+    public mutating func removeAccountDirective(named name: String) -> AccountDirective? {
+        journal.removeAccountDirective(named: name)
+    }
+
     // MARK: - Accounts
+
+    /// The `account` directive declaring `name`, or `nil` when the account is
+    /// inferred from postings rather than declared.
+    public func accountDirective(named name: String) -> AccountDirective? {
+        journal.accountDirective(named: name)
+    }
 
     /// All accounts inferred from posting names, merged with any explicit
     /// `account` directives. Sorted by name.
