@@ -1156,6 +1156,38 @@ private func makeTx(
         let decoded = try JSONDecoder().decode(Posting.self, from: JSONEncoder().encode(posting))
         #expect(decoded == posting)
     }
+
+    @Test
+    func `a round-tripped balance matrix keeps its rows and answers lookups`() throws {
+        let matrix = try makeMatrixLedger().balanceMatrix(
+            bucketStarts: monthlyStarts(), to: makeDate(2024, 3, 31),
+        )
+        let decoded = try JSONDecoder().decode(
+            BalanceMatrix.self, from: JSONEncoder().encode(matrix),
+        )
+        #expect(decoded == matrix)
+        #expect(decoded.accountNames == matrix.accountNames)
+        #expect(decoded["Assets:Checking"]?.endingBalance() == [usd(3950)])
+    }
+
+    @Test
+    func `a balance matrix decoded with its rows out of order still looks them up`() throws {
+        // `subscript(_:)` binary-searches, so decoding has to restore the
+        // ordering rather than trust whatever wrote the JSON.
+        let json = """
+        {"bucketStarts": [{"year": 2024, "month": 1, "day": 1}],
+         "to": {"year": 2024, "month": 1, "day": 31},
+         "rows": [
+           {"account": {"name": "Zebra", "type": "unclassified"},
+            "opening": [], "changes": [[]]},
+           {"account": {"name": "Assets:Cash", "type": "asset"},
+            "opening": [], "changes": [[]]}]}
+        """
+        let matrix = try JSONDecoder().decode(BalanceMatrix.self, from: Data(json.utf8))
+        #expect(matrix.accountNames == ["Assets:Cash", "Zebra"])
+        #expect(matrix["Assets:Cash"]?.account.name == "Assets:Cash")
+        #expect(matrix["Zebra"]?.account.name == "Zebra")
+    }
 }
 
 // MARK: - PlainTextJournalStore
@@ -1665,6 +1697,411 @@ private func makeTx(
         )
         #expect(series[0].expenses.isEmpty)
         #expect(series[1].expenses == [Amount(quantity: 900, commodity: "USD")])
+    }
+}
+
+// MARK: - Balance matrix
+
+/// The day before `date`, in the Gregorian calendar.
+private func dayBefore(_ date: JournalDate) throws -> JournalDate {
+    let calendar = Calendar(identifier: .gregorian)
+    return try JournalDate(#require(calendar.date(byAdding: .day, value: -1, to: date.date())))
+}
+
+private func usd(_ quantity: Decimal) -> Amount {
+    Amount(quantity: quantity, commodity: "USD")
+}
+
+private func eur(_ quantity: Decimal) -> Amount {
+    Amount(quantity: quantity, commodity: "EUR")
+}
+
+/// Pre-window history, multi-commodity activity, a cleared/unmarked mix, an
+/// account reachable only through one description, a bucket whose postings
+/// cancel out, an out-of-window transaction — and deliberately **not** in
+/// date order, so every case built on it also exercises document order.
+private func makeMatrixLedger() throws -> Ledger {
+    try Ledger(journal: JournalParser().parse("""
+    2024-02-14 * Groceries
+        Expenses:Food                    30 USD
+        Assets:Checking                 -30 USD
+
+    2023-12-15 Opening balance
+        Assets:Checking                1000 USD
+        Equity:Opening                -1000 USD
+
+    2024-05-01 After the window
+        Expenses:Food                   999 USD
+        Assets:Checking                -999 USD
+
+    2024-01-05 Groceries
+        Expenses:Food                    50 USD
+        Assets:Checking                 -50 USD
+
+    2024-03-03 * Grocery refund
+        Expenses:Food                   -30 USD
+        Assets:Checking                  30 USD
+
+    2024-01-20 * Salary
+        Assets:Checking                3000 USD
+        Income:Salary                 -3000 USD
+
+    2024-02-10 Travel to Berlin
+        Expenses:Travel                  40 EUR
+        Assets:Cash                     -40 EUR
+
+    2024-02-20 Snacks
+        Expenses:Food                    20 USD
+        Assets:Cash                     -20 USD
+
+    2024-03-10 Misc outlay
+        Expenses:Misc                    12 USD
+        Assets:Cash                     -12 USD
+
+    2024-03-11 Misc refunded
+        Expenses:Misc                   -12 USD
+        Assets:Cash                      12 USD
+    """))
+}
+
+/// The three monthly buckets the fixture is usually read through:
+/// January, February and March 2024.
+private func monthlyStarts() throws -> [JournalDate] {
+    try [makeDate(2024, 1, 1), makeDate(2024, 2, 1), makeDate(2024, 3, 1)]
+}
+
+@Suite("BalanceMatrix cross-checks") struct BalanceMatrixCrossCheckTests {
+    @Test
+    func `opening plus cumulative changes matches balance(for:asOf:) at each boundary`() throws {
+        let ledger = try makeMatrixLedger()
+        let starts = try monthlyStarts()
+        let windowEnd = try makeDate(2024, 3, 31)
+        let matrix = ledger.balanceMatrix(bucketStarts: starts, to: windowEnd)
+
+        var boundaries: [JournalDate] = []
+        for index in starts.indices {
+            try boundaries.append(
+                index + 1 < starts.count ? dayBefore(starts[index + 1]) : windowEnd,
+            )
+        }
+
+        for row in matrix.rows {
+            let endings = row.endingBalances()
+            #expect(endings.count == starts.count)
+            for (index, boundary) in boundaries.enumerated() {
+                let expected = ledger.balance(for: row.account.name, asOf: boundary)
+                #expect(
+                    endings[index] == expected,
+                    "\(row.account.name) at \(boundary): \(endings[index]) != \(expected)",
+                )
+            }
+        }
+        // Every account named by a posting on or before the window end has a row.
+        #expect(matrix.accountNames == [
+            "Assets:Cash", "Assets:Checking", "Equity:Opening",
+            "Expenses:Food", "Expenses:Misc", "Expenses:Travel", "Income:Salary",
+        ])
+    }
+
+    @Test
+    func `a single-bucket matrix agrees with IncomeStatement revenues and expenses`() throws {
+        let ledger = try makeMatrixLedger()
+
+        func check(from: JournalDate, to windowEnd: JournalDate) {
+            let matrix = ledger.balanceMatrix(bucketStarts: [from], to: windowEnd)
+            let statement = IncomeStatement(ledger: ledger, from: from, to: windowEnd)
+
+            func entries(_ type: AccountType) -> [(name: String, amounts: [Amount])] {
+                matrix.rows
+                    .filter { $0.account.type == type }
+                    .compactMap { row in
+                        let amounts = row.changes[0].filter { !$0.isZero }
+                        return amounts.isEmpty ? nil : (row.account.name, amounts)
+                    }
+            }
+
+            let expected = [
+                (AccountType.revenue, statement.revenues),
+                (AccountType.expense, statement.expenses),
+            ]
+            for (type, balances) in expected {
+                let actual = entries(type)
+                #expect(
+                    actual.map(\.name) == balances.map(\.account.name),
+                    "\(type) accounts from \(from)",
+                )
+                #expect(
+                    actual.map(\.amounts) == balances.map(\.amounts),
+                    "\(type) amounts from \(from)",
+                )
+            }
+        }
+
+        try check(from: makeDate(2024, 1, 1), to: makeDate(2024, 3, 31))
+        // March alone: one non-zero expense, one that cancels out, and a
+        // revenue account with no activity at all — each dropped or kept
+        // the same way on both sides.
+        try check(from: makeDate(2024, 3, 1), to: makeDate(2024, 3, 31))
+    }
+
+    @Test
+    func `per-day buckets aggregate to subtreeBalanceSeries`() throws {
+        let ledger = try makeMatrixLedger()
+        let from = try makeDate(2024, 1, 1)
+        let windowEnd = try makeDate(2024, 3, 31)
+
+        let calendar = Calendar(identifier: .gregorian)
+        let dayCount =
+            (calendar.dateComponents([.day], from: from.date(), to: windowEnd.date()).day ?? 0) + 1
+        var days: [JournalDate] = []
+        for offset in 0 ..< dayCount {
+            let day = calendar.date(byAdding: .day, value: offset, to: from.date())
+            try days.append(JournalDate(#require(day)))
+        }
+
+        let matrix = ledger.balanceMatrix(bucketStarts: days, to: windowEnd)
+        for prefix in ["Assets", "Expenses", "Assets:Cash"] {
+            let series = ledger.subtreeBalanceSeries(forPrefix: prefix, from: from, to: windowEnd)
+            let endings = matrix.rows
+                .filter { $0.account.name == prefix || $0.account.name.hasPrefix(prefix + ":") }
+                .map { $0.endingBalances() }
+            for day in 0 ..< dayCount {
+                let aggregated = endings.flatMap { $0[day] }.netByCommodity()
+                #expect(aggregated == series[day], "\(prefix) on \(days[day])")
+            }
+        }
+    }
+}
+
+@Suite("BalanceMatrix bucketing") struct BalanceMatrixBucketingTests {
+    @Test
+    func `bucket assignment follows dates, not document order`() throws {
+        let ledger = try makeMatrixLedger()
+        // The fixture is stored out of date order…
+        let dates = ledger.journal.transactions.map(\.date)
+        #expect(try dates.first == makeDate(2024, 2, 14))
+        #expect(dates != dates.sorted())
+
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: monthlyStarts(), to: makeDate(2024, 3, 31),
+        )
+        let checking = try #require(matrix["Assets:Checking"])
+        #expect(checking.opening == [usd(1000)])
+        #expect(checking.changes == [[usd(2950)], [usd(-30)], [usd(30)]])
+        #expect(checking.endingBalances() == [[usd(3950)], [usd(3920)], [usd(3950)]])
+        #expect(checking.endingBalance() == [usd(3950)])
+    }
+
+    @Test
+    func `a transaction dated on a bucket start belongs to that bucket`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: [makeDate(2024, 2, 1), makeDate(2024, 3, 3)],
+            to: makeDate(2024, 3, 31),
+        )
+        // The 2024-03-03 refund opens the second bucket rather than closing the first.
+        #expect(matrix["Expenses:Food"]?.changes == [[usd(50)], [usd(-30)]])
+    }
+
+    @Test
+    func `single-day buckets separate consecutive days`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: [makeDate(2024, 3, 10), makeDate(2024, 3, 11)],
+            to: makeDate(2024, 3, 11),
+        )
+        let misc = try #require(matrix["Expenses:Misc"])
+        #expect(misc.opening.isEmpty)
+        #expect(misc.changes == [[usd(12)], [usd(-12)]])
+    }
+
+    @Test
+    func `transactions after the window end land nowhere`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: monthlyStarts(), to: makeDate(2024, 3, 31),
+        )
+        let food = try #require(matrix["Expenses:Food"])
+        // The 999 USD entry on 2024-05-01 reaches neither opening nor any bucket…
+        #expect(food.opening.isEmpty)
+        #expect(food.endingBalance() == [usd(70)])
+        // …though the ledger itself still holds it.
+        #expect(ledger.balance(for: "Expenses:Food") == [usd(1069)])
+    }
+
+    @Test
+    func `bucketStarts beginning after the window end leave every posting in opening`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: [makeDate(2024, 6, 1)], to: makeDate(2024, 3, 31),
+        )
+        let checking = try #require(matrix["Assets:Checking"])
+        #expect(checking.opening == [usd(3950)])
+        #expect(checking.changes == [[]])
+    }
+
+    @Test
+    func `empty bucketStarts yields an empty matrix`() throws {
+        let ledger = try makeMatrixLedger()
+        let windowEnd = try makeDate(2024, 3, 31)
+        let matrix = ledger.balanceMatrix(bucketStarts: [], to: windowEnd)
+        #expect(matrix.rows.isEmpty)
+        #expect(matrix.bucketStarts.isEmpty)
+        #expect(matrix.bucketCount == 0)
+        #expect(matrix.to == windowEnd)
+        #expect(matrix["Assets:Checking"] == nil)
+    }
+}
+
+@Suite("BalanceMatrix zeros, commodities and rows") struct BalanceMatrixRowTests {
+    @Test
+    func `a bucket that cancels out keeps a zero while an empty bucket stays empty`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: monthlyStarts(), to: makeDate(2024, 3, 31),
+        )
+        let misc = try #require(matrix["Expenses:Misc"])
+        // March holds +12 and -12; January and February hold nothing at all.
+        #expect(misc.changes == [[], [], [usd(0)]])
+        #expect(misc.endingBalances() == [[], [], [usd(0)]])
+    }
+
+    @Test
+    func `mixed commodities in one account net separately and sort by commodity`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: monthlyStarts(), to: makeDate(2024, 3, 31),
+        )
+        let cash = try #require(matrix["Assets:Cash"])
+        #expect(cash.changes == [[], [eur(-40), usd(-20)], [usd(0)]])
+        #expect(cash.endingBalance() == [eur(-40), usd(-20)])
+    }
+
+    @Test
+    func `rows are exact posting accounts with no parent roll-up`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: monthlyStarts(), to: makeDate(2024, 3, 31),
+        )
+        #expect(matrix["Expenses"] == nil)
+        #expect(matrix["Assets"] == nil)
+        #expect(matrix["Nothing:Here"] == nil)
+        #expect(matrix.accountNames == matrix.accountNames.sorted())
+        #expect(matrix.rows.allSatisfy { $0.changes.count == matrix.bucketCount })
+    }
+
+    @Test
+    func `an account directive type overrides name-based inference on a row`() throws {
+        var ledger = Ledger()
+        ledger.add(.accountDirective(AccountDirective(name: "Suspense", type: .asset)))
+        try ledger.add(
+            .transaction(
+                makeTx(date: makeDate(2024, 1, 5), debit: "Suspense", credit: "Assets:Cash"),
+            ),
+        )
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: [makeDate(2024, 1, 1)], to: makeDate(2024, 1, 31),
+        )
+        #expect(matrix["Suspense"]?.account.type == .asset)
+    }
+
+    @Test
+    func `the initialiser sorts rows, whatever order they are handed in`() throws {
+        let rows = [
+            BalanceMatrix.Row(account: Account(name: "Zebra"), opening: [], changes: [[]]),
+            BalanceMatrix.Row(account: Account(name: "Assets:Cash"), opening: [], changes: [[]]),
+        ]
+        let matrix = try BalanceMatrix(
+            bucketStarts: [makeDate(2024, 1, 1)], to: makeDate(2024, 1, 31), rows: rows,
+        )
+        #expect(matrix.accountNames == ["Assets:Cash", "Zebra"])
+        // Unsorted rows would leave the binary search missing both of them.
+        #expect(matrix["Assets:Cash"]?.account.name == "Assets:Cash")
+        #expect(matrix["Zebra"]?.account.name == "Zebra")
+    }
+
+    @Test
+    func `balanceMatrix is re-exposed on LedgerManager`() throws {
+        let manager = try LedgerManager(store: InMemoryLedgerStore(ledger: makeMatrixLedger()))
+        let matrix = try manager.balanceMatrix(
+            bucketStarts: monthlyStarts(), to: makeDate(2024, 3, 31),
+        )
+        #expect(matrix["Assets:Checking"]?.endingBalance() == [usd(3950)])
+    }
+}
+
+@Suite("BalanceMatrix including predicate") struct BalanceMatrixPredicateTests {
+    @Test
+    func `a status predicate keeps excluded transactions out of opening and every bucket`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: [makeDate(2024, 1, 1)],
+            to: makeDate(2024, 3, 31),
+            including: { $0.status == .cleared },
+        )
+        // Only the three `*` transactions survive, and the unmarked
+        // 2023-12-15 opening balance is gone from `opening` as well.
+        #expect(matrix.accountNames == ["Assets:Checking", "Expenses:Food", "Income:Salary"])
+        let checking = try #require(matrix["Assets:Checking"])
+        #expect(checking.opening.isEmpty)
+        #expect(checking.changes == [[usd(3000)]])
+        // 30 in, 30 straight back out — kept as an explicit zero, not dropped.
+        #expect(matrix["Expenses:Food"]?.changes == [[usd(0)]])
+        #expect(matrix["Income:Salary"]?.changes == [[usd(-3000)]])
+    }
+
+    @Test
+    func `an account seen only through excluded transactions gets no row`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: monthlyStarts(),
+            to: makeDate(2024, 3, 31),
+            including: { !$0.description.contains("Travel") },
+        )
+        // Expenses:Travel is named by that one transaction alone.
+        #expect(matrix["Expenses:Travel"] == nil)
+        #expect(!matrix.accountNames.contains("Expenses:Travel"))
+        // Assets:Cash survives, without the EUR leg it shared with Travel.
+        #expect(matrix["Assets:Cash"]?.changes == [[], [usd(-20)], [usd(0)]])
+    }
+
+    @Test
+    func `the predicate sees whole transactions, so every posting of a kept one counts`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: [makeDate(2024, 1, 1)],
+            to: makeDate(2024, 3, 31),
+            including: { $0.description == "Salary" },
+        )
+        // Matching the transaction's description pulls in its
+        // Assets:Checking leg too, not just Income:Salary.
+        #expect(matrix.accountNames == ["Assets:Checking", "Income:Salary"])
+        #expect(matrix["Assets:Checking"]?.changes == [[usd(3000)]])
+    }
+
+    @Test
+    func `a nil predicate matches passing one that accepts everything`() throws {
+        let ledger = try makeMatrixLedger()
+        let starts = try monthlyStarts()
+        let windowEnd = try makeDate(2024, 3, 31)
+        #expect(
+            ledger.balanceMatrix(bucketStarts: starts, to: windowEnd)
+                == ledger.balanceMatrix(
+                    bucketStarts: starts, to: windowEnd, including: { _ in true },
+                ),
+        )
+    }
+
+    @Test
+    func `a predicate that rejects everything yields no rows`() throws {
+        let ledger = try makeMatrixLedger()
+        let matrix = try ledger.balanceMatrix(
+            bucketStarts: monthlyStarts(),
+            to: makeDate(2024, 3, 31),
+            including: { _ in false },
+        )
+        #expect(matrix.rows.isEmpty)
+        #expect(matrix.bucketCount == 3)
     }
 }
 

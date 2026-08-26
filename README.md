@@ -336,6 +336,52 @@ for entry in statement.expenses  { print(entry.account.name, entry.amounts) }
 print(statement.netIncome)  // [Amount] per commodity
 ```
 
+### BalanceMatrix
+
+A per-account, per-period matrix — the single-pass primitive behind
+multi-period (hledger-style `balance -M`) reports:
+
+```swift
+let matrix = ledger.balanceMatrix(
+    bucketStarts: [
+        JournalDate(year: 2024, month: 1, day: 1),
+        JournalDate(year: 2024, month: 2, day: 1),
+        JournalDate(year: 2024, month: 3, day: 1),
+    ],
+    to: JournalDate(year: 2024, month: 3, day: 31)
+)
+
+for row in matrix.rows {              // sorted by account name
+    print(row.account.name, row.opening, row.changes)
+    print(row.endingBalances())       // closing balance per bucket
+}
+
+matrix["Assets:Checking"]?.endingBalance()
+```
+
+Bucket `i` covers `bucketStarts[i]` through the day before `bucketStarts[i + 1]`;
+the last bucket runs through `to` inclusive. `opening` nets every posting dated
+strictly before the first bucket start, so cumulative and historical views come
+out of one scan. Netted amounts keep their zeros: a bucket whose postings cancel
+out is `[Amount(0, …)]`, distinct from the `[]` of a bucket with no postings.
+
+The optional `including` predicate sees **whole transactions** — one it rejects
+contributes nothing anywhere, `opening` included, and an account named only by
+rejected transactions gets no row. A single-bucket matrix with a predicate is
+therefore a *filtered* income statement or balance sheet, which neither report
+type offers on its own:
+
+```swift
+let cleared = ledger.balanceMatrix(
+    bucketStarts: [start], to: end, including: { $0.status == .cleared }
+)
+```
+
+`subtreeBalanceSeries(forPrefix:from:to:)` and
+`incomeStatementSeries(bucketStarts:to:)` remain the cheaper choices for their
+special cases — one subtree's daily closing balances, and unfiltered
+revenue/expense totals — since neither builds per-account rows.
+
 ### AccountStatement
 
 Running balance for one account, useful for a bank-statement view. Lines are
