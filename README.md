@@ -287,7 +287,10 @@ let foodTotal: [Amount] = ledger.subtreeBalance(forPrefix: "Expenses:Food")
 // All balances as of a date
 let snapshot = ledger.allBalances(asOf: JournalDate(year: 2024, month: 12, day: 31))
 
-// Transactions for one account
+// Transactions for one account.
+// All three queries below return results sorted by date, ties broken by
+// original document order. Use `ledger.journal.transactions` for the
+// journal's own document order.
 let txs = ledger.transactions(for: "Assets:Checking")
 
 // Transactions in subtree
@@ -335,7 +338,9 @@ print(statement.netIncome)  // [Amount] per commodity
 
 ### AccountStatement
 
-Running balance for one account, useful for a bank-statement view:
+Running balance for one account, useful for a bank-statement view. Lines are
+chronological — ordered by date, ties broken by document order — so each
+`runningBalance` is the account's balance as of that posting:
 
 ```swift
 let stmt = AccountStatement(ledger: ledger, accountName: "Assets:Checking")

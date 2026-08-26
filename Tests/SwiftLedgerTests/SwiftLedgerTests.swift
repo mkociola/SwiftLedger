@@ -856,6 +856,38 @@ private func makeTx(
     }
 
     @Test
+    func `transaction queries return date order for a journal written out of order`() throws {
+        var ledger = Ledger()
+        let jan = try makeDate(2024, 1, 1)
+        let feb = try makeDate(2024, 2, 1)
+        let mar = try makeDate(2024, 3, 1)
+        try ledger.add(.transaction(makeTx(date: mar, description: "Mar")))
+        try ledger.add(.transaction(makeTx(date: jan, description: "Jan")))
+        try ledger.add(.transaction(makeTx(date: feb, description: "Feb")))
+
+        // The journal itself stays in document order; the queries sort it.
+        #expect(ledger.journal.transactions.map(\.description) == ["Mar", "Jan", "Feb"])
+        #expect(ledger.transactions(for: "Assets:Cash").map(\.description) == ["Jan", "Feb", "Mar"])
+        #expect(ledger.transactions(forPrefix: "Expenses").map(\.description) == ["Jan", "Feb", "Mar"])
+        #expect(ledger.transactions().map(\.description) == ["Jan", "Feb", "Mar"])
+        #expect(ledger.transactions(from: feb).map(\.description) == ["Feb", "Mar"])
+    }
+
+    @Test
+    func `transactions sharing a date keep their original document order`() throws {
+        var ledger = Ledger()
+        let jan = try makeDate(2024, 1, 1)
+        let jun = try makeDate(2024, 6, 1)
+        try ledger.add(.transaction(makeTx(date: jun, description: "Jun")))
+        for index in 1 ... 6 {
+            try ledger.add(.transaction(makeTx(date: jan, description: "Jan-\(index)")))
+        }
+
+        let descriptions = ledger.transactions(for: "Assets:Cash").map(\.description)
+        #expect(descriptions == ["Jan-1", "Jan-2", "Jan-3", "Jan-4", "Jan-5", "Jan-6", "Jun"])
+    }
+
+    @Test
     func `parent accounts are inferred automatically from posting names`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
@@ -1334,7 +1366,7 @@ private func makeTx(
 
 @Suite("AccountStatement") struct AccountStatementTests {
     @Test
-    func `lines appear in journal order with correct running balance after each posting`() throws {
+    func `same-date lines follow document order with a running balance after each posting`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
         try ledger.add(
@@ -1402,6 +1434,37 @@ private func makeTx(
         let stmt = AccountStatement(ledger: ledger, accountName: "Assets:Cash", to: mar)
         #expect(stmt.lines.count == 1)
         #expect(stmt.lines[0].transaction.description == "Jan")
+    }
+
+    @Test
+    func `lines are chronological with a correct running balance when the journal is out of order`() throws {
+        var ledger = Ledger()
+        let jan = try makeDate(2024, 1, 1)
+        let feb = try makeDate(2024, 2, 1)
+        let mar = try makeDate(2024, 3, 1)
+        let coffee = try makeTx(
+            date: mar, description: "Coffee", debit: "Expenses:Food", credit: "Assets:Checking", amount: 5,
+        )
+        let deposit = try makeTx(
+            date: jan, description: "Deposit", debit: "Assets:Checking", credit: "Equity:Opening",
+            amount: 1000,
+        )
+        let rent = try makeTx(
+            date: feb, description: "Rent", debit: "Expenses:Housing", credit: "Assets:Checking",
+            amount: 200,
+        )
+        let fee = try makeTx(
+            date: feb, description: "Fee", debit: "Expenses:Bank", credit: "Assets:Checking", amount: 10,
+        )
+        // Written out of date order, with Rent and Fee sharing February.
+        for transaction in [coffee, deposit, rent, fee] {
+            ledger.add(.transaction(transaction))
+        }
+
+        let stmt = AccountStatement(ledger: ledger, accountName: "Assets:Checking")
+        #expect(stmt.lines.map(\.transaction.description) == ["Deposit", "Rent", "Fee", "Coffee"])
+        let balances = stmt.lines.map { $0.runningBalance[0].quantity }
+        #expect(balances == [1000, 800, 790, 785])
     }
 }
 

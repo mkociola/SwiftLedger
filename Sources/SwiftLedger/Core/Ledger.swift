@@ -245,14 +245,16 @@ public struct Ledger: Sendable {
     }
 
     /// Returns transactions that contain at least one posting in the account
-    /// subtree rooted at `prefix`.
+    /// subtree rooted at `prefix`, sorted by date then by original document
+    /// order.
     public func transactions(forPrefix prefix: String) -> [Transaction] {
         filteredTransactions { transaction in
             transaction.postings.contains { isInSubtree($0.accountName, prefix: prefix) }
         }
     }
 
-    /// Returns all transactions within an optional date range (inclusive).
+    /// Returns all transactions within an optional date range (inclusive),
+    /// sorted by date then by original document order.
     public func transactions(
         from: JournalDate? = nil, to: JournalDate? = nil, // swiftlint:disable:this identifier_name
     ) -> [Transaction] {
@@ -265,8 +267,26 @@ public struct Ledger: Sendable {
 
     // MARK: - Private helpers
 
+    /// Filters the journal's transactions into date order, breaking ties by
+    /// original document position.
+    ///
+    /// A journal's items are stored in document order, which is not
+    /// necessarily chronological: `add(_:)` appends, so a back-dated entry
+    /// lands after entries it precedes. Sorting here is what lets every
+    /// transaction query — and the running balance `AccountStatement` builds
+    /// on top of them — read chronologically. `sorted(by:)` is not guaranteed
+    /// stable, so the document index is carried through the comparison rather
+    /// than assumed to survive it.
     private func filteredTransactions(_ predicate: (Transaction) -> Bool) -> [Transaction] {
-        journal.transactions.filter(predicate)
+        journal.transactions
+            .enumerated()
+            .filter { predicate($0.element) }
+            .sorted { lhs, rhs in
+                lhs.element.date == rhs.element.date
+                    ? lhs.offset < rhs.offset
+                    : lhs.element.date < rhs.element.date
+            }
+            .map(\.element)
     }
 
     private func postings(for accountName: String, asOf: JournalDate?) -> [Posting] {

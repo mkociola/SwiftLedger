@@ -2,6 +2,9 @@ import Foundation
 
 /// An account statement: a chronological list of transactions affecting one
 /// account, with a running balance per commodity.
+///
+/// Lines are ordered by date, ties broken by original document order, which is
+/// what makes each `runningBalance` the account's balance as of that posting.
 public struct AccountStatement: Sendable {
     public struct Line: Sendable {
         public let transaction: Transaction
@@ -21,12 +24,11 @@ public struct AccountStatement: Sendable {
         var prefixFlags: [String: Bool] = [:]
         var resultLines: [Line] = []
 
-        let txs = ledger.journal.transactions
-            .filter {
-                if let fromDate = from, $0.date < fromDate { return false }
-                if let toDate = to, $0.date > toDate { return false }
-                return $0.postings.contains { $0.accountName == accountName }
-            }
+        // Date-ordered by `Ledger`, unlike `journal.transactions`, which is in
+        // document order; `filter` preserves that order. The running balance
+        // accumulated below is only correct chronologically.
+        let txs = ledger.transactions(from: from, to: to)
+            .filter { $0.postings.contains { $0.accountName == accountName } }
 
         for transaction in txs {
             for posting in transaction.postings where posting.accountName == accountName {
