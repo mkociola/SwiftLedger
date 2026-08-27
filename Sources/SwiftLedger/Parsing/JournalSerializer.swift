@@ -3,11 +3,18 @@ import Foundation
 /// Serialises a `Journal` back to plain-text `.ledger` / `.journal` format.
 ///
 /// Round-trip fidelity goals:
+/// - A transaction that came from `JournalParser` and was not changed since is
+///   written back from its own source lines, byte for byte. A journal file the
+///   caller only read therefore survives a save untouched — no re-alignment, no
+///   re-formatted amounts, and a diff that shows only what the user did.
 /// - Preserves blank lines, comments, and account directives.
 /// - Full-line comments inside a transaction are written back verbatim, in
 ///   place, from `Transaction.leadingComments` and `Posting.trailingComments`.
 /// - Lines the parser does not model (`include`, `P`, `commodity`, `alias`,
 ///   `D`, `year`, indented sub-directives, …) are written back verbatim.
+///
+/// The rules below describe the formatting applied to a transaction the caller
+/// built or changed — one with no source lines of its own:
 /// - Elided postings (resolved during parsing) are written with explicit amounts.
 /// - Amounts are formatted using the stored `commodityIsPrefix` flag.
 /// - A posting's price and balance assertion are re-emitted after its amount,
@@ -76,6 +83,13 @@ public struct JournalSerializer {
     // MARK: - Transaction serialisation
 
     private func serializeTransaction(_ transaction: Transaction) -> [String] {
+        // Parsed and untouched: hand back the user's own lines. Formatting them
+        // would rewrite the whole file on any edit, which is exactly what a
+        // plain-text journal kept in version control cannot afford.
+        if let source = transaction.sourceText {
+            return source.components(separatedBy: "\n")
+        }
+
         var lines: [String] = []
 
         // Header line

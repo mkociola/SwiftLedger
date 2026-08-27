@@ -28,6 +28,26 @@ private func makeTx(
     )
 }
 
+/// A journal as a person would keep one: hand-aligned columns, thousands
+/// separators, trailing zeros, tab indentation, an elided amount, a price and
+/// an assertion. Nothing here is canonical, and all of it is valid.
+private let handWrittenJournal = "; a journal written by hand, not by SwiftLedger\n"
+    + "account Assets:Checking\n"
+    + "\n"
+    + "2024-01-15 * (CHQ001) Groceries  ; weekly shop\n"
+    + "  Expenses:Food:Groceries      $1,234.50\n"
+    + "  Assets:Checking             $-1,234.50\n"
+    + "\n"
+    + "2024-02-01 Buy shares\n"
+    + "\tAssets:Brokerage  10 AAPL@$150.00 = 30 AAPL\n"
+    + "\tAssets:Checking   $-1500.00\n"
+    + "\n"
+    + "2024-03-01 Salary\n"
+    + "    Assets:Checking          3,000.00 EUR\n"
+    + "    Income:Salary\n"
+    + "\n"
+    + "include other.ledger"
+
 // MARK: - JournalDate
 
 @Suite("JournalDate") struct JournalDateTests {
@@ -1310,6 +1330,118 @@ private func makeTx(
         let reparsed = try #require(try JournalParser().parse(text).transactions.first)
         #expect(reparsed.leadingComments == ["    ; no indentation"])
         #expect(reparsed.postings[0].trailingComments == ["    ; reviewed"])
+    }
+}
+
+// MARK: - JournalSerializer: leaving untouched transactions alone
+
+@Suite("verbatim transactions") struct VerbatimTransactionTests {
+    @Test
+    func `a journal nobody edited serialises back byte-identical`() throws {
+        let journal = try JournalParser().parse(handWrittenJournal)
+        #expect(JournalSerializer().serialize(journal) == handWrittenJournal)
+    }
+
+    @Test
+    func `an untouched save is idempotent, so a second one is a no-op too`() throws {
+        let parser = JournalParser()
+        let serializer = JournalSerializer()
+        let once = try serializer.serialize(parser.parse(handWrittenJournal))
+        #expect(try serializer.serialize(parser.parse(once)) == once)
+    }
+
+    @Test
+    func `an elided amount is not written out when nothing edited the transaction`() throws {
+        let text = try JournalSerializer().serialize(JournalParser().parse(handWrittenJournal))
+        #expect(text.contains("    Income:Salary\n"))
+        #expect(!text.contains("Income:Salary  "))
+    }
+
+    @Test
+    func `editing one transaction reformats that one and leaves every other line alone`() throws {
+        var journal = try JournalParser().parse(handWrittenJournal)
+        let salary = try #require(journal.transactions.last)
+        journal.remove(.transaction(salary))
+        try journal.append(.transaction(Transaction(
+            id: salary.id,
+            date: salary.date,
+            description: "Salary (adjusted)",
+            postings: salary.postings,
+        )))
+
+        let written = JournalSerializer().serialize(journal).components(separatedBy: "\n")
+        // Every line of the journal but the edited transaction's survives as-is.
+        let untouched = handWrittenJournal.components(separatedBy: "\n")
+            .filter { !$0.contains("Salary") && !$0.contains("3,000.00") }
+        for line in untouched where !line.isEmpty {
+            #expect(written.contains(line), "rewrote a line nobody edited: \(line)")
+        }
+        // The edited one, and only it, comes back canonically formatted.
+        #expect(!written.contains("    Assets:Checking          3,000.00 EUR"))
+        #expect(written.contains("2024-03-01 Salary (adjusted)"))
+        #expect(written.contains(where: { $0.hasPrefix("    Assets:Checking") && $0.hasSuffix("3000 EUR") }))
+    }
+
+    @Test
+    func `a transaction rebuilt through init drops the source text it cannot vouch for`() throws {
+        let parsed = try #require(try JournalParser().parse(handWrittenJournal).transactions.first)
+        #expect(parsed.sourceText != nil)
+        let rebuilt = try Transaction(
+            id: parsed.id,
+            date: parsed.date,
+            status: parsed.status,
+            code: parsed.code,
+            description: parsed.description,
+            postings: parsed.postings,
+            comment: parsed.comment,
+            leadingComments: parsed.leadingComments,
+        )
+        #expect(rebuilt.sourceText == nil)
+    }
+
+    @Test
+    func `source text is not part of the value, so removal by value still works`() throws {
+        var journal = try JournalParser().parse(handWrittenJournal)
+        let parsed = try #require(journal.transactions.first)
+        let rebuilt = try Transaction(
+            id: parsed.id,
+            date: parsed.date,
+            status: parsed.status,
+            code: parsed.code,
+            description: parsed.description,
+            postings: parsed.postings,
+            comment: parsed.comment,
+            leadingComments: parsed.leadingComments,
+        )
+        #expect(rebuilt == parsed)
+        #expect(Set([parsed, rebuilt]).count == 1)
+        // …which is what lets a caller holding the rebuilt copy remove the parsed one.
+        let removed = journal.remove(.transaction(rebuilt))
+        #expect(removed)
+        #expect(journal.transactions.count == 2)
+    }
+
+    @Test
+    func `source text is not encoded, so a decoded transaction is formatted afresh`() throws {
+        let parsed = try #require(try JournalParser().parse(handWrittenJournal).transactions.first)
+        let encoded = try JSONEncoder().encode(parsed)
+        let object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(object["sourceText"] == nil)
+
+        let decoded = try JSONDecoder().decode(Transaction.self, from: encoded)
+        #expect(decoded.sourceText == nil)
+        #expect(decoded == parsed)
+        let written = JournalSerializer().serialize(Journal(items: [.transaction(decoded)]))
+        #expect(written.contains("$1234.5"))
+    }
+
+    @Test
+    func `a transaction built in code is formatted, having no source to fall back on`() throws {
+        let transaction = try makeTx(date: makeDate(2024, 1, 1), description: "Coffee")
+        #expect(transaction.sourceText == nil)
+        let written = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+        #expect(written.components(separatedBy: "\n")[0] == "2024-01-01 Coffee")
+        #expect(written.contains("    Expenses:Food"))
     }
 }
 

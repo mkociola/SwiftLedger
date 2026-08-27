@@ -19,6 +19,9 @@ import Foundation
 /// - Comments: `;` or `#` at line start; inline `  ;` after 2+ spaces
 /// - `account NAME` directives, with an optional inline comment
 /// - Blank lines and full-line comments are preserved in the AST.
+/// - Every parsed transaction keeps its own source lines verbatim
+///   (`Transaction.sourceText`), so serialising a journal nobody edited
+///   reproduces the file byte for byte.
 /// - Indented full-line comments inside a transaction are commentary, not
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
@@ -147,7 +150,10 @@ public struct JournalParser {
             comment: header.comment,
             leadingComments: leadingComments,
         )
-        return (transaction, index - start)
+        // Keep the lines this came from, so that a transaction nobody edits is
+        // written back exactly as the user wrote it.
+        let source = lines[start ..< index].joined(separator: "\n")
+        return (transaction.taggedWithSource(source), index - start)
     }
 
     // MARK: - Header parsing
