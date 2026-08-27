@@ -10,6 +10,8 @@ import Foundation
 ///   `D`, `year`, indented sub-directives, …) are written back verbatim.
 /// - Elided postings (resolved during parsing) are written with explicit amounts.
 /// - Amounts are formatted using the stored `commodityIsPrefix` flag.
+/// - A posting's price and balance assertion are re-emitted after its amount,
+///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
 /// - Postings are indented with 4 spaces.
 /// - Amounts are right-aligned at column 52 (same as ledger-cli default).
 public struct JournalSerializer {
@@ -118,7 +120,7 @@ public struct JournalSerializer {
 
         line += posting.accountName
 
-        let amountStr = formatAmount(posting.amount)
+        let amountStr = formatPostingAmount(posting)
         // Right-align amount at column 52
         let accountFieldWidth = 52 - 4 - (posting.status != nil && posting.status != .unmarked ? 2 : 0)
         let padding = accountFieldWidth - posting.accountName.count
@@ -134,6 +136,22 @@ public struct JournalSerializer {
         }
 
         return line
+    }
+
+    /// The whole amount field of a posting: the amount, then whatever price
+    /// and balance assertion it carries, in the order ledger writes them —
+    /// `AMOUNT @ PRICE = ASSERTION`, canonically spaced.
+    private func formatPostingAmount(_ posting: Posting) -> String {
+        var field = formatAmount(posting.amount)
+        switch posting.price {
+        case nil: break
+        case let .perUnit(price): field += " @ \(formatAmount(price))"
+        case let .total(price): field += " @@ \(formatAmount(price))"
+        }
+        if let assertion = posting.balanceAssertion {
+            field += " = \(formatAmount(assertion))"
+        }
+        return field
     }
 
     private func formatAmount(_ amount: Amount) -> String {

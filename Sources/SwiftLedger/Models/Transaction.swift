@@ -6,6 +6,12 @@ import Foundation
 /// The sum of all posting amounts must be zero for each commodity present —
 /// this invariant is enforced at construction time.
 ///
+/// A posting that carries a price balances at that price rather than at face
+/// value (`Posting.balancingAmount`), which is what lets a two-commodity trade
+/// net to zero: `10 AAPL @ $150.00` against `$-1,500.00` balances, because the
+/// share leg counts as the $1,500 it cost. Balance assertions take no part in
+/// this — they are preserved, never checked.
+///
 /// Use `JournalParser` to build transactions from plain-text `.ledger` files,
 /// which also resolves elided amounts before constructing `Transaction` objects.
 public struct Transaction: Identifiable, Sendable, Codable, Hashable {
@@ -82,7 +88,8 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     private static func validateBalance(_ postings: [Posting]) throws {
         var sums: [String: Decimal] = [:]
         for posting in postings {
-            sums[posting.amount.commodity, default: .zero] += posting.amount.quantity
+            let balancing = posting.balancingAmount
+            sums[balancing.commodity, default: .zero] += balancing.quantity
         }
         for (commodity, sum) in sums where sum != .zero {
             throw LedgerError.unbalancedTransaction(commodity: commodity, imbalance: sum)

@@ -11,6 +11,10 @@ import Foundation
 ///
 /// - Date formats: `YYYY-MM-DD` or `YYYY/MM/DD`
 /// - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `100.00 EUR`, `£500`
+/// - A posting amount may be followed by a price (`@` per unit, `@@` total)
+///   and/or a balance assertion (`=`), in that order, each written in either
+///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
+///   balancing; assertions are preserved but never checked.
 /// - Status: `*` = cleared, `!` = pending
 /// - Comments: `;` or `#` at line start; inline `  ;` after 2+ spaces
 /// - `account NAME` directives, with an optional inline comment
@@ -206,6 +210,8 @@ public struct JournalParser {
     private struct RawPosting {
         var accountName: String
         var amount: Amount?
+        var price: PostingPrice?
+        var balanceAssertion: Amount?
         var status: ClearingStatus?
         var comment: String?
         /// Full-line comments written below this posting, verbatim.
@@ -229,14 +235,32 @@ public struct JournalParser {
         // Account name ends at 2+ spaces, or at end of line
         let (accountName, amountStr) = splitAccountAndAmount(rest)
 
+        // The amount may be trailed by a price and/or a balance assertion.
+        // An empty part is dropped rather than parsed: a dangling `@` is not
+        // an amount, and refusing to load the file over one would be the very
+        // failure this splitting exists to remove.
         var amount: Amount?
+        var price: PostingPrice?
+        var balanceAssertion: Amount?
         if let rawAmount = amountStr {
-            amount = try parseAmount(rawAmount, lineNumber: lineNumber)
+            let field = splitAmountField(rawAmount)
+            if !field.amount.isEmpty {
+                amount = try parseAmount(field.amount, lineNumber: lineNumber)
+            }
+            if let rawPrice = field.price, !rawPrice.isEmpty {
+                let priced = try parseAmount(rawPrice, lineNumber: lineNumber)
+                price = field.priceIsTotal ? .total(priced) : .perUnit(priced)
+            }
+            if let rawAssertion = field.assertion, !rawAssertion.isEmpty {
+                balanceAssertion = try parseAmount(rawAssertion, lineNumber: lineNumber)
+            }
         }
 
         return RawPosting(
             accountName: accountName,
             amount: amount,
+            price: price,
+            balanceAssertion: balanceAssertion,
             status: postingStatus,
             comment: comment?.trimmingCharacters(in: .whitespaces),
         )
@@ -251,18 +275,16 @@ public struct JournalParser {
         if elidedCount == 0 {
             return try rawPostings.map { raw in
                 guard let amount = raw.amount else { throw LedgerError.cannotResolveElision }
-                return Posting(
-                    accountName: raw.accountName,
-                    amount: amount,
-                    status: raw.status,
-                    comment: raw.comment,
-                    trailingComments: raw.trailingComments,
-                )
+                return Self.posting(from: raw, amount: amount)
             }
         }
 
-        // Exactly one elided posting: compute its amount
-        let explicitAmounts = rawPostings.compactMap(\.amount)
+        // Exactly one elided posting: compute its amount. A priced posting
+        // contributes what it cost, not what it moved, so that a share
+        // purchase can balance an elided cash leg.
+        let explicitAmounts = rawPostings.compactMap { raw in
+            raw.amount.map { raw.price?.cost(of: $0.quantity) ?? $0 }
+        }
         let commodities = Set(explicitAmounts.map(\.commodity))
         guard commodities.count == 1,
               let commodity = commodities.first,
@@ -273,77 +295,19 @@ public struct JournalParser {
         let elidedAmount = Amount(quantity: -sum, commodity: commodity, commodityIsPrefix: isPrefix)
 
         return rawPostings.map { raw in
-            let amt = raw.amount ?? elidedAmount
-            return Posting(
-                accountName: raw.accountName,
-                amount: amt,
-                status: raw.status,
-                comment: raw.comment,
-                trailingComments: raw.trailingComments,
-            )
+            Self.posting(from: raw, amount: raw.amount ?? elidedAmount)
         }
     }
 
-    // MARK: - Amount parsing
-
-    /// Parses an amount string such as `$100`, `-$50`, `$-50`, `100 USD`, `100.00`.
-    func parseAmount(_ raw: String, lineNumber _: Int) throws -> Amount {
-        let trimmed = raw.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { throw LedgerError.invalidAmount(raw) }
-
-        var str = trimmed
-        var sign = Decimal(1)
-        if str.hasPrefix("-") {
-            sign = -1
-            str = String(str.dropFirst())
-        } else if str.hasPrefix("+") {
-            str = String(str.dropFirst())
-        }
-
-        guard let firstChar = str.unicodeScalars.first else { throw LedgerError.invalidAmount(raw) }
-        if !CharacterSet.decimalDigits.union(.init(charactersIn: ".")).contains(firstChar) {
-            return try parsePrefixCommodityAmount(str, sign: sign, raw: raw)
-        }
-        return try parseSuffixCommodityAmount(str, sign: sign, raw: raw)
-    }
-
-    private func parsePrefixCommodityAmount(_ str: String, sign: Decimal, raw: String) throws -> Amount {
-        var commodityEnd = str.endIndex
-        for idx in str.indices {
-            let char = str[idx]
-            if char.isNumber || char == "." || char == "-" || char == "+" {
-                commodityEnd = idx
-                break
-            }
-        }
-        let commodity = String(str[..<commodityEnd])
-        var numStr = String(str[commodityEnd...])
-        var adjustedSign = sign
-        if numStr.hasPrefix("-") {
-            adjustedSign *= -1
-            numStr = String(numStr.dropFirst())
-        } else if numStr.hasPrefix("+") {
-            numStr = String(numStr.dropFirst())
-        }
-        numStr = numStr.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
-        guard let quantity = Decimal(string: numStr) else { throw LedgerError.invalidAmount(raw) }
-        return Amount(quantity: adjustedSign * quantity, commodity: commodity, commodityIsPrefix: true)
-    }
-
-    private func parseSuffixCommodityAmount(_ str: String, sign: Decimal, raw: String) throws -> Amount {
-        var end = str.startIndex
-        for idx in str.indices {
-            let char = str[idx]
-            if char.isNumber || char == "." || char == "," {
-                end = str.index(after: idx)
-            } else {
-                break
-            }
-        }
-        let numStr = String(str[..<end]).replacingOccurrences(of: ",", with: "")
-        let remainder = String(str[end...]).trimmingCharacters(in: .whitespaces)
-        guard let quantity = Decimal(string: numStr) else { throw LedgerError.invalidAmount(raw) }
-        let commodity = remainder.isEmpty ? "USD" : remainder
-        return Amount(quantity: sign * quantity, commodity: commodity, commodityIsPrefix: false)
+    private static func posting(from raw: RawPosting, amount: Amount) -> Posting {
+        Posting(
+            accountName: raw.accountName,
+            amount: amount,
+            price: raw.price,
+            balanceAssertion: raw.balanceAssertion,
+            status: raw.status,
+            comment: raw.comment,
+            trailingComments: raw.trailingComments,
+        )
     }
 }
