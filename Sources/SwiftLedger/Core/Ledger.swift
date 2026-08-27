@@ -163,22 +163,16 @@ public struct Ledger: Sendable {
     ) -> [(revenues: [Amount], expenses: [Amount])] {
         guard let firstStart = bucketStarts.first else { return [] }
 
-        var directiveTypes: [String: AccountType] = [:]
-        for directive in journal.accountDirectives {
-            if let type = directive.type { directiveTypes[directive.name] = type }
-        }
-
+        let declaredTypes = directiveTypes
         var revenueSums = [CommoditySums](repeating: [:], count: bucketStarts.count)
         var expenseSums = revenueSums
         for transaction in journal.transactions {
             guard transaction.date >= firstStart, transaction.date <= to else { continue }
-            // Last bucket whose start is on or before the date. Bucket
-            // counts are small (chart columns), so a linear scan is fine.
-            guard let bucket = bucketStarts.lastIndex(where: { $0 <= transaction.date })
+            guard let bucket = Self.bucketIndex(for: transaction.date, in: bucketStarts)
             else { continue }
             for posting in transaction.postings {
                 let type =
-                    directiveTypes[posting.accountName]
+                    declaredTypes[posting.accountName]
                         ?? AccountType.inferred(from: posting.accountName)
                 guard type == .revenue || type == .expense else { continue }
                 if type == .revenue {
@@ -197,18 +191,45 @@ public struct Ledger: Sendable {
         }
     }
 
+    /// Explicit `account` directive types keyed by account name, for the
+    /// queries that type accounts the way `accounts` does: directive first,
+    /// name inference second. Directives declaring no type are omitted, so a
+    /// lookup miss means "infer from the name".
+    var directiveTypes: [String: AccountType] {
+        var types: [String: AccountType] = [:]
+        for directive in journal.accountDirectives {
+            if let type = directive.type { types[directive.name] = type }
+        }
+        return types
+    }
+
+    /// The index of the bucket `date` falls in — the last start on or before
+    /// it — or `nil` when `date` precedes every start.
+    ///
+    /// `bucketStarts` must be ascending: that is the bucketing contract
+    /// `incomeStatementSeries(bucketStarts:to:)` and
+    /// `balanceMatrix(bucketStarts:to:including:)` share, and this is the one
+    /// place that implements it. Bucket counts are small (report columns), so
+    /// a linear scan is fine.
+    static func bucketIndex(for date: JournalDate, in bucketStarts: [JournalDate]) -> Int? {
+        bucketStarts.lastIndex(where: { $0 <= date })
+    }
+
     /// Running per-commodity sums; the Bool is the commodity's display-prefix
     /// flag, carried through like `netByCommodity()`.
-    private typealias CommoditySums = [String: (quantity: Decimal, isPrefix: Bool)]
+    ///
+    /// Internal rather than private: `balanceMatrix(bucketStarts:to:including:)`
+    /// folds postings the same way from `Reports/BalanceMatrix.swift`.
+    typealias CommoditySums = [String: (quantity: Decimal, isPrefix: Bool)]
 
     /// Adds `amount` into the running per-commodity sums.
-    private static func accumulate(_ amount: Amount, into sums: inout CommoditySums) {
+    static func accumulate(_ amount: Amount, into sums: inout CommoditySums) {
         let current = sums[amount.commodity, default: (.zero, amount.commodityIsPrefix)]
         sums[amount.commodity] = (current.quantity + amount.quantity, amount.commodityIsPrefix)
     }
 
     /// Converts running per-commodity sums into `Amount`s sorted by commodity.
-    private static func amounts(from sums: CommoditySums, dropZeros: Bool = false) -> [Amount] {
+    static func amounts(from sums: CommoditySums, dropZeros: Bool = false) -> [Amount] {
         sums
             .map {
                 Amount(

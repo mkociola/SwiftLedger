@@ -92,6 +92,14 @@ public final class LedgerManager {
         ledger.incomeStatementSeries(bucketStarts: bucketStarts, to: to)
     }
 
+    public func balanceMatrix(
+        bucketStarts: [JournalDate],
+        to: JournalDate, // swiftlint:disable:this identifier_name
+        including: (@Sendable (Transaction) -> Bool)? = nil,
+    ) -> BalanceMatrix {
+        ledger.balanceMatrix(bucketStarts: bucketStarts, to: to, including: including)
+    }
+
     public func transactions(for accountName: String) -> [Transaction] {
         ledger.transactions(for: accountName)
     }
