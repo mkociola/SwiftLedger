@@ -970,7 +970,9 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
             ],
         )
         let text = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
-        #expect(text.contains("10 AAPL @ $150 = 30 AAPL"))
+        // `$150.00`, not `$150`: nothing in this journal writes a dollar
+        // amount, so the symbol's two-decimal default settles it.
+        #expect(text.contains("10 AAPL @ $150.00 = 30 AAPL"))
         // …and it must come back meaning the same thing.
         let reparsed = try #require(try JournalParser().parse(text).transactions.first)
         #expect(reparsed.postings[0].price == transaction.postings[0].price)
@@ -995,7 +997,7 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
             ],
         )
         let text = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
-        #expect(text.contains("10 AAPL @@ $1500"))
+        #expect(text.contains("10 AAPL @@ $1500.00"))
         #expect(!text.contains("@@@"))
     }
 }
@@ -1376,10 +1378,14 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         for line in untouched where !line.isEmpty {
             #expect(written.contains(line), "rewrote a line nobody edited: \(line)")
         }
-        // The edited one, and only it, comes back canonically formatted.
+        // The edited one, and only it, comes back canonically aligned — but
+        // written the way this file writes euros. The hand-aligned column is
+        // the serializer's to set and it moves; the number is the user's and
+        // `3,000.00` survives, elided second leg included.
         #expect(!written.contains("    Assets:Checking          3,000.00 EUR"))
         #expect(written.contains("2024-03-01 Salary (adjusted)"))
-        #expect(written.contains(where: { $0.hasPrefix("    Assets:Checking") && $0.hasSuffix("3000 EUR") }))
+        #expect(written.contains(where: { $0.hasPrefix("    Assets:Checking") && $0.hasSuffix("3,000.00 EUR") }))
+        #expect(written.contains(where: { $0.hasPrefix("    Income:Salary") && $0.hasSuffix("-3,000.00 EUR") }))
     }
 
     @Test
@@ -1431,8 +1437,12 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         let decoded = try JSONDecoder().decode(Transaction.self, from: encoded)
         #expect(decoded.sourceText == nil)
         #expect(decoded == parsed)
+        // Formatted afresh in every sense: the journal it is serialised into
+        // was built in code and carries no house style either, so the dollar
+        // default applies and the file's `$1,234.50` is not reproduced.
         let written = JournalSerializer().serialize(Journal(items: [.transaction(decoded)]))
-        #expect(written.contains("$1234.5"))
+        #expect(written.contains("$1234.50"))
+        #expect(!written.contains("$1,234.50"))
     }
 
     @Test
@@ -1442,6 +1452,241 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         let written = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
         #expect(written.components(separatedBy: "\n")[0] == "2024-01-01 Coffee")
         #expect(written.contains("    Expenses:Food"))
+    }
+}
+
+// MARK: - JournalSerializer: writing a rebuilt entry the way the file writes
+
+/// `Decimal` forgets how a number was written — it normalises its own scale on
+/// construction, and the parser strips thousands separators before it — so an
+/// amount rebuilt through `Transaction.init` used to come back as whatever
+/// `Decimal.description` printed: `$1,240.50` written as `$1240.5`, `@ $150.00`
+/// as `@ $150`.
+///
+/// That was survivable while every save reformatted the whole file. Once an
+/// untouched transaction started replaying its own source lines, it stopped
+/// being: the reformatting landed on exactly the one entry the user edited, and
+/// an edit to a payee showed up in the diff as a restyled amount.
+@Suite("commodity display format") struct CommodityDisplayFormatTests {
+    /// Rebuilds `transaction` with a new description, in place, the way an edit
+    /// through `LedgerManager` does — through `init`, so the source text goes.
+    private func renaming(
+        _ transaction: Transaction,
+        to description: String,
+        in journal: inout Journal,
+    ) throws {
+        journal.remove(.transaction(transaction))
+        try journal.append(.transaction(Transaction(
+            id: transaction.id,
+            date: transaction.date,
+            auxDate: transaction.auxDate,
+            status: transaction.status,
+            code: transaction.code,
+            description: description,
+            postings: transaction.postings,
+            comment: transaction.comment,
+            leadingComments: transaction.leadingComments,
+        )))
+    }
+
+    @Test
+    func `editing the payee leaves that entry's own numbers alone`() throws {
+        let text = """
+        2026-08-14 * Whole Foods
+            Expenses:Groceries                       $1,240.50
+            Assets:Checking                         $-1,240.50
+        """
+        var journal = try JournalParser().parse(text)
+        try renaming(#require(journal.transactions.first), to: "Whole Foods Market", in: &journal)
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("$1,240.50"))
+        #expect(written.contains("$-1,240.50"))
+        #expect(!written.contains("$1240.5"))
+        #expect(written.contains("2026-08-14 * Whole Foods Market"))
+    }
+
+    @Test
+    func `a price and an assertion keep the scale the file wrote them at`() throws {
+        let text = """
+        2026-03-09 * Broker buy
+            Assets:Brokerage:AAPL      10 AAPL @ $150.00 = 30 AAPL
+            Assets:Checking          $-1,500.00
+        """
+        var journal = try JournalParser().parse(text)
+        try renaming(#require(journal.transactions.first), to: "Broker buy (Q1)", in: &journal)
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("10 AAPL @ $150.00 = 30 AAPL"))
+        #expect(written.contains("$-1,500.00"))
+        // The share count is not padded to match the dollars: AAPL is written
+        // whole in this file, and `10.00 AAPL` would be a restyling of its own.
+        #expect(!written.contains("10.00 AAPL"))
+    }
+
+    @Test
+    func `a transaction built in code is written the way its journal writes`() throws {
+        let text = """
+        2026-01-05 * Rent
+            Expenses:Rent                            $2,400.00
+            Assets:Checking                         $-2,400.00
+        """
+        var journal = try JournalParser().parse(text)
+        try journal.append(.transaction(Transaction(
+            date: makeDate(2026, 1, 6),
+            description: "Deposit",
+            postings: [
+                Posting(
+                    accountName: "Assets:Checking",
+                    amount: Amount(quantity: 1234.5, commodity: "$", commodityIsPrefix: true),
+                ),
+                Posting(
+                    accountName: "Income:Salary",
+                    amount: Amount(quantity: -1234.5, commodity: "$", commodityIsPrefix: false),
+                ),
+            ],
+        )))
+
+        // The new entry never saw the file, and `1234.5` is all its `Decimal`
+        // can say — but the file writes dollars to two places with separators,
+        // so that is how the entry joining it is written.
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("$1,234.50"))
+        #expect(written.contains("-1,234.50 $"))
+    }
+
+    @Test
+    func `with no example to learn from, only a symbol gets decimal places`() throws {
+        let transaction = try Transaction(
+            date: makeDate(2026, 1, 1),
+            description: "Buy shares",
+            postings: [
+                Posting(
+                    accountName: "Assets:Brokerage",
+                    amount: Amount(quantity: 10, commodity: "AAPL"),
+                    price: .perUnit(Amount(quantity: 150, commodity: "$", commodityIsPrefix: true)),
+                ),
+                Posting(
+                    accountName: "Assets:Checking",
+                    amount: Amount(quantity: -1500, commodity: "$", commodityIsPrefix: true),
+                ),
+            ],
+        )
+        let written = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+        // `$` is a currency however little the file says; `AAPL` is spelled the
+        // way `USD` is and could be either, so it is left as written.
+        #expect(written.contains("10 AAPL @ $150.00"))
+        #expect(written.contains("-$1500.00"))
+    }
+
+    @Test
+    func `the house style is a floor, so an odd amount keeps every digit`() throws {
+        let text = """
+        2026-01-05 * Rent
+            Expenses:Rent                             $2,400.00
+            Assets:Checking                          -$2,400.00
+
+        2026-01-20 * Groceries
+            Expenses:Groceries                           $60.00
+            Assets:Checking                             -$60.00
+
+        2026-02-01 * Interest
+            Expenses:Fees                                 $0.333
+            Assets:Checking                              -$0.333
+        """
+        var journal = try JournalParser().parse(text)
+        try renaming(#require(journal.transactions.last), to: "Interest (revised)", in: &journal)
+
+        // Two decimals is this file's style — one odd amount is an odd amount,
+        // not a house style — but rounding to it would change what the journal
+        // says and leave the entry no longer balancing.
+        let written = JournalSerializer().serialize(journal)
+        #expect(journal.commodityFormats["$"]?.fractionDigits == 2)
+        #expect(written.contains("$0.333"))
+        #expect(written.contains("-$0.333"))
+    }
+
+    @Test
+    func `the minus sign goes back on the side of the symbol the file puts it`() throws {
+        let text = """
+        2026-02-01 * Rent
+            Expenses:Rent                             $2,400.00
+            Assets:Checking                           $-2,400.00
+        """
+        var journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["$"]?.signPrecedesCommodity == false)
+        try renaming(#require(journal.transactions.first), to: "Rent (Feb)", in: &journal)
+
+        // `$-2,400.00` and `-$2,400.00` mean the same thing and the parser
+        // reads both, which is exactly why swapping one for the other is a
+        // change the user did not ask for.
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("$-2,400.00"))
+        #expect(!written.contains("-$2,400.00"))
+    }
+
+    @Test
+    func `a file that writes no separators is not given any`() throws {
+        let text = """
+        2026-02-01 * Rent
+            Expenses:Rent                            3000.00 EUR
+            Assets:Checking                         -3000.00 EUR
+        """
+        var journal = try JournalParser().parse(text)
+        try renaming(#require(journal.transactions.first), to: "Rent (Feb)", in: &journal)
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("3000.00 EUR"))
+        #expect(!written.contains("3,000.00 EUR"))
+    }
+
+    @Test
+    func `formats survive the remove-and-append an edit is made of`() throws {
+        var journal = try JournalParser().parse(handWrittenJournal)
+        #expect(journal.commodityFormats["$"] == CommodityFormat(
+            fractionDigits: 2,
+            groupsThousands: true,
+            signPrecedesCommodity: false,
+        ))
+        #expect(journal.commodityFormats["AAPL"] == CommodityFormat(fractionDigits: 0, groupsThousands: false))
+
+        try renaming(#require(journal.transactions.first), to: "Groceries (revised)", in: &journal)
+        #expect(journal.commodityFormats["$"]?.fractionDigits == 2)
+    }
+
+    @Test
+    func `a rewritten entry is stable, so the next save changes nothing`() throws {
+        let parser = JournalParser()
+        let serializer = JournalSerializer()
+        var journal = try parser.parse(handWrittenJournal)
+        try renaming(#require(journal.transactions.first), to: "Groceries (revised)", in: &journal)
+
+        let once = serializer.serialize(journal)
+        #expect(try serializer.serialize(parser.parse(once)) == once)
+    }
+
+    @Test
+    func `the style describes the file, so it is not encoded with the journal`() throws {
+        let journal = try JournalParser().parse(handWrittenJournal)
+        #expect(!journal.commodityFormats.isEmpty)
+
+        let encoded = try JSONEncoder().encode(journal)
+        let object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(object["commodityFormats"] == nil)
+        #expect(try JSONDecoder().decode(Journal.self, from: encoded).commodityFormats.isEmpty)
+    }
+
+    @Test
+    func `rendering pads and groups without touching the value`() throws {
+        let money = CommodityFormat(fractionDigits: 2, groupsThousands: true)
+        #expect(try money.render(#require(Decimal(string: "1234567.5"))) == "1,234,567.50")
+        #expect(money.render(1000) == "1,000.00")
+        #expect(money.render(999) == "999.00")
+        #expect(try money.render(#require(Decimal(string: "0.12345"))) == "0.12345")
+
+        let plain = CommodityFormat()
+        #expect(try plain.render(#require(Decimal(string: "1234567.5"))) == "1234567.5")
+        #expect(plain.render(10) == "10")
     }
 }
 
