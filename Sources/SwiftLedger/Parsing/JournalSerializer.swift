@@ -3,13 +3,22 @@ import Foundation
 /// Serialises a `Journal` back to plain-text `.ledger` / `.journal` format.
 ///
 /// Round-trip fidelity goals:
+/// - A transaction that came from `JournalParser` and was not changed since is
+///   written back from its own source lines, byte for byte. A journal file the
+///   caller only read therefore survives a save untouched — no re-alignment, no
+///   re-formatted amounts, and a diff that shows only what the user did.
 /// - Preserves blank lines, comments, and account directives.
 /// - Full-line comments inside a transaction are written back verbatim, in
 ///   place, from `Transaction.leadingComments` and `Posting.trailingComments`.
 /// - Lines the parser does not model (`include`, `P`, `commodity`, `alias`,
 ///   `D`, `year`, indented sub-directives, …) are written back verbatim.
+///
+/// The rules below describe the formatting applied to a transaction the caller
+/// built or changed — one with no source lines of its own:
 /// - Elided postings (resolved during parsing) are written with explicit amounts.
 /// - Amounts are formatted using the stored `commodityIsPrefix` flag.
+/// - A posting's price and balance assertion are re-emitted after its amount,
+///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
 /// - Postings are indented with 4 spaces.
 /// - Amounts are right-aligned at column 52 (same as ledger-cli default).
 public struct JournalSerializer {
@@ -74,6 +83,13 @@ public struct JournalSerializer {
     // MARK: - Transaction serialisation
 
     private func serializeTransaction(_ transaction: Transaction) -> [String] {
+        // Parsed and untouched: hand back the user's own lines. Formatting them
+        // would rewrite the whole file on any edit, which is exactly what a
+        // plain-text journal kept in version control cannot afford.
+        if let source = transaction.sourceText {
+            return source.components(separatedBy: "\n")
+        }
+
         var lines: [String] = []
 
         // Header line
@@ -118,7 +134,7 @@ public struct JournalSerializer {
 
         line += posting.accountName
 
-        let amountStr = formatAmount(posting.amount)
+        let amountStr = formatPostingAmount(posting)
         // Right-align amount at column 52
         let accountFieldWidth = 52 - 4 - (posting.status != nil && posting.status != .unmarked ? 2 : 0)
         let padding = accountFieldWidth - posting.accountName.count
@@ -134,6 +150,22 @@ public struct JournalSerializer {
         }
 
         return line
+    }
+
+    /// The whole amount field of a posting: the amount, then whatever price
+    /// and balance assertion it carries, in the order ledger writes them —
+    /// `AMOUNT @ PRICE = ASSERTION`, canonically spaced.
+    private func formatPostingAmount(_ posting: Posting) -> String {
+        var field = formatAmount(posting.amount)
+        switch posting.price {
+        case nil: break
+        case let .perUnit(price): field += " @ \(formatAmount(price))"
+        case let .total(price): field += " @@ \(formatAmount(price))"
+        }
+        if let assertion = posting.balanceAssertion {
+            field += " = \(formatAmount(assertion))"
+        }
+        return field
     }
 
     private func formatAmount(_ amount: Amount) -> String {

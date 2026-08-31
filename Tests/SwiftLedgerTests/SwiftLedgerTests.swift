@@ -28,6 +28,26 @@ private func makeTx(
     )
 }
 
+/// A journal as a person would keep one: hand-aligned columns, thousands
+/// separators, trailing zeros, tab indentation, an elided amount, a price and
+/// an assertion. Nothing here is canonical, and all of it is valid.
+private let handWrittenJournal = "; a journal written by hand, not by SwiftLedger\n"
+    + "account Assets:Checking\n"
+    + "\n"
+    + "2024-01-15 * (CHQ001) Groceries  ; weekly shop\n"
+    + "  Expenses:Food:Groceries      $1,234.50\n"
+    + "  Assets:Checking             $-1,234.50\n"
+    + "\n"
+    + "2024-02-01 Buy shares\n"
+    + "\tAssets:Brokerage  10 AAPL@$150.00 = 30 AAPL\n"
+    + "\tAssets:Checking   $-1500.00\n"
+    + "\n"
+    + "2024-03-01 Salary\n"
+    + "    Assets:Checking          3,000.00 EUR\n"
+    + "    Income:Salary\n"
+    + "\n"
+    + "include other.ledger"
+
 // MARK: - JournalDate
 
 @Suite("JournalDate") struct JournalDateTests {
@@ -778,6 +798,208 @@ private func makeTx(
     }
 }
 
+// MARK: - JournalParser: prices and balance assertions
+
+@Suite("prices and balance assertions") struct PriceAndAssertionTests {
+    @Test
+    func `a per-unit price is parsed off the amount, not into its commodity`() throws {
+        let text = """
+        2024-01-01 Buy shares
+            Assets:Brokerage  10 AAPL @ $150.00
+            Assets:Checking   $-1500.00
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        let share = transaction.postings[0]
+        #expect(share.amount.quantity == 10)
+        #expect(share.amount.commodity == "AAPL")
+        #expect(share.price == .perUnit(Amount(quantity: 150, commodity: "$", commodityIsPrefix: true)))
+        #expect(share.balanceAssertion == nil)
+    }
+
+    @Test
+    func `a total price is kept as a total, not divided into a per-unit price`() throws {
+        let text = """
+        2024-01-01 Buy shares
+            Assets:Brokerage  10 AAPL @@ $1,500.00
+            Assets:Checking   $-1500.00
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings[0].price == .total(Amount(quantity: 1500, commodity: "$",
+                                                               commodityIsPrefix: true)))
+    }
+
+    @Test
+    func `a prefix-style balance assertion is parsed instead of being silently dropped`() throws {
+        let text = """
+        2024-01-01 Groceries
+            Assets:Checking  $-100.00 = $500.00
+            Expenses:Food    $100.00
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        let checking = transaction.postings[0]
+        #expect(checking.amount.quantity == -100)
+        #expect(checking.balanceAssertion == Amount(quantity: 500, commodity: "$", commodityIsPrefix: true))
+        #expect(checking.price == nil)
+    }
+
+    @Test
+    func `a suffix-style balance assertion is parsed off the commodity name`() throws {
+        let text = """
+        2024-01-01 Groceries
+            Assets:Checking  -100 EUR = 500 EUR
+            Expenses:Food    100 EUR
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        let checking = transaction.postings[0]
+        #expect(checking.amount.commodity == "EUR")
+        #expect(checking.balanceAssertion == Amount(quantity: 500, commodity: "EUR"))
+    }
+
+    @Test
+    func `a price and an assertion on one posting are both parsed`() throws {
+        let text = """
+        2024-01-01 Buy shares
+            Assets:Brokerage  10 AAPL @ $150.00 = 30 AAPL
+            Assets:Checking   $-1500.00
+        """
+        let share = try #require(try JournalParser().parse(text).transactions.first?.postings.first)
+        #expect(share.price == .perUnit(Amount(quantity: 150, commodity: "$", commodityIsPrefix: true)))
+        #expect(share.balanceAssertion == Amount(quantity: 30, commodity: "AAPL"))
+    }
+
+    @Test
+    func `a per-unit price balances the posting at what it cost`() throws {
+        let text = """
+        2024-01-01 Buy shares
+            Assets:Brokerage  10 AAPL @ $150.00
+            Assets:Checking   $-1500.00
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        let balancing = transaction.postings[0].balancingAmount
+        #expect(balancing.quantity == 1500)
+        #expect(balancing.commodity == "$")
+        // …and the AAPL quantity itself is still what the account holds.
+        let ledger = try Ledger(journal: JournalParser().parse(text))
+        #expect(ledger.balance(for: "Assets:Brokerage") == [Amount(quantity: 10, commodity: "AAPL")])
+    }
+
+    @Test
+    func `a total price takes the sign of the posting it prices`() throws {
+        let text = """
+        2024-01-01 Sell shares
+            Assets:Brokerage  -10 AAPL @@ $1500.00
+            Assets:Checking   $1500.00
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings[0].balancingAmount.quantity == -1500)
+    }
+
+    @Test
+    func `an unbalanced priced transaction still throws`() throws {
+        let text = """
+        2024-01-01 Buy shares
+            Assets:Brokerage  10 AAPL @ $150.00
+            Assets:Checking   $-1000.00
+        """
+        #expect(throws: LedgerError.unbalancedTransaction(commodity: "$", imbalance: 500)) {
+            try JournalParser().parse(text)
+        }
+    }
+
+    @Test
+    func `an elided amount resolves against what a priced posting cost`() throws {
+        let text = """
+        2024-01-01 Buy shares
+            Assets:Brokerage  10 AAPL @ $150.00
+            Assets:Checking
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings[1].amount.quantity == -1500)
+        #expect(transaction.postings[1].amount.commodity == "$")
+    }
+
+    @Test
+    func `an assertion that disagrees with the balance is preserved, not rejected`() throws {
+        // Assertions are carried, never checked: a journal claiming a balance
+        // no posting supports must still load, unchanged.
+        let text = """
+        2024-01-01 Opening
+            Assets:Cash     100 EUR = 999999 EUR
+            Equity:Opening  -100 EUR
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings[0].balanceAssertion == Amount(quantity: 999_999, commodity: "EUR"))
+        let ledger = try Ledger(journal: JournalParser().parse(text))
+        #expect(ledger.balance(for: "Assets:Cash") == [Amount(quantity: 100, commodity: "EUR")])
+    }
+
+    @Test
+    func `prices and assertions survive a parse, serialise and re-parse`() throws {
+        let text = """
+        2024-01-01 Buy shares
+            Assets:Brokerage  10 AAPL @ $150.00 = 30 AAPL
+            Assets:Checking   $-1500.00
+
+        2024-01-02 Sell shares
+            Assets:Brokerage  -4 AAPL @@ $640.00
+            Assets:Checking   $640.00
+        """
+        let parser = JournalParser()
+        let journal = try parser.parse(JournalSerializer().serialize(parser.parse(text)))
+        #expect(journal.transactions[0].postings[0].price
+            == .perUnit(Amount(quantity: 150, commodity: "$", commodityIsPrefix: true)))
+        #expect(journal.transactions[0].postings[0].balanceAssertion == Amount(quantity: 30, commodity: "AAPL"))
+        #expect(journal.transactions[1].postings[0].price
+            == .total(Amount(quantity: 640, commodity: "$", commodityIsPrefix: true)))
+    }
+
+    @Test
+    func `a transaction built in code writes its price and assertion back canonically`() throws {
+        let dollars = { (quantity: Decimal) in Amount(quantity: quantity, commodity: "$", commodityIsPrefix: true) }
+        let transaction = try Transaction(
+            date: makeDate(2024, 1, 1),
+            description: "Buy shares",
+            postings: [
+                Posting(
+                    accountName: "Assets:Brokerage",
+                    amount: Amount(quantity: 10, commodity: "AAPL"),
+                    price: .perUnit(dollars(150)),
+                    balanceAssertion: Amount(quantity: 30, commodity: "AAPL"),
+                ),
+                Posting(accountName: "Assets:Checking", amount: dollars(-1500)),
+            ],
+        )
+        let text = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+        #expect(text.contains("10 AAPL @ $150 = 30 AAPL"))
+        // …and it must come back meaning the same thing.
+        let reparsed = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(reparsed.postings[0].price == transaction.postings[0].price)
+        #expect(reparsed.postings[0].balanceAssertion == transaction.postings[0].balanceAssertion)
+    }
+
+    @Test
+    func `a total price is written with the double marker that produced it`() throws {
+        let transaction = try Transaction(
+            date: makeDate(2024, 1, 1),
+            description: "Buy shares",
+            postings: [
+                Posting(
+                    accountName: "Assets:Brokerage",
+                    amount: Amount(quantity: 10, commodity: "AAPL"),
+                    price: .total(Amount(quantity: 1500, commodity: "$", commodityIsPrefix: true)),
+                ),
+                Posting(
+                    accountName: "Assets:Checking",
+                    amount: Amount(quantity: -1500, commodity: "$", commodityIsPrefix: true),
+                ),
+            ],
+        )
+        let text = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+        #expect(text.contains("10 AAPL @@ $1500"))
+        #expect(!text.contains("@@@"))
+    }
+}
+
 // MARK: - Ledger
 
 @Suite("Ledger") struct LedgerTests {
@@ -1111,6 +1333,118 @@ private func makeTx(
     }
 }
 
+// MARK: - JournalSerializer: leaving untouched transactions alone
+
+@Suite("verbatim transactions") struct VerbatimTransactionTests {
+    @Test
+    func `a journal nobody edited serialises back byte-identical`() throws {
+        let journal = try JournalParser().parse(handWrittenJournal)
+        #expect(JournalSerializer().serialize(journal) == handWrittenJournal)
+    }
+
+    @Test
+    func `an untouched save is idempotent, so a second one is a no-op too`() throws {
+        let parser = JournalParser()
+        let serializer = JournalSerializer()
+        let once = try serializer.serialize(parser.parse(handWrittenJournal))
+        #expect(try serializer.serialize(parser.parse(once)) == once)
+    }
+
+    @Test
+    func `an elided amount is not written out when nothing edited the transaction`() throws {
+        let text = try JournalSerializer().serialize(JournalParser().parse(handWrittenJournal))
+        #expect(text.contains("    Income:Salary\n"))
+        #expect(!text.contains("Income:Salary  "))
+    }
+
+    @Test
+    func `editing one transaction reformats that one and leaves every other line alone`() throws {
+        var journal = try JournalParser().parse(handWrittenJournal)
+        let salary = try #require(journal.transactions.last)
+        journal.remove(.transaction(salary))
+        try journal.append(.transaction(Transaction(
+            id: salary.id,
+            date: salary.date,
+            description: "Salary (adjusted)",
+            postings: salary.postings,
+        )))
+
+        let written = JournalSerializer().serialize(journal).components(separatedBy: "\n")
+        // Every line of the journal but the edited transaction's survives as-is.
+        let untouched = handWrittenJournal.components(separatedBy: "\n")
+            .filter { !$0.contains("Salary") && !$0.contains("3,000.00") }
+        for line in untouched where !line.isEmpty {
+            #expect(written.contains(line), "rewrote a line nobody edited: \(line)")
+        }
+        // The edited one, and only it, comes back canonically formatted.
+        #expect(!written.contains("    Assets:Checking          3,000.00 EUR"))
+        #expect(written.contains("2024-03-01 Salary (adjusted)"))
+        #expect(written.contains(where: { $0.hasPrefix("    Assets:Checking") && $0.hasSuffix("3000 EUR") }))
+    }
+
+    @Test
+    func `a transaction rebuilt through init drops the source text it cannot vouch for`() throws {
+        let parsed = try #require(try JournalParser().parse(handWrittenJournal).transactions.first)
+        #expect(parsed.sourceText != nil)
+        let rebuilt = try Transaction(
+            id: parsed.id,
+            date: parsed.date,
+            status: parsed.status,
+            code: parsed.code,
+            description: parsed.description,
+            postings: parsed.postings,
+            comment: parsed.comment,
+            leadingComments: parsed.leadingComments,
+        )
+        #expect(rebuilt.sourceText == nil)
+    }
+
+    @Test
+    func `source text is not part of the value, so removal by value still works`() throws {
+        var journal = try JournalParser().parse(handWrittenJournal)
+        let parsed = try #require(journal.transactions.first)
+        let rebuilt = try Transaction(
+            id: parsed.id,
+            date: parsed.date,
+            status: parsed.status,
+            code: parsed.code,
+            description: parsed.description,
+            postings: parsed.postings,
+            comment: parsed.comment,
+            leadingComments: parsed.leadingComments,
+        )
+        #expect(rebuilt == parsed)
+        #expect(Set([parsed, rebuilt]).count == 1)
+        // …which is what lets a caller holding the rebuilt copy remove the parsed one.
+        let removed = journal.remove(.transaction(rebuilt))
+        #expect(removed)
+        #expect(journal.transactions.count == 2)
+    }
+
+    @Test
+    func `source text is not encoded, so a decoded transaction is formatted afresh`() throws {
+        let parsed = try #require(try JournalParser().parse(handWrittenJournal).transactions.first)
+        let encoded = try JSONEncoder().encode(parsed)
+        let object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(object["sourceText"] == nil)
+
+        let decoded = try JSONDecoder().decode(Transaction.self, from: encoded)
+        #expect(decoded.sourceText == nil)
+        #expect(decoded == parsed)
+        let written = JournalSerializer().serialize(Journal(items: [.transaction(decoded)]))
+        #expect(written.contains("$1234.5"))
+    }
+
+    @Test
+    func `a transaction built in code is formatted, having no source to fall back on`() throws {
+        let transaction = try makeTx(date: makeDate(2024, 1, 1), description: "Coffee")
+        #expect(transaction.sourceText == nil)
+        let written = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+        #expect(written.components(separatedBy: "\n")[0] == "2024-01-01 Coffee")
+        #expect(written.contains("    Expenses:Food"))
+    }
+}
+
 // MARK: - Codable
 
 @Suite("Codable") struct CodableTests {
@@ -1144,6 +1478,31 @@ private func makeTx(
         let directive = try JSONDecoder().decode(AccountDirective.self, from: Data(json.utf8))
         #expect(directive.name == "Assets:Cash")
         #expect(directive.comment == nil)
+    }
+
+    @Test
+    func `a posting encoded before price and balanceAssertion existed still decodes`() throws {
+        let json = """
+        {"accountName":"Assets:Cash",
+         "amount":{"quantity":5,"commodity":"USD","commodityIsPrefix":false}}
+        """
+        let posting = try JSONDecoder().decode(Posting.self, from: Data(json.utf8))
+        #expect(posting.price == nil)
+        #expect(posting.balanceAssertion == nil)
+        #expect(posting.balancingAmount == posting.amount)
+    }
+
+    @Test
+    func `a round-tripped posting keeps its price and balance assertion`() throws {
+        let posting = Posting(
+            accountName: "Assets:Brokerage",
+            amount: Amount(quantity: 10, commodity: "AAPL"),
+            price: .total(Amount(quantity: 1500, commodity: "$", commodityIsPrefix: true)),
+            balanceAssertion: Amount(quantity: 30, commodity: "AAPL"),
+        )
+        let decoded = try JSONDecoder().decode(Posting.self, from: JSONEncoder().encode(posting))
+        #expect(decoded == posting)
+        #expect(decoded.balancingAmount.quantity == 1500)
     }
 
     @Test
