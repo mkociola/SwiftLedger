@@ -1677,6 +1677,67 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     }
 
     @Test
+    func `a D directive settles the style the amounts alone would not`() throws {
+        let text = """
+        D $1,000.00
+
+        2026-02-01 * Rent
+            Expenses:Rent      $2400
+            Assets:Checking    $-2400
+        """
+        var journal = try JournalParser().parse(text)
+        // Left to the postings, this file writes dollars whole and ungrouped.
+        // The directive says otherwise, and it is the user saying it.
+        #expect(journal.commodityFormats["$"]?.fractionDigits == 2)
+        #expect(journal.commodityFormats["$"]?.groupsThousands == true)
+
+        try renaming(#require(journal.transactions.first), to: "Rent (Feb)", in: &journal)
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("$2,400.00"))
+        #expect(written.contains("$-2,400.00"))
+        // …and the directive line is still the line the user wrote.
+        #expect(written.contains("D $1,000.00"))
+    }
+
+    @Test
+    func `a format line inside a commodity block says the same thing`() throws {
+        let text = """
+        commodity $
+            format $1,000.00
+            note US dollars
+
+        2026-02-01 * Rent
+            Expenses:Rent      $2400
+            Assets:Checking    $-2400
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["$"] == CommodityFormat(
+            fractionDigits: 2,
+            groupsThousands: true,
+            signPrecedesCommodity: false,
+        ))
+        // Reading a line is not modelling it: every one of them still goes
+        // back exactly as written.
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `a commodity directive naming a symbol alone states no style`() throws {
+        let text = """
+        commodity $
+
+        2026-02-01 * Rent
+            Expenses:Rent      $2400
+            Assets:Checking    $-2400
+        """
+        var journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["$"]?.fractionDigits == 0)
+
+        try renaming(#require(journal.transactions.first), to: "Rent (Feb)", in: &journal)
+        #expect(JournalSerializer().serialize(journal).contains("$-2400"))
+    }
+
+    @Test
     func `rendering pads and groups without touching the value`() throws {
         let money = CommodityFormat(fractionDigits: 2, groupsThousands: true)
         #expect(try money.render(#require(Decimal(string: "1234567.5"))) == "1,234,567.50")

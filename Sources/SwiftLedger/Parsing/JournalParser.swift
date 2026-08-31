@@ -92,11 +92,46 @@ public struct JournalParser {
             // Anything else — an unsupported directive (`include`, `P`, `commodity`,
             // `alias`, `D`, `year`, an indented sub-directive) or malformed content.
             // Kept verbatim so serialising never rewrites what we cannot interpret.
+            // A `D` or `commodity` line is read for the display style it states
+            // and kept verbatim all the same: learning from a line is not the
+            // same as modelling it, and this one still goes back byte for byte.
+            declareFormat(from: line, into: &formats)
             items.append(.directive(line))
             index += 1
         }
 
         return Journal(items: items, commodityFormats: formats.formats)
+    }
+
+    // MARK: - Declared display styles
+
+    /// Reads the display style a `D` or `commodity` directive states, if the
+    /// line is one.
+    ///
+    /// ledger and hledger both spell a style as a sample amount, in three
+    /// places: `D $1,000.00`, the one-line `commodity $1,000.00`, and the
+    /// indented `format $1,000.00` inside a `commodity` block. An indented line
+    /// can only reach here from such a block — the ones inside a transaction
+    /// are consumed with it — so no block tracking is needed to tell them
+    /// apart.
+    ///
+    /// Anything that does not parse as an amount is left alone. A directive
+    /// SwiftLedger misreads here costs nothing but the guess: the line itself
+    /// is still written back verbatim.
+    private func declareFormat(from line: String, into formats: inout CommodityFormatCollector) {
+        let isIndented = line.first == " " || line.first == "\t"
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let keyword = ["D ", "commodity ", "format "].first { trimmed.hasPrefix($0) }
+        guard let keyword else { return }
+        guard keyword != "format " || isIndented else { return }
+
+        let sample = String(trimmed.dropFirst(keyword.count)).trimmingCharacters(in: .whitespaces)
+        // `commodity $` names a commodity without stating a style; only the
+        // sample-amount forms say anything to record.
+        guard sample.contains(where: \.isNumber),
+              let amount = try? parseAmount(sample, lineNumber: 0),
+              !amount.commodity.isEmpty else { return }
+        formats.declare(sample, commodity: amount.commodity)
     }
 
     // MARK: - Transaction parsing

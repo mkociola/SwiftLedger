@@ -18,6 +18,8 @@ struct CommodityFormatCollector {
     /// negative amounts written `-$50`, and negative amounts written `$-50`.
     private var signFirst: [String: Int] = [:]
     private var signAfterCommodity: [String: Int] = [:]
+    /// Styles a `D` or `commodity` directive states outright.
+    private var declared: [String: (fractionDigits: Int, groupsThousands: Bool)] = [:]
 
     /// Records how one amount was written.
     ///
@@ -48,6 +50,16 @@ struct CommodityFormatCollector {
         }
     }
 
+    /// Records the style a directive states for a commodity, written the way
+    /// ledger writes one — as a sample amount: `D $1,000.00`.
+    ///
+    /// A declaration says nothing about where a minus sign goes, so that stays
+    /// with whatever the file's own amounts show.
+    mutating func declare(_ raw: String, commodity: String) {
+        guard let shape = NumberShape(raw) else { return }
+        declared[commodity] = (shape.fractionDigits, shape.usesSeparator)
+    }
+
     /// The house style for every commodity the journal mentions.
     var formats: [String: CommodityFormat] {
         var result: [String: CommodityFormat] = [:]
@@ -62,6 +74,15 @@ struct CommodityFormatCollector {
                 // the placement SwiftLedger has always written.
                 signPrecedesCommodity: (signFirst[commodity] ?? 0) >= (signAfterCommodity[commodity] ?? 0),
             )
+        }
+        // A declaration is the user stating their house style rather than the
+        // parser guessing it from what they happened to type, so it wins —
+        // including for a commodity no posting in the file uses yet.
+        for (commodity, stated) in declared {
+            var format = result[commodity] ?? CommodityFormat()
+            format.fractionDigits = stated.fractionDigits
+            format.groupsThousands = stated.groupsThousands
+            result[commodity] = format
         }
         return result
     }
