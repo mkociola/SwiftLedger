@@ -38,6 +38,25 @@ public final class LedgerManager {
         return true
     }
 
+    /// Replaces the first occurrence of `item` with `replacement`, keeping its
+    /// position in the file, and persists the result.
+    ///
+    /// One write, so an edit cannot half-apply: `remove` then `add` leaves the
+    /// journal briefly without the entry, and a failed `add` has to be unwound
+    /// by hand. Nothing to unwind here — either the save succeeds and the
+    /// in-memory ledger advances with it, or neither happens.
+    ///
+    /// - Returns: `true` if a matching item was found and replaced;
+    ///   `false` if no match exists, in which case nothing was written.
+    @discardableResult
+    public func replace(_ item: JournalItem, with replacement: JournalItem) throws -> Bool {
+        var updated = ledger
+        guard updated.replace(item, with: replacement) else { return false }
+        try store?.save(updated)
+        ledger = updated
+        return true
+    }
+
     /// Removes the `account` directive declaring `name` and persists the result.
     ///
     /// Atomic in the same way as `remove(_:)`: nothing is written when no line
@@ -58,6 +77,16 @@ public final class LedgerManager {
     }
 
     // MARK: - Queries
+
+    /// The journal as it currently stands: its items in document order, the
+    /// unmodelled directive lines it preserves, and the display style its own
+    /// text implies.
+    ///
+    /// Read-only. Every mutation goes through this type so that the file and
+    /// the value in memory cannot disagree.
+    public var currentJournal: Journal {
+        ledger.journal
+    }
 
     /// The `account` directive declaring `name`, or `nil` when the account is
     /// inferred from postings rather than declared.

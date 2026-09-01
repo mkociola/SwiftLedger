@@ -41,7 +41,7 @@ public struct JournalParser {
         var items: [JournalItem] = []
         // Watches how the file writes each commodity, so that a transaction
         // the caller later rebuilds is written the same way.
-        var formats = CommodityFormatCollector()
+        var style = JournalStyleCollector()
         var index = 0
 
         while index < lines.count {
@@ -83,7 +83,7 @@ public struct JournalParser {
 
             // Transaction header (starts with a date)
             if startsWithDate(trimmed) {
-                let (transaction, consumed) = try parseTransaction(lines: lines, from: index, into: &formats)
+                let (transaction, consumed) = try parseTransaction(lines: lines, from: index, into: &style)
                 items.append(.transaction(transaction))
                 index += consumed
                 continue
@@ -95,43 +95,17 @@ public struct JournalParser {
             // A `D` or `commodity` line is read for the display style it states
             // and kept verbatim all the same: learning from a line is not the
             // same as modelling it, and this one still goes back byte for byte.
-            declareFormat(from: line, into: &formats)
+            declareFormat(from: line, into: &style)
             items.append(.directive(line))
             index += 1
         }
 
-        return Journal(items: items, commodityFormats: formats.formats)
-    }
-
-    // MARK: - Declared display styles
-
-    /// Reads the display style a `D` or `commodity` directive states, if the
-    /// line is one.
-    ///
-    /// ledger and hledger both spell a style as a sample amount, in three
-    /// places: `D $1,000.00`, the one-line `commodity $1,000.00`, and the
-    /// indented `format $1,000.00` inside a `commodity` block. An indented line
-    /// can only reach here from such a block — the ones inside a transaction
-    /// are consumed with it — so no block tracking is needed to tell them
-    /// apart.
-    ///
-    /// Anything that does not parse as an amount is left alone. A directive
-    /// SwiftLedger misreads here costs nothing but the guess: the line itself
-    /// is still written back verbatim.
-    private func declareFormat(from line: String, into formats: inout CommodityFormatCollector) {
-        let isIndented = line.first == " " || line.first == "\t"
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        let keyword = ["D ", "commodity ", "format "].first { trimmed.hasPrefix($0) }
-        guard let keyword else { return }
-        guard keyword != "format " || isIndented else { return }
-
-        let sample = String(trimmed.dropFirst(keyword.count)).trimmingCharacters(in: .whitespaces)
-        // `commodity $` names a commodity without stating a style; only the
-        // sample-amount forms say anything to record.
-        guard sample.contains(where: \.isNumber),
-              let amount = try? parseAmount(sample, lineNumber: 0),
-              !amount.commodity.isEmpty else { return }
-        formats.declare(sample, commodity: amount.commodity)
+        return Journal(
+            items: items,
+            commodityFormats: style.formats,
+            amountAlignment: style.amountAlignment,
+            postingIndent: style.postingIndent,
+        )
     }
 
     // MARK: - Transaction parsing
@@ -148,7 +122,7 @@ public struct JournalParser {
     private func parseTransaction(
         lines: [String],
         from start: Int,
-        into formats: inout CommodityFormatCollector,
+        into style: inout JournalStyleCollector,
     ) throws -> (Transaction, Int) {
         let headerLine = lines[start]
         let lineNumber = start + 1 // 1-based for errors
@@ -176,7 +150,7 @@ public struct JournalParser {
                     rawPostings[rawPostings.count - 1].trailingComments.append(currentLine)
                 }
             } else {
-                try rawPostings.append(parsePosting(currentLine, lineNumber: index + 1, into: &formats))
+                try rawPostings.append(parsePosting(currentLine, lineNumber: index + 1, into: &style))
             }
             index += 1
         }
@@ -269,7 +243,7 @@ public struct JournalParser {
     private func parsePosting(
         _ line: String,
         lineNumber: Int,
-        into formats: inout CommodityFormatCollector,
+        into style: inout JournalStyleCollector,
     ) throws -> RawPosting {
         var rest = line.trimmingCharacters(in: .whitespaces)
 
@@ -286,6 +260,10 @@ public struct JournalParser {
 
         // Account name ends at 2+ spaces, or at end of line
         let (accountName, amountStr) = splitAccountAndAmount(rest)
+        style.observeIndent(String(line.prefix { $0 == " " || $0 == "\t" }))
+        if let amountStr, let start = Self.amountColumn(in: line, after: accountName) {
+            style.observeAmountField(start: start, end: start + amountStr.count)
+        }
 
         // The amount may be trailed by a price and/or a balance assertion.
         // An empty part is dropped rather than parsed: a dangling `@` is not
@@ -298,17 +276,17 @@ public struct JournalParser {
             let field = splitAmountField(rawAmount)
             if !field.amount.isEmpty {
                 let parsed = try parseAmount(field.amount, lineNumber: lineNumber)
-                formats.observe(field.amount, as: parsed)
+                style.observe(field.amount, as: parsed)
                 amount = parsed
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
                 let priced = try parseAmount(rawPrice, lineNumber: lineNumber)
-                formats.observe(rawPrice, as: priced)
+                style.observe(rawPrice, as: priced)
                 price = field.priceIsTotal ? .total(priced) : .perUnit(priced)
             }
             if let rawAssertion = field.assertion, !rawAssertion.isEmpty {
                 let asserted = try parseAmount(rawAssertion, lineNumber: lineNumber)
-                formats.observe(rawAssertion, as: asserted)
+                style.observe(rawAssertion, as: asserted)
                 balanceAssertion = asserted
             }
         }

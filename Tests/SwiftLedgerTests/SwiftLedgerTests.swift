@@ -1455,6 +1455,28 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     }
 }
 
+/// Rebuilds `transaction` with a new description, in place, the way an edit
+/// through `LedgerManager` used to — remove then append, so the source text
+/// goes and the entry lands at the end of the file.
+private func renaming(
+    _ transaction: Transaction,
+    to description: String,
+    in journal: inout Journal,
+) throws {
+    journal.remove(.transaction(transaction))
+    try journal.append(.transaction(Transaction(
+        id: transaction.id,
+        date: transaction.date,
+        auxDate: transaction.auxDate,
+        status: transaction.status,
+        code: transaction.code,
+        description: description,
+        postings: transaction.postings,
+        comment: transaction.comment,
+        leadingComments: transaction.leadingComments,
+    )))
+}
+
 // MARK: - JournalSerializer: writing a rebuilt entry the way the file writes
 
 /// `Decimal` forgets how a number was written — it normalises its own scale on
@@ -1468,27 +1490,6 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
 /// being: the reformatting landed on exactly the one entry the user edited, and
 /// an edit to a payee showed up in the diff as a restyled amount.
 @Suite("commodity display format") struct CommodityDisplayFormatTests {
-    /// Rebuilds `transaction` with a new description, in place, the way an edit
-    /// through `LedgerManager` does — through `init`, so the source text goes.
-    private func renaming(
-        _ transaction: Transaction,
-        to description: String,
-        in journal: inout Journal,
-    ) throws {
-        journal.remove(.transaction(transaction))
-        try journal.append(.transaction(Transaction(
-            id: transaction.id,
-            date: transaction.date,
-            auxDate: transaction.auxDate,
-            status: transaction.status,
-            code: transaction.code,
-            description: description,
-            postings: transaction.postings,
-            comment: transaction.comment,
-            leadingComments: transaction.leadingComments,
-        )))
-    }
-
     @Test
     func `editing the payee leaves that entry's own numbers alone`() throws {
         let text = """
@@ -1748,6 +1749,191 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         let plain = CommodityFormat()
         #expect(try plain.render(#require(Decimal(string: "1234567.5"))) == "1234567.5")
         #expect(plain.render(10) == "10")
+    }
+}
+
+// MARK: - JournalSerializer: laying it out the way the file lays it out
+
+/// Where a rebuilt entry's columns come from. Formatting its numbers correctly
+/// is half of leaving a diff alone; the other half is not moving them.
+@Suite("journal layout") struct JournalLayoutTests {
+    /// A journal whose postings both start their amount at `column` — built
+    /// rather than written out, so the margin is a fact of the fixture and not
+    /// of how carefully the spaces were counted.
+    private func journalWithMargin(_ column: Int = 29) -> String {
+        func line(_ account: String, _ amount: String) -> String {
+            let indented = "    " + account
+            return indented + String(repeating: " ", count: column - indented.count) + amount
+        }
+        return [
+            "2026-01-05 * Rent",
+            line("Expenses:Rent", "$2,400.00"),
+            line("Assets:Checking", "$-2,400.00"),
+        ].joined(separator: "\n")
+    }
+
+    @Test
+    func `a rebuilt entry is laid out at the file's margin, not the library's`() throws {
+        var journal = try JournalParser().parse(journalWithMargin())
+        #expect(journal.amountAlignment == .start(column: 29))
+        try renaming(#require(journal.transactions.first), to: "Rent (Jan)", in: &journal)
+
+        // Column 52 is a default, not a house style. Imposing it on the one
+        // entry the user edited drags that entry's columns away from every
+        // other entry's, which is a change nobody asked for.
+        let postings = JournalSerializer().serialize(journal)
+            .components(separatedBy: "\n")
+            .filter { $0.hasPrefix("    ") }
+        #expect(postings.count == 2)
+        for posting in postings {
+            let dollar = try #require(posting.firstIndex(of: "$"))
+            #expect(posting.distance(from: posting.startIndex, to: dollar) == 29)
+        }
+    }
+
+    @Test
+    func `a journal with no margin of its own keeps the library default`() throws {
+        let transaction = try makeTx(date: makeDate(2026, 1, 1), description: "Coffee")
+        let written = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+        let posting = try #require(
+            written.components(separatedBy: "\n").first { $0.hasPrefix("    Expenses") },
+        )
+        #expect(posting.dropFirst(52).hasPrefix("50 USD"))
+    }
+
+    @Test
+    func `the most common margin wins, so one long account name is not the file`() throws {
+        let text = """
+        2026-01-05 * Rent
+            Expenses:Rent                $2,400.00
+            Assets:Checking              $-2,400.00
+
+        2026-01-06 * Groceries
+            Expenses:Food:Groceries:Bulk           $60.00
+            Assets:Checking              $-60.00
+        """
+        // Three postings share a margin; the fourth is pushed out by its own
+        // account name, and one long name is not the file's layout.
+        #expect(try JournalParser().parse(text).amountAlignment == .start(column: 33))
+    }
+}
+
+// MARK: - Replacing an item in place
+
+/// Editing an entry used to mean removing it and appending its successor, which
+/// tears it out of date order and leaves it at the end of the file: two changed
+/// hunks for a one-field edit, neither of them where the reader is looking.
+@Suite("replace in place") struct ReplaceInPlaceTests {
+    /// `transaction` with a new description and nothing else changed.
+    private func renamed(_ transaction: Transaction, to description: String) throws -> Transaction {
+        try Transaction(
+            id: transaction.id,
+            date: transaction.date,
+            auxDate: transaction.auxDate,
+            status: transaction.status,
+            code: transaction.code,
+            description: description,
+            postings: transaction.postings,
+            comment: transaction.comment,
+            leadingComments: transaction.leadingComments,
+        )
+    }
+
+    @Test
+    func `a replaced transaction stays where it was`() throws {
+        var journal = try JournalParser().parse(handWrittenJournal)
+        let groceries = try #require(journal.transactions.first)
+        let replacement = try renamed(groceries, to: "Groceries (revised)")
+
+        let replaced = journal.replace(.transaction(groceries), with: .transaction(replacement))
+        #expect(replaced)
+        #expect(journal.transactions.map(\.description) == [
+            "Groceries (revised)", "Buy shares", "Salary",
+        ])
+        // The comment above it did not move either.
+        #expect(journal.items.first == .comment("; a journal written by hand, not by SwiftLedger"))
+    }
+
+    @Test
+    func `replacing something absent changes nothing and says so`() throws {
+        var journal = try JournalParser().parse(handWrittenJournal)
+        let before = journal.items
+        let stranger = try makeTx(date: makeDate(1999, 1, 1))
+
+        let replaced = journal.replace(.transaction(stranger), with: .transaction(stranger))
+        #expect(!replaced)
+        #expect(journal.items == before)
+    }
+
+    @Test
+    func `the manager writes the replacement in place`() throws {
+        let store = try InMemoryLedgerStore(
+            ledger: Ledger(journal: JournalParser().parse(handWrittenJournal)),
+        )
+        let manager = try LedgerManager(store: store)
+        let salary = try #require(manager.transactions().last)
+
+        let replaced = try manager.replace(
+            .transaction(salary), with: .transaction(renamed(salary, to: "Salary (adjusted)")),
+        )
+        #expect(replaced)
+        #expect(manager.transactions().map(\.description) == [
+            "Groceries", "Buy shares", "Salary (adjusted)",
+        ])
+    }
+
+    /// A journal kept consistently: one indent, one margin, amounts ending at
+    /// the same column, dollars written to two places with separators.
+    ///
+    /// `handWrittenJournal` cannot stand in for this. It is deliberately ragged
+    /// — three different indents and four different margins — and a file with
+    /// no house style has nothing for an edit to be consistent with.
+    private static let tidyJournal: String = {
+        func posting(_ account: String, _ amount: String) -> String {
+            let indented = "    " + account
+            return indented + String(repeating: " ", count: 34 - indented.count - amount.count) + amount
+        }
+        return ([
+            "; household",
+            "",
+            "2026-01-05 * Rent",
+            posting("Expenses:Rent", "$2,400.00"),
+            posting("Assets:Checking", "$-2,400.00"),
+            "",
+            "2026-01-14 * Whole Foods",
+            posting("Expenses:Groceries", "$1,240.50"),
+            posting("Assets:Checking", "$-1,240.50"),
+        ] as [String]).joined(separator: "\n")
+    }()
+
+    @Test
+    func `a tidy journal is read as ending its amounts at one column`() throws {
+        let journal = try JournalParser().parse(Self.tidyJournal)
+        // Starts scatter by the width of each sign; ends agree. Four agreeing
+        // ends beat two agreeing starts.
+        #expect(journal.amountAlignment == .end(column: 34))
+        #expect(journal.postingIndent == "    ")
+    }
+
+    @Test
+    func `a replaced entry is the only line of the file that changes`() throws {
+        var journal = try JournalParser().parse(Self.tidyJournal)
+        let groceries = try #require(journal.transactions.last)
+        try journal.replace(
+            .transaction(groceries),
+            with: .transaction(renamed(groceries, to: "Whole Foods Market")),
+        )
+
+        // The whole point, stated as a diff: same line count, one line apart.
+        // Every other line — including the edited entry's own postings, which
+        // were rebuilt and formatted rather than replayed — comes back byte
+        // for byte.
+        let before = Self.tidyJournal.components(separatedBy: "\n")
+        let after = JournalSerializer().serialize(journal).components(separatedBy: "\n")
+        #expect(before.count == after.count)
+        let changed = zip(before, after).enumerated().filter { $0.element.0 != $0.element.1 }
+        #expect(changed.map(\.offset) == [6])
+        #expect(changed.first?.element.1 == "2026-01-14 * Whole Foods Market")
     }
 }
 

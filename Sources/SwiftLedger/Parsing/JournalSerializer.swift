@@ -24,8 +24,12 @@ import Foundation
 ///   `-$1234.5`.
 /// - A posting's price and balance assertion are re-emitted after its amount,
 ///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
-/// - Postings are indented with 4 spaces.
-/// - Amounts are right-aligned at column 52 (same as ledger-cli default).
+/// - Postings are indented the way the rest of the journal indents its own
+///   (`Journal.postingIndent`), falling back to 4 spaces.
+/// - Amount fields are lined up the way the rest of the journal lines its own
+///   up (`Journal.amountAlignment`) — beginning at one column, or ending at
+///   one — falling back to beginning at column 52, the ledger-cli default, for
+///   a journal that shows none.
 public struct JournalSerializer {
     public init() {}
 
@@ -49,7 +53,12 @@ public struct JournalSerializer {
                 }
                 lines.append(line)
             case let .transaction(transaction):
-                lines.append(contentsOf: serializeTransaction(transaction, formats: journal.commodityFormats))
+                lines.append(contentsOf: serializeTransaction(
+                    transaction,
+                    formats: journal.commodityFormats,
+                    alignment: journal.amountAlignment ?? Self.defaultAlignment,
+                    indent: journal.postingIndent ?? Self.defaultIndent,
+                ))
             }
         }
         return lines.joined(separator: "\n")
@@ -87,9 +96,19 @@ public struct JournalSerializer {
 
     // MARK: - Transaction serialisation
 
+    /// How amounts are lined up when the journal shows no margin of its own:
+    /// beginning at column 52, ledger-cli's default and what SwiftLedger has
+    /// always written.
+    static let defaultAlignment = AmountAlignment.start(column: 52)
+
+    /// How postings are indented when the journal shows no indent of its own.
+    static let defaultIndent = "    "
+
     private func serializeTransaction(
         _ transaction: Transaction,
         formats: [String: CommodityFormat],
+        alignment: AmountAlignment,
+        indent: String,
     ) -> [String] {
         // Parsed and untouched: hand back the user's own lines. Formatting them
         // would rewrite the whole file on any edit, which is exactly what a
@@ -124,7 +143,7 @@ public struct JournalSerializer {
 
         // Posting lines, each followed by the comment lines written below it
         for posting in transaction.postings {
-            lines.append(serializePosting(posting, formats: formats))
+            lines.append(serializePosting(posting, formats: formats, alignment: alignment, indent: indent))
             for comment in posting.trailingComments {
                 lines.append(transactionCommentLine(comment))
             }
@@ -133,8 +152,13 @@ public struct JournalSerializer {
         return lines
     }
 
-    private func serializePosting(_ posting: Posting, formats: [String: CommodityFormat]) -> String {
-        var line = "    "
+    private func serializePosting(
+        _ posting: Posting,
+        formats: [String: CommodityFormat],
+        alignment: AmountAlignment,
+        indent: String,
+    ) -> String {
+        var line = indent
 
         if let postingStatus = posting.status, postingStatus != .unmarked {
             line += "\(postingStatus.rawValue) "
@@ -143,15 +167,14 @@ public struct JournalSerializer {
         line += posting.accountName
 
         let amountStr = formatPostingAmount(posting, formats: formats)
-        // Right-align amount at column 52
-        let accountFieldWidth = 52 - 4 - (posting.status != nil && posting.status != .unmarked ? 2 : 0)
-        let padding = accountFieldWidth - posting.accountName.count
-        if padding >= 2 {
-            line += String(repeating: " ", count: padding)
-            line += amountStr
-        } else {
-            line += "  \(amountStr)"
+        // Pad to the journal's own margin — two spaces at minimum, since one
+        // is not enough to separate an account name from an amount.
+        let padding: Int = switch alignment {
+        case let .start(column): column - line.count
+        case let .end(column): column - line.count - amountStr.count
         }
+        line += String(repeating: " ", count: max(2, padding))
+        line += amountStr
 
         if let comment = posting.comment {
             line += "  ; \(comment)"
