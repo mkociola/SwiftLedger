@@ -129,6 +129,7 @@ struct JournalStyleCollector {
         for (commodity, counts) in fractionDigitCounts {
             result[commodity] = CommodityFormat(
                 fractionDigits: Self.mostCommon(counts),
+                maxFractionDigits: counts.keys.max() ?? 0,
                 groupsThousands: Self.groups(
                     separated: separated[commodity] ?? 0,
                     unseparated: unseparated[commodity] ?? 0,
@@ -142,10 +143,16 @@ struct JournalStyleCollector {
         // parser guessing it from what they happened to type, so it wins —
         // including for a commodity no posting in the file uses yet.
         for (commodity, stated) in declared {
-            var format = result[commodity] ?? CommodityFormat()
-            format.fractionDigits = stated.fractionDigits
-            format.groupsThousands = stated.groupsThousands
-            result[commodity] = format
+            let observed = result[commodity] ?? CommodityFormat()
+            result[commodity] = CommodityFormat(
+                fractionDigits: stated.fractionDigits,
+                // A declaration states how to write one, not how precisely the
+                // file actually speaks, so it can raise the observed maximum
+                // but never lower it.
+                maxFractionDigits: max(observed.maxFractionDigits, stated.fractionDigits),
+                groupsThousands: stated.groupsThousands,
+                signPrecedesCommodity: observed.signPrecedesCommodity,
+            )
         }
         return result
     }
@@ -153,6 +160,10 @@ struct JournalStyleCollector {
     // MARK: - Private
 
     /// The most frequent fraction-digit count, ties going to the longer one.
+    ///
+    /// Paired with `CommodityFormat.maxFractionDigits`, which takes the largest
+    /// count instead — the two answer different questions for different
+    /// callers, so both are recorded.
     ///
     /// The mode rather than the maximum, because one `$0.333` in a file of
     /// `$1,234.50` is an odd amount, not a house style, and taking the maximum
