@@ -1752,6 +1752,90 @@ private func renaming(
     }
 }
 
+// MARK: - How many digits, and for whom
+
+/// `fractionDigits` and `maxFractionDigits` answer different questions and have
+/// different callers. A serializer that padded every amount to the largest
+/// would turn a file of `$1,234.50` into one of `$1,234.500`; a display that
+/// rounded every figure to the most common would turn a real `0.00123456 BTC`
+/// holding into `BTC0.00`.
+@Suite("commodity precision") struct CommodityPrecisionTests {
+    @Test
+    func `the digits a padded amount was written with survive the Decimal`() throws {
+        let text = """
+        2026-04-01 * Buy
+            Assets:Crypto           0.50000000 BTC
+            Assets:Exchange        -0.50000000 BTC
+        """
+        let journal = try JournalParser().parse(text)
+        let posting = try #require(journal.transactions.first?.postings.first)
+
+        // The model cannot answer this question: `Decimal` normalised eight
+        // written digits down to one on the way in, and `0.50000000` and `0.5`
+        // are the same value by the time anything downstream sees them.
+        #expect(posting.amount.quantity.exponent == -1)
+        #expect(journal.commodityFormats["BTC"]?.maxFractionDigits == 8)
+    }
+
+    @Test
+    func `the usual count and the largest are recorded separately`() throws {
+        let text = """
+        2026-01-05 * Rent
+            Expenses:Rent                             $2,400.00
+            Assets:Checking                          $-2,400.00
+
+        2026-01-20 * Groceries
+            Expenses:Groceries                           $60.00
+            Assets:Checking                             $-60.00
+
+        2026-02-01 * Interest
+            Expenses:Fees                                 $0.333
+            Assets:Checking                              $-0.333
+        """
+        var journal = try JournalParser().parse(text)
+        let format = try #require(journal.commodityFormats["$"])
+
+        // Two questions, two answers. How should a rebuilt amount be written?
+        // The way most of them are. How precisely does this file speak about
+        // dollars? To three places, because one amount says so.
+        #expect(format.fractionDigits == 2)
+        #expect(format.maxFractionDigits == 3)
+
+        // The serializer still writes the usual count: padding every amount to
+        // the largest would turn this file into one of `$2,400.000`.
+        try renaming(#require(journal.transactions.first), to: "Rent (Jan)", in: &journal)
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("$2,400.00"))
+        #expect(!written.contains("$2,400.000"))
+    }
+
+    @Test
+    func `a declaration can raise the largest count but never lower it`() throws {
+        let raised = try JournalParser().parse("""
+        D $1,000.00
+
+        2026-02-01 * Rent
+            Expenses:Rent      $2400
+            Assets:Checking    $-2400
+        """)
+        // Nothing here writes a cent, but the user declared that dollars have
+        // two, and a declaration is a statement about the commodity.
+        #expect(raised.commodityFormats["$"]?.maxFractionDigits == 2)
+
+        let kept = try JournalParser().parse("""
+        D $1,000.00
+
+        2026-02-01 * Interest
+            Expenses:Fees       $0.333
+            Assets:Checking    $-0.333
+        """)
+        // The file speaks to three places whatever the declaration says about
+        // how to write one, and rounding a display to two would hide a figure.
+        #expect(kept.commodityFormats["$"]?.fractionDigits == 2)
+        #expect(kept.commodityFormats["$"]?.maxFractionDigits == 3)
+    }
+}
+
 // MARK: - JournalSerializer: laying it out the way the file lays it out
 
 /// Where a rebuilt entry's columns come from. Formatting its numbers correctly

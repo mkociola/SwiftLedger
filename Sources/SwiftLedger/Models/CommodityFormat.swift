@@ -1,8 +1,9 @@
 import Foundation
 
 /// How one commodity's amounts are written in a particular journal: how many
-/// digits follow the decimal point, whether the integer part carries thousands
-/// separators, and which side of the symbol a minus sign goes on.
+/// digits follow the decimal point — both the usual count and the most any one
+/// amount carries — whether the integer part carries thousands separators, and
+/// which side of the symbol a minus sign goes on.
 ///
 /// `Decimal` cannot answer either question. It normalises its own scale on
 /// construction — `Decimal(string: "1240.50")` and `Decimal(string: "1240.5")`
@@ -38,6 +39,24 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
     /// transaction that no longer balances.
     public var fractionDigits: Int
 
+    /// The most digits any single amount in this commodity was written with.
+    ///
+    /// `fractionDigits` answers "how should I write one of these" and is the
+    /// most common count. This answers "how precisely does this file speak
+    /// about this commodity" and is the largest, which is a different question
+    /// with a different consumer: a display that rounds every figure to the
+    /// common case turns a `0.00123456 BTC` holding into `BTC0.00`, while a
+    /// serializer that pads every amount to the largest turns a file of
+    /// `$1,234.50` into one of `$1,234.500`.
+    ///
+    /// Neither is recoverable from a parsed `Decimal`, which normalises its own
+    /// scale: `0.50000000 BTC` and `0.5 BTC` are one value, and only the parser
+    /// ever sees which one the file wrote.
+    ///
+    /// Never less than `fractionDigits`; the initialiser raises it if asked for
+    /// less.
+    public var maxFractionDigits: Int
+
     /// Whether the integer part is written in three-digit groups separated by
     /// `,` — `$1,234.50` rather than `$1234.50`.
     public var groupsThousands: Bool
@@ -52,10 +71,12 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
 
     public init(
         fractionDigits: Int = 0,
+        maxFractionDigits: Int = 0,
         groupsThousands: Bool = false,
         signPrecedesCommodity: Bool = true,
     ) {
         self.fractionDigits = fractionDigits
+        self.maxFractionDigits = max(maxFractionDigits, fractionDigits)
         self.groupsThousands = groupsThousands
         self.signPrecedesCommodity = signPrecedesCommodity
     }
