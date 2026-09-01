@@ -1,13 +1,15 @@
 import Foundation
 
-/// Watches how a journal writes each of its commodities, so that the serializer
-/// can write a rebuilt posting the same way.
+/// Watches how a journal is written, so that the serializer can write a
+/// rebuilt transaction the same way.
 ///
-/// The parser feeds it the raw text of every amount it reads — posting amounts,
-/// `@` prices and `= ` balance assertions alike — before that text becomes a
-/// `Decimal` and loses its shape. What comes out is one `CommodityFormat` per
-/// commodity the file mentions.
-struct CommodityFormatCollector {
+/// Two things, both lost by the time parsing is done. The parser feeds it the
+/// raw text of every amount it reads — posting amounts, `@` prices and `= `
+/// balance assertions alike — before that text becomes a `Decimal` and loses
+/// its shape; and the column each posting's amount field starts at, before the
+/// line is discarded. What comes out is one `CommodityFormat` per commodity the
+/// file mentions, and the column the file lines its amounts up at.
+struct JournalStyleCollector {
     /// The number of fraction digits seen for a commodity, and how often.
     private var fractionDigitCounts: [String: [Int: Int]] = [:]
     /// Per commodity: amounts large enough to show grouping that used a
@@ -20,6 +22,12 @@ struct CommodityFormatCollector {
     private var signAfterCommodity: [String: Int] = [:]
     /// Styles a `D` or `commodity` directive states outright.
     private var declared: [String: (fractionDigits: Int, groupsThousands: Bool)] = [:]
+    /// The column each posting's amount field began at, and each one ended at,
+    /// with how often — the two conventions, counted against each other.
+    private var amountStarts: [Int: Int] = [:]
+    private var amountEnds: [Int: Int] = [:]
+    /// The leading whitespace each posting line was written with, and how often.
+    private var indents: [String: Int] = [:]
 
     /// Records how one amount was written.
     ///
@@ -58,6 +66,61 @@ struct CommodityFormatCollector {
     mutating func declare(_ raw: String, commodity: String) {
         guard let shape = NumberShape(raw) else { return }
         declared[commodity] = (shape.fractionDigits, shape.usesSeparator)
+    }
+
+    /// Records where a posting line's amount field began and ended.
+    ///
+    /// Only postings that write an amount say anything: an elided leg has no
+    /// field to line up, and counting it would drag the answer toward zero.
+    mutating func observeAmountField(start: Int, end: Int) {
+        amountStarts[start, default: 0] += 1
+        amountEnds[end, default: 0] += 1
+    }
+
+    /// How this file lines its amounts up, or `nil` when no posting showed —
+    /// a journal built in code, or one whose every posting elides its amount.
+    ///
+    /// Both conventions are measured and the better-agreeing one wins. A file
+    /// that ends its amounts at one column has as many agreeing ends as it has
+    /// postings while its starts scatter by the width of each sign, and the
+    /// reverse holds for a file SwiftLedger itself wrote. Ties go to `.start`,
+    /// which is what this library has always produced.
+    ///
+    /// Within a convention it is the most common column, not the first or the
+    /// widest: a file is allowed one long account name that pushes its own
+    /// amount past the rest without that becoming the file's margin.
+    var amountAlignment: AmountAlignment? {
+        let start = Self.mode(amountStarts)
+        let end = Self.mode(amountEnds)
+        switch (start, end) {
+        case (nil, nil): return nil
+        case let (start?, nil): return .start(column: start.column)
+        case let (nil, end?): return .end(column: end.column)
+        case let (start?, end?):
+            return end.count > start.count ? .end(column: end.column) : .start(column: start.column)
+        }
+    }
+
+    /// The most common column and how many postings agreed on it.
+    private static func mode(_ counts: [Int: Int]) -> (column: Int, count: Int)? {
+        counts
+            .max { lhs, rhs in lhs.value != rhs.value ? lhs.value < rhs.value : lhs.key < rhs.key }
+            .map { (column: $0.key, count: $0.value) }
+    }
+
+    /// Records the whitespace a posting line is indented with, verbatim, so a
+    /// file written with two spaces or with tabs is not re-indented to four.
+    mutating func observeIndent(_ indent: String) {
+        guard !indent.isEmpty else { return }
+        indents[indent, default: 0] += 1
+    }
+
+    /// The indent this file writes its postings with, or `nil` when it showed
+    /// none. The most common one, ties going to the wider.
+    var postingIndent: String? {
+        indents.max { lhs, rhs in
+            lhs.value != rhs.value ? lhs.value < rhs.value : lhs.key.count < rhs.key.count
+        }?.key
     }
 
     /// The house style for every commodity the journal mentions.

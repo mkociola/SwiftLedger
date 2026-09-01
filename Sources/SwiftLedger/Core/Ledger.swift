@@ -28,6 +28,16 @@ public struct Ledger: Sendable {
         journal.remove(item)
     }
 
+    /// Replaces the first occurrence of `item` with `replacement`, keeping its
+    /// position in the file.
+    ///
+    /// - Returns: `true` if a matching item was found and replaced;
+    ///   `false` if no match exists.
+    @discardableResult
+    public mutating func replace(_ item: JournalItem, with replacement: JournalItem) -> Bool {
+        journal.replace(item, with: replacement)
+    }
+
     /// Removes the `account` directive declaring `name` and returns it, with
     /// its `type` and `comment` intact.
     ///

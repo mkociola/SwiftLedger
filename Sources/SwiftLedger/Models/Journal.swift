@@ -60,13 +60,38 @@ public struct Journal: Sendable, Codable {
     /// `CommodityFormat.default(for:)`.
     public private(set) var commodityFormats: [String: CommodityFormat] = [:]
 
-    public init(items: [JournalItem] = [], commodityFormats: [String: CommodityFormat] = [:]) {
+    /// How this file lines its posting amounts up, or `nil` when it showed no
+    /// amount to learn from.
+    ///
+    /// Recorded for the same reason as `commodityFormats` and used the same
+    /// way: a transaction the serializer has to format is laid out at the
+    /// file's own margin rather than at the library's default of column 52, so
+    /// an edit does not drag one entry's columns away from every other entry's.
+    /// Not encoded, for the same reason again — it describes one file's layout.
+    public private(set) var amountAlignment: AmountAlignment?
+
+    /// The whitespace this file indents its postings with — two spaces, four,
+    /// a tab — or `nil` when it showed none.
+    ///
+    /// Recorded and applied for the same reason as `amountColumn`: re-indenting
+    /// the one entry the user edited is a change nobody asked for. Not encoded.
+    public private(set) var postingIndent: String?
+
+    public init(
+        items: [JournalItem] = [],
+        commodityFormats: [String: CommodityFormat] = [:],
+        amountAlignment: AmountAlignment? = nil,
+        postingIndent: String? = nil,
+    ) {
         self.items = items
         self.commodityFormats = commodityFormats
+        self.amountAlignment = amountAlignment
+        self.postingIndent = postingIndent
     }
 
-    /// The encoded shape of a journal. `commodityFormats` is deliberately
-    /// absent, for the reason given on the property.
+    /// The encoded shape of a journal. `commodityFormats`, `amountAlignment`
+    /// and `postingIndent` are deliberately absent: they describe one file's
+    /// layout rather than the events it records.
     private enum CodingKeys: String, CodingKey {
         case items
     }
@@ -130,6 +155,23 @@ public struct Journal: Sendable, Codable {
     public mutating func remove(_ item: JournalItem) -> Bool {
         guard let idx = items.firstIndex(of: item) else { return false }
         items.remove(at: idx)
+        return true
+    }
+
+    /// Replaces the first occurrence of `item` with `replacement`, in place.
+    ///
+    /// The position is the point. Removing an item and appending its successor
+    /// leaves the file reordered — the edited entry torn out of its date order
+    /// and left at the end — which in a journal kept in version control is two
+    /// changed hunks for a one-field edit, neither of them where the reader is
+    /// looking. Equality is value-based, as it is for `remove(_:)`.
+    ///
+    /// - Returns: `true` if a matching item was found and replaced;
+    ///   `false` if no match exists, in which case nothing changed.
+    @discardableResult
+    public mutating func replace(_ item: JournalItem, with replacement: JournalItem) -> Bool {
+        guard let idx = items.firstIndex(of: item) else { return false }
+        items[idx] = replacement
         return true
     }
 
