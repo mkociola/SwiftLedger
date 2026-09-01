@@ -39,6 +39,9 @@ public struct JournalParser {
     public func parse(_ text: String) throws -> Journal {
         let lines = text.components(separatedBy: "\n")
         var items: [JournalItem] = []
+        // Watches how the file writes each commodity, so that a transaction
+        // the caller later rebuilds is written the same way.
+        var formats = CommodityFormatCollector()
         var index = 0
 
         while index < lines.count {
@@ -80,7 +83,7 @@ public struct JournalParser {
 
             // Transaction header (starts with a date)
             if startsWithDate(trimmed) {
-                let (transaction, consumed) = try parseTransaction(lines: lines, from: index)
+                let (transaction, consumed) = try parseTransaction(lines: lines, from: index, into: &formats)
                 items.append(.transaction(transaction))
                 index += consumed
                 continue
@@ -89,11 +92,46 @@ public struct JournalParser {
             // Anything else — an unsupported directive (`include`, `P`, `commodity`,
             // `alias`, `D`, `year`, an indented sub-directive) or malformed content.
             // Kept verbatim so serialising never rewrites what we cannot interpret.
+            // A `D` or `commodity` line is read for the display style it states
+            // and kept verbatim all the same: learning from a line is not the
+            // same as modelling it, and this one still goes back byte for byte.
+            declareFormat(from: line, into: &formats)
             items.append(.directive(line))
             index += 1
         }
 
-        return Journal(items: items)
+        return Journal(items: items, commodityFormats: formats.formats)
+    }
+
+    // MARK: - Declared display styles
+
+    /// Reads the display style a `D` or `commodity` directive states, if the
+    /// line is one.
+    ///
+    /// ledger and hledger both spell a style as a sample amount, in three
+    /// places: `D $1,000.00`, the one-line `commodity $1,000.00`, and the
+    /// indented `format $1,000.00` inside a `commodity` block. An indented line
+    /// can only reach here from such a block — the ones inside a transaction
+    /// are consumed with it — so no block tracking is needed to tell them
+    /// apart.
+    ///
+    /// Anything that does not parse as an amount is left alone. A directive
+    /// SwiftLedger misreads here costs nothing but the guess: the line itself
+    /// is still written back verbatim.
+    private func declareFormat(from line: String, into formats: inout CommodityFormatCollector) {
+        let isIndented = line.first == " " || line.first == "\t"
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let keyword = ["D ", "commodity ", "format "].first { trimmed.hasPrefix($0) }
+        guard let keyword else { return }
+        guard keyword != "format " || isIndented else { return }
+
+        let sample = String(trimmed.dropFirst(keyword.count)).trimmingCharacters(in: .whitespaces)
+        // `commodity $` names a commodity without stating a style; only the
+        // sample-amount forms say anything to record.
+        guard sample.contains(where: \.isNumber),
+              let amount = try? parseAmount(sample, lineNumber: 0),
+              !amount.commodity.isEmpty else { return }
+        formats.declare(sample, commodity: amount.commodity)
     }
 
     // MARK: - Transaction parsing
@@ -107,7 +145,11 @@ public struct JournalParser {
         var comment: String?
     }
 
-    private func parseTransaction(lines: [String], from start: Int) throws -> (Transaction, Int) {
+    private func parseTransaction(
+        lines: [String],
+        from start: Int,
+        into formats: inout CommodityFormatCollector,
+    ) throws -> (Transaction, Int) {
         let headerLine = lines[start]
         let lineNumber = start + 1 // 1-based for errors
 
@@ -134,7 +176,7 @@ public struct JournalParser {
                     rawPostings[rawPostings.count - 1].trailingComments.append(currentLine)
                 }
             } else {
-                try rawPostings.append(parsePosting(currentLine, lineNumber: index + 1))
+                try rawPostings.append(parsePosting(currentLine, lineNumber: index + 1, into: &formats))
             }
             index += 1
         }
@@ -224,7 +266,11 @@ public struct JournalParser {
         var trailingComments: [String] = []
     }
 
-    private func parsePosting(_ line: String, lineNumber: Int) throws -> RawPosting {
+    private func parsePosting(
+        _ line: String,
+        lineNumber: Int,
+        into formats: inout CommodityFormatCollector,
+    ) throws -> RawPosting {
         var rest = line.trimmingCharacters(in: .whitespaces)
 
         // Extract inline comment (2+ spaces then ;)
@@ -251,14 +297,19 @@ public struct JournalParser {
         if let rawAmount = amountStr {
             let field = splitAmountField(rawAmount)
             if !field.amount.isEmpty {
-                amount = try parseAmount(field.amount, lineNumber: lineNumber)
+                let parsed = try parseAmount(field.amount, lineNumber: lineNumber)
+                formats.observe(field.amount, as: parsed)
+                amount = parsed
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
                 let priced = try parseAmount(rawPrice, lineNumber: lineNumber)
+                formats.observe(rawPrice, as: priced)
                 price = field.priceIsTotal ? .total(priced) : .perUnit(priced)
             }
             if let rawAssertion = field.assertion, !rawAssertion.isEmpty {
-                balanceAssertion = try parseAmount(rawAssertion, lineNumber: lineNumber)
+                let asserted = try parseAmount(rawAssertion, lineNumber: lineNumber)
+                formats.observe(rawAssertion, as: asserted)
+                balanceAssertion = asserted
             }
         }
 

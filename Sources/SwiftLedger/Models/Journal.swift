@@ -43,8 +43,32 @@ public enum JournalItem: Sendable, Codable, Hashable {
 public struct Journal: Sendable, Codable {
     public private(set) var items: [JournalItem]
 
-    public init(items: [JournalItem] = []) {
+    /// How this file writes each commodity it mentions — decimal places,
+    /// thousands separators and where a minus sign goes — as `JournalParser`
+    /// found it.
+    ///
+    /// `JournalSerializer` writes a transaction it has to format in the style
+    /// recorded here, so that editing one entry in a file of `$1,234.50` does
+    /// not restyle that entry's amounts to `$1240.5` and put a change nobody
+    /// asked for in the diff. A transaction nobody edited never reaches that
+    /// code at all: it is replayed from its own source lines.
+    ///
+    /// Empty for a journal built in code, and for one decoded from JSON —
+    /// this describes one file's layout rather than the events it records, so
+    /// it is not encoded, exactly as `Transaction.sourceText` is not. A
+    /// commodity that is missing here is written in
+    /// `CommodityFormat.default(for:)`.
+    public private(set) var commodityFormats: [String: CommodityFormat] = [:]
+
+    public init(items: [JournalItem] = [], commodityFormats: [String: CommodityFormat] = [:]) {
         self.items = items
+        self.commodityFormats = commodityFormats
+    }
+
+    /// The encoded shape of a journal. `commodityFormats` is deliberately
+    /// absent, for the reason given on the property.
+    private enum CodingKeys: String, CodingKey {
+        case items
     }
 
     /// All transactions in document order.

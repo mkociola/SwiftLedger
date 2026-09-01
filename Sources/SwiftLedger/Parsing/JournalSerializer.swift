@@ -16,7 +16,12 @@ import Foundation
 /// The rules below describe the formatting applied to a transaction the caller
 /// built or changed — one with no source lines of its own:
 /// - Elided postings (resolved during parsing) are written with explicit amounts.
-/// - Amounts are formatted using the stored `commodityIsPrefix` flag.
+/// - Amounts are formatted using the stored `commodityIsPrefix` flag, in the
+///   decimal places, thousands separators and minus-sign placement the rest of
+///   the journal uses for that commodity (`Journal.commodityFormats`). A
+///   `Decimal` has forgotten all three by the time it gets here, so without
+///   that an edit to a payee would also restyle that entry's `$-1,234.50` to
+///   `-$1234.5`.
 /// - A posting's price and balance assertion are re-emitted after its amount,
 ///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
 /// - Postings are indented with 4 spaces.
@@ -44,7 +49,7 @@ public struct JournalSerializer {
                 }
                 lines.append(line)
             case let .transaction(transaction):
-                lines.append(contentsOf: serializeTransaction(transaction))
+                lines.append(contentsOf: serializeTransaction(transaction, formats: journal.commodityFormats))
             }
         }
         return lines.joined(separator: "\n")
@@ -82,7 +87,10 @@ public struct JournalSerializer {
 
     // MARK: - Transaction serialisation
 
-    private func serializeTransaction(_ transaction: Transaction) -> [String] {
+    private func serializeTransaction(
+        _ transaction: Transaction,
+        formats: [String: CommodityFormat],
+    ) -> [String] {
         // Parsed and untouched: hand back the user's own lines. Formatting them
         // would rewrite the whole file on any edit, which is exactly what a
         // plain-text journal kept in version control cannot afford.
@@ -116,7 +124,7 @@ public struct JournalSerializer {
 
         // Posting lines, each followed by the comment lines written below it
         for posting in transaction.postings {
-            lines.append(serializePosting(posting))
+            lines.append(serializePosting(posting, formats: formats))
             for comment in posting.trailingComments {
                 lines.append(transactionCommentLine(comment))
             }
@@ -125,7 +133,7 @@ public struct JournalSerializer {
         return lines
     }
 
-    private func serializePosting(_ posting: Posting) -> String {
+    private func serializePosting(_ posting: Posting, formats: [String: CommodityFormat]) -> String {
         var line = "    "
 
         if let postingStatus = posting.status, postingStatus != .unmarked {
@@ -134,7 +142,7 @@ public struct JournalSerializer {
 
         line += posting.accountName
 
-        let amountStr = formatPostingAmount(posting)
+        let amountStr = formatPostingAmount(posting, formats: formats)
         // Right-align amount at column 52
         let accountFieldWidth = 52 - 4 - (posting.status != nil && posting.status != .unmarked ? 2 : 0)
         let padding = accountFieldWidth - posting.accountName.count
@@ -155,26 +163,37 @@ public struct JournalSerializer {
     /// The whole amount field of a posting: the amount, then whatever price
     /// and balance assertion it carries, in the order ledger writes them —
     /// `AMOUNT @ PRICE = ASSERTION`, canonically spaced.
-    private func formatPostingAmount(_ posting: Posting) -> String {
-        var field = formatAmount(posting.amount)
+    private func formatPostingAmount(_ posting: Posting, formats: [String: CommodityFormat]) -> String {
+        var field = formatAmount(posting.amount, formats: formats)
         switch posting.price {
         case nil: break
-        case let .perUnit(price): field += " @ \(formatAmount(price))"
-        case let .total(price): field += " @@ \(formatAmount(price))"
+        case let .perUnit(price): field += " @ \(formatAmount(price, formats: formats))"
+        case let .total(price): field += " @@ \(formatAmount(price, formats: formats))"
         }
         if let assertion = posting.balanceAssertion {
-            field += " = \(formatAmount(assertion))"
+            field += " = \(formatAmount(assertion, formats: formats))"
         }
         return field
     }
 
-    private func formatAmount(_ amount: Amount) -> String {
-        let absValue = abs(amount.quantity).description
+    /// Writes one amount in the journal's own style for its commodity, falling
+    /// back to `CommodityFormat.default(for:)` for a commodity the file has no
+    /// example of — a journal built in code, or the first `$` amount in a file
+    /// that has none yet.
+    ///
+    /// The style sets a minimum number of decimal places, never a maximum, so
+    /// an amount carrying more digits than the house style keeps all of them.
+    /// Rounding here would change what the journal says and could leave a
+    /// transaction that no longer balances.
+    private func formatAmount(_ amount: Amount, formats: [String: CommodityFormat]) -> String {
+        let format = formats[amount.commodity] ?? .default(for: amount.commodity)
+        let absValue = format.render(abs(amount.quantity))
         let sign = amount.quantity < 0 ? "-" : ""
-        if amount.commodityIsPrefix {
-            return "\(sign)\(amount.commodity)\(absValue)"
-        } else {
+        guard amount.commodityIsPrefix else {
             return "\(sign)\(absValue) \(amount.commodity)"
         }
+        return format.signPrecedesCommodity
+            ? "\(sign)\(amount.commodity)\(absValue)"
+            : "\(amount.commodity)\(sign)\(absValue)"
     }
 }
