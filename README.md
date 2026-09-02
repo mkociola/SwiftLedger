@@ -487,5 +487,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup (pre-commit hooks, 
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
 
