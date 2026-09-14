@@ -12,7 +12,6 @@ public enum LedgerError: Error, Sendable, Equatable {
 
     // MARK: - Transaction
 
-    case emptyTransaction
     case unbalancedTransaction(commodity: String, imbalance: Decimal)
 
     // MARK: - Commodity
@@ -37,8 +36,6 @@ extension LedgerError: LocalizedError {
             "A transaction may have at most one posting with an elided amount"
         case .cannotResolveElision:
             "Cannot resolve elided amount: remaining postings span multiple commodities"
-        case .emptyTransaction:
-            "A transaction must contain at least two postings"
         case let .unbalancedTransaction(commodity, imbalance):
             "Transaction is unbalanced in \(commodity): off by \(imbalance)"
         case let .commodityMismatch(first, second):
