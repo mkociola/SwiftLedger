@@ -5,6 +5,8 @@
 ; account type when the name root doesn't match the recognised conventions.
 account Assets:Checking
 account Assets:Savings
+account Assets:Brokerage
+account Assets:PettyCash
 account Liabilities:CreditCard
 account Equity:Opening
 account Income:Salary
@@ -83,3 +85,25 @@ account Expenses:Utilities
 2024-02-28 Pay off credit card
     Liabilities:CreditCard     $112.60
     Assets:Checking
+
+; ── Entries with fewer than two postings ────────────────────────────────────
+; The rule is that every commodity nets to zero, not that there are two
+; postings, so these are valid in ledger, in hledger and here.
+
+; A dated line on its own is how a journal keeps a note.
+2024-02-03 Called the bank about the card fee
+
+; A single posting of zero touches an account without moving money.
+2024-02-06 Opened a brokerage account
+    Assets:Brokerage       $0
+
+; With nothing to balance against, an elided amount reads as zero, exactly
+; as if 0 had been written.
+2024-02-08 Set up the petty cash tin
+    Assets:PettyCash
+
+; The usual hledger shape: a zero posting carrying a balance assertion, which
+; states the balance on that date without recording a movement. SwiftLedger
+; preserves the assertion and does not check it.
+2024-02-29 Statement check
+    Assets:Savings         $0 = $5000.00
