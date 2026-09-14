@@ -2,9 +2,13 @@ import Foundation
 
 /// An immutable, balanced journal transaction.
 ///
-/// A transaction is a dated financial event that affects two or more accounts.
-/// The sum of all posting amounts must be zero for each commodity present —
-/// this invariant is enforced at construction time.
+/// A transaction is a dated financial event recorded as a list of postings.
+/// The sum of all posting amounts must be zero for each commodity present,
+/// and that invariant is enforced at construction time. It is the only rule
+/// on how many postings there may be: none at all sums to zero, so a dated
+/// line with nothing but a description is a transaction, and so is a single
+/// posting of zero. Both are what ledger and hledger accept, and a bare dated
+/// line is a common way to keep a note in a journal.
 ///
 /// A posting that carries a price balances at that price rather than at face
 /// value (`Posting.balancingAmount`), which is what lets a two-commodity trade
@@ -65,7 +69,11 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
 
     /// Creates a validated transaction.
     ///
-    /// - Throws: `LedgerError.emptyTransaction` if fewer than two postings are provided.
+    /// Any number of postings is allowed, none included, as long as every
+    /// commodity present nets to zero. A lone posting of zero therefore
+    /// builds; a lone posting of anything else does not, and says which
+    /// commodity it is off in rather than counting postings at the caller.
+    ///
     /// - Throws: `LedgerError.unbalancedTransaction` if postings do not sum to zero
     ///   for any commodity.
     public init(
@@ -79,7 +87,6 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         comment: String? = nil,
         leadingComments: [String] = [],
     ) throws {
-        guard postings.count >= 2 else { throw LedgerError.emptyTransaction }
         try Self.validateBalance(postings)
         self.id = id
         self.date = date

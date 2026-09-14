@@ -18,6 +18,10 @@ import Foundation
 /// - Status: `*` = cleared, `!` = pending
 /// - Comments: `;` or `#` at line start; inline `  ;` after 2+ spaces
 /// - `account NAME` directives, with an optional inline comment
+/// - A transaction may carry any number of postings, none included: a dated
+///   line on its own is a valid entry, as it is in ledger and hledger, and so
+///   is a single posting of zero. The rule is that every commodity nets to
+///   zero, never a posting count.
 /// - Blank lines and full-line comments are preserved in the AST.
 /// - Every parsed transaction keeps its own source lines verbatim
 ///   (`Transaction.sourceText`), so serialising a journal nobody edited
@@ -303,6 +307,17 @@ public struct JournalParser {
 
     // MARK: - Elision resolution
 
+    /// Fills in the amount of the one posting that elided it, if any.
+    ///
+    /// The ordinary case balances that posting against what the other lines
+    /// wrote. When no line wrote an amount at all there is nothing to balance
+    /// against, and the elision is read exactly as if the user had written
+    /// `0`, which is also how hledger prints such a posting back out. It goes
+    /// through `parseAmount` rather than being built here, so that a written
+    /// `0` and an elided one produce the very same amount, commodity and all.
+    ///
+    /// A transaction with no postings has nothing to resolve and comes back
+    /// empty.
     private func resolveElisions(_ rawPostings: [RawPosting]) throws -> [Posting] {
         let elidedCount = rawPostings.count(where: { $0.amount == nil })
         guard elidedCount <= 1 else { throw LedgerError.multipleElidedPostings }
@@ -320,6 +335,11 @@ public struct JournalParser {
         let explicitAmounts = rawPostings.compactMap { raw in
             raw.amount.map { raw.price?.cost(of: $0.quantity) ?? $0 }
         }
+        if explicitAmounts.isEmpty {
+            let zero = try parseAmount("0", lineNumber: 0)
+            return rawPostings.map { Self.posting(from: $0, amount: $0.amount ?? zero) }
+        }
+
         let commodities = Set(explicitAmounts.map(\.commodity))
         guard commodities.count == 1,
               let commodity = commodities.first,

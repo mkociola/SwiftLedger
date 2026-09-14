@@ -272,9 +272,30 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     }
 
     @Test
-    func `fewer than two postings throws emptyTransaction`() throws {
+    func `a transaction with no postings is valid, an empty sum being zero`() throws {
+        let transaction = try Transaction(
+            date: makeDate(2024, 1, 1), description: "just a payee", postings: [],
+        )
+        #expect(transaction.postings.isEmpty)
+        #expect(transaction.description == "just a payee")
+    }
+
+    @Test
+    func `a lone posting of zero is valid`() throws {
+        let transaction = try Transaction(
+            date: makeDate(2024, 1, 1), description: "zero",
+            postings: [
+                Posting(accountName: "Assets:Checking", amount: Amount(quantity: 0, commodity: "USD")),
+            ],
+        )
+        #expect(transaction.postings.count == 1)
+        #expect(transaction.postings[0].amount.quantity == 0)
+    }
+
+    @Test
+    func `a lone non-zero posting is unbalanced, and says so`() throws {
         let date = try makeDate(2024, 1, 1)
-        #expect(throws: LedgerError.emptyTransaction) {
+        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: 100)) {
             try Transaction(
                 date: date, description: "Single",
                 postings: [
@@ -3037,6 +3058,118 @@ private func monthlyStarts() throws -> [JournalDate] {
         )
         #expect(matrix.rows.isEmpty)
         #expect(matrix.bucketCount == 3)
+    }
+}
+
+// MARK: - Sparse entries
+
+/// A journal holding the entries ledger and hledger accept and SwiftLedger
+/// used to refuse outright: a dated line kept as a note, a lone posting of
+/// zero, and a lone posting that elides its amount. Ordinary entries sit
+/// around them, because the bug that mattered was one such line making the
+/// whole file unreadable.
+private let sparseEntryJournal = """
+2024-01-01 Opening
+    Assets:Checking          $1,000.00
+    Equity:Opening          $-1,000.00
+
+2024-01-05 rang the bank about the fee
+
+2024-01-06 zero
+    Assets:Savings   $0
+
+2024-01-07 note
+    Assets:Petty
+
+2024-01-10 Coffee
+    Expenses:Food                $4.00
+    Assets:Checking             $-4.00
+"""
+
+@Suite("zero- and single-posting entries") struct SparseEntryTests {
+    @Test
+    func `a dated line on its own parses to a transaction with no postings`() throws {
+        let journal = try JournalParser().parse("2024-01-01 just a payee")
+        let transaction = try #require(journal.transactions.first)
+        #expect(transaction.postings.isEmpty)
+        #expect(transaction.description == "just a payee")
+        #expect(transaction.date.description == "2024-01-01")
+    }
+
+    @Test
+    func `a note parsed from a file is written back byte-for-byte`() throws {
+        let text = "2024-01-01 just a payee"
+        #expect(try JournalSerializer().serialize(JournalParser().parse(text)) == text)
+    }
+
+    @Test
+    func `a postingless transaction built in code serialises as its header line alone`() throws {
+        let transaction = try Transaction(
+            date: makeDate(2024, 1, 1), description: "just a payee", postings: [],
+        )
+        #expect(transaction.sourceText == nil)
+        let written = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+        #expect(written == "2024-01-01 just a payee")
+    }
+
+    @Test
+    func `a lone posting of zero parses, and its account is inferred`() throws {
+        let journal = try JournalParser().parse("2024-01-01 zero\n    Assets:Checking   $0")
+        let transaction = try #require(journal.transactions.first)
+        #expect(transaction.postings.count == 1)
+        #expect(transaction.postings[0].amount.quantity == 0)
+        #expect(Ledger(journal: journal).accounts.map(\.name).contains("Assets:Checking"))
+    }
+
+    @Test
+    func `a lone elided posting is read exactly as a written zero`() throws {
+        let elided = try JournalParser().parse("2024-01-01 note\n    Assets:Petty")
+        let written = try JournalParser().parse("2024-01-01 note\n    Assets:Petty  0")
+        let elidedAmount = try #require(elided.transactions.first?.postings.first?.amount)
+        let writtenAmount = try #require(written.transactions.first?.postings.first?.amount)
+        #expect(elidedAmount.quantity == 0)
+        #expect(elidedAmount == writtenAmount)
+    }
+
+    @Test
+    func `a lone non-zero posting is rejected as unbalanced, never as empty`() throws {
+        #expect(throws: LedgerError.unbalancedTransaction(commodity: "$", imbalance: 5)) {
+            try JournalParser().parse("2024-01-01 oops\n    Assets:Checking   $5")
+        }
+    }
+
+    @Test
+    func `a note and a lone zero posting leave every balance where it was`() throws {
+        let ledger = try Ledger(journal: JournalParser().parse(sparseEntryJournal))
+        let checking = ledger.balance(for: "Assets:Checking")
+        #expect(checking.count == 1)
+        #expect(checking[0].quantity == 996)
+        #expect(ledger.balance(for: "Assets:Savings").allSatisfy { $0.quantity == 0 })
+        #expect(ledger.balance(for: "Assets:Petty").allSatisfy { $0.quantity == 0 })
+        #expect(ledger.subtreeBalance(forPrefix: "Expenses")[0].quantity == 4)
+    }
+
+    @Test
+    func `a statement for the zero account has one line and an unmoved running balance`() throws {
+        let ledger = try Ledger(journal: JournalParser().parse(sparseEntryJournal))
+        let statement = AccountStatement(ledger: ledger, accountName: "Assets:Savings")
+        #expect(statement.lines.count == 1)
+        #expect(statement.lines[0].transaction.description == "zero")
+        #expect(statement.lines[0].runningBalance.count == 1)
+        #expect(statement.lines[0].runningBalance[0].quantity == 0)
+    }
+
+    @Test
+    func `an unrelated add leaves the note and the sparse postings byte-for-byte`() throws {
+        var journal = try JournalParser().parse(sparseEntryJournal)
+        journal.append(.blank)
+        try journal.append(.transaction(makeTx(date: makeDate(2024, 2, 1), description: "Lunch")))
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.hasPrefix(sparseEntryJournal))
+        #expect(written.contains("2024-01-05 rang the bank about the fee"))
+        #expect(written.contains("    Assets:Savings   $0"))
+        #expect(written.contains("    Assets:Petty\n"))
+        #expect(written.contains("2024-02-01 Lunch"))
     }
 }
 
