@@ -6,7 +6,8 @@ import Foundation
 /// ```
 /// DATE [= AUXDATE] [* | !] [(CODE)] DESCRIPTION [  ; comment]
 ///     [* | !] ACCOUNT_NAME  [AMOUNT] [  ; comment]
-///     [* | !] ACCOUNT_NAME  [AMOUNT] [  ; comment]
+///     [* | !] (ACCOUNT_NAME)  [AMOUNT] [  ; comment]      ; virtual
+///     [* | !] [ACCOUNT_NAME]  [AMOUNT] [  ; comment]      ; balanced virtual
 /// ```
 ///
 /// - Date formats: `YYYY-MM-DD` or `YYYY/MM/DD`
@@ -18,10 +19,22 @@ import Foundation
 /// - Status: `*` = cleared, `!` = pending
 /// - Comments: `;` or `#` at line start; inline `  ;` after 2+ spaces
 /// - `account NAME` directives, with an optional inline comment
+/// - Virtual postings: `(ACCOUNT)` takes no part in balancing; `[ACCOUNT]` is
+///   exempt from balancing against the real postings but the bracketed
+///   postings of one transaction must sum to zero among themselves. The
+///   delimiters are stripped from `Posting.accountName` and written back for a
+///   rebuilt posting. Both ends must match with something between them — an
+///   unmatched bracket is part of the name — and space just inside them is
+///   padding, so `( ACCOUNT )` names the same account as `(ACCOUNT)`.
 /// - A transaction may carry any number of postings, none included: a dated
 ///   line on its own is a valid entry, as it is in ledger and hledger, and so
 ///   is a single posting of zero. The rule is that every commodity nets to
-///   zero, never a posting count.
+///   zero in each balancing group, never a posting count.
+/// - At most one posting per balancing group may elide its amount, and it
+///   takes what the rest of its own group leaves over. An elided
+///   parenthesised posting has no group to balance against and reads as zero,
+///   which is hledger's reading; ledger-cli would hand it the real remainder
+///   instead.
 /// - Blank lines and full-line comments are preserved in the AST.
 /// - Every parsed transaction keeps its own source lines verbatim
 ///   (`Transaction.sourceText`), so serialising a journal nobody edited
@@ -233,8 +246,9 @@ public struct JournalParser {
 
     // MARK: - Posting parsing
 
-    private struct RawPosting {
+    struct RawPosting {
         var accountName: String
+        var kind: Posting.Kind
         var amount: Amount?
         var price: PostingPrice?
         var balanceAssertion: Amount?
@@ -262,10 +276,13 @@ public struct JournalParser {
             rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
         }
 
-        // Account name ends at 2+ spaces, or at end of line
-        let (accountName, amountStr) = splitAccountAndAmount(rest)
+        // Account name ends at 2+ spaces, or at end of line. The token is kept
+        // as the line writes it for the style observation below; the posting
+        // stores the bare name.
+        let (accountToken, amountStr) = splitAccountAndAmount(rest)
+        let (accountName, kind) = splitAccountKind(accountToken)
         style.observeIndent(String(line.prefix { $0 == " " || $0 == "\t" }))
-        if let amountStr, let start = Self.amountColumn(in: line, after: accountName) {
+        if let amountStr, let start = Self.amountColumn(in: line, after: accountToken) {
             style.observeAmountField(start: start, end: start + amountStr.count)
         }
 
@@ -297,72 +314,12 @@ public struct JournalParser {
 
         return RawPosting(
             accountName: accountName,
+            kind: kind,
             amount: amount,
             price: price,
             balanceAssertion: balanceAssertion,
             status: postingStatus,
             comment: comment?.trimmingCharacters(in: .whitespaces),
-        )
-    }
-
-    // MARK: - Elision resolution
-
-    /// Fills in the amount of the one posting that elided it, if any.
-    ///
-    /// The ordinary case balances that posting against what the other lines
-    /// wrote. When no line wrote an amount at all there is nothing to balance
-    /// against, and the elision is read exactly as if the user had written
-    /// `0`, which is also how hledger prints such a posting back out. It goes
-    /// through `parseAmount` rather than being built here, so that a written
-    /// `0` and an elided one produce the very same amount, commodity and all.
-    ///
-    /// A transaction with no postings has nothing to resolve and comes back
-    /// empty.
-    private func resolveElisions(_ rawPostings: [RawPosting]) throws -> [Posting] {
-        let elidedCount = rawPostings.count(where: { $0.amount == nil })
-        guard elidedCount <= 1 else { throw LedgerError.multipleElidedPostings }
-
-        if elidedCount == 0 {
-            return try rawPostings.map { raw in
-                guard let amount = raw.amount else { throw LedgerError.cannotResolveElision }
-                return Self.posting(from: raw, amount: amount)
-            }
-        }
-
-        // Exactly one elided posting: compute its amount. A priced posting
-        // contributes what it cost, not what it moved, so that a share
-        // purchase can balance an elided cash leg.
-        let explicitAmounts = rawPostings.compactMap { raw in
-            raw.amount.map { raw.price?.cost(of: $0.quantity) ?? $0 }
-        }
-        if explicitAmounts.isEmpty {
-            let zero = try parseAmount("0", lineNumber: 0)
-            return rawPostings.map { Self.posting(from: $0, amount: $0.amount ?? zero) }
-        }
-
-        let commodities = Set(explicitAmounts.map(\.commodity))
-        guard commodities.count == 1,
-              let commodity = commodities.first,
-              let firstAmount = explicitAmounts.first else { throw LedgerError.cannotResolveElision }
-
-        let isPrefix = firstAmount.commodityIsPrefix
-        let sum = explicitAmounts.reduce(Decimal.zero) { $0 + $1.quantity }
-        let elidedAmount = Amount(quantity: -sum, commodity: commodity, commodityIsPrefix: isPrefix)
-
-        return rawPostings.map { raw in
-            Self.posting(from: raw, amount: raw.amount ?? elidedAmount)
-        }
-    }
-
-    private static func posting(from raw: RawPosting, amount: Amount) -> Posting {
-        Posting(
-            accountName: raw.accountName,
-            amount: amount,
-            price: raw.price,
-            balanceAssertion: raw.balanceAssertion,
-            status: raw.status,
-            comment: raw.comment,
-            trailingComments: raw.trailingComments,
         )
     }
 }

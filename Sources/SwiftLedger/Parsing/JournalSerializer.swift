@@ -24,6 +24,9 @@ import Foundation
 ///   `-$1234.5`.
 /// - A posting's price and balance assertion are re-emitted after its amount,
 ///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
+/// - A virtual posting's account name is written back inside its own
+///   delimiters: `(name)` or `[name]`. The delimiters count toward the margin,
+///   so a rebuilt envelope leg lines its amount up with its neighbours.
 /// - Postings are indented the way the rest of the journal indents its own
 ///   (`Journal.postingIndent`), falling back to 4 spaces.
 /// - Amount fields are lined up the way the rest of the journal lines its own
@@ -164,7 +167,7 @@ public struct JournalSerializer {
             line += "\(postingStatus.rawValue) "
         }
 
-        line += posting.accountName
+        line += posting.delimitedAccountName
 
         let amountStr = formatPostingAmount(posting, formats: formats)
         // Pad to the journal's own margin — two spaces at minimum, since one

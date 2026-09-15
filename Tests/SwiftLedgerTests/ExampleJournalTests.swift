@@ -53,6 +53,25 @@ import Testing
         #expect(check.postings.first?.balanceAssertion == asserted)
     }
 
+    @Test
+    func `the example shows all three kinds of posting`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let entry = try #require(
+            journal.transactions.first { $0.description == "Groceries, and move the food envelope" },
+        )
+        #expect(entry.postings.map(\.kind) == [
+            .real, .real, .balancedVirtual, .balancedVirtual, .virtual,
+        ])
+        #expect(entry.postings.map(\.accountName) == [
+            "Expenses:Food:Groceries",
+            "Assets:Checking",
+            "Assets:Checking:Envelope:Food",
+            "Assets:Checking:Available",
+            "Reserve:Capital",
+        ])
+        #expect(entry.postings.map(\.amount.quantity) == [60, -60, -60, 60, 250])
+    }
+
     /// The library preserves a balance assertion without checking it, so the
     /// example has to be honest on its own: the figure it asserts is the
     /// balance the entries above it produce.

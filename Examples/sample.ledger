@@ -107,3 +107,18 @@ account Expenses:Utilities
 ; preserves the assertion and does not check it.
 2024-02-29 Statement check
     Assets:Savings         $0 = $5000.00
+
+; ── Virtual postings ────────────────────────────────────────────────────────
+; Parentheses make a posting virtual: it moves money in a tracking account
+; outside the double-entry books and takes no part in balancing. Square
+; brackets make it balanced virtual — exempt from balancing against the real
+; postings, but the bracketed postings of one entry must sum to zero among
+; themselves. Both names are stored bare, so a query finds the same account
+; however the journal spells it.
+
+2024-03-01 Groceries, and move the food envelope
+    Expenses:Food:Groceries    $60.00
+    Assets:Checking
+    [Assets:Checking:Envelope:Food]   $-60.00
+    [Assets:Checking:Available]        $60.00
+    (Reserve:Capital)                 $250.00

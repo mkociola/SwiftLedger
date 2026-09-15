@@ -1,0 +1,92 @@
+// MARK: - Resolving elided posting amounts
+
+import Foundation
+
+extension JournalParser {
+    /// Fills in the amount of the postings that elided one.
+    ///
+    /// Elision is resolved per balancing group, the way hledger infers one: at
+    /// most one real posting may elide its amount and it takes what the other
+    /// real postings leave over, and likewise at most one bracketed posting
+    /// among the bracketed ones. The two groups never see each other, so an
+    /// elided cash leg is not quietly paid for by an envelope.
+    ///
+    /// A parenthesised posting takes part in no balance, so there is nothing to
+    /// infer its amount from and any number of them may elide one: each reads
+    /// as zero, exactly as if the user had written it, which is also how an
+    /// elision with nothing to balance against has always been read here.
+    /// hledger is the tool followed on this point; ledger-cli would hand a lone
+    /// null-amount posting the real remainder instead.
+    ///
+    /// A transaction with no postings has nothing to resolve and comes back
+    /// empty.
+    func resolveElisions(_ rawPostings: [RawPosting]) throws -> [Posting] {
+        var fills: [Posting.Kind: Amount] = [:]
+        for kind in [Posting.Kind.real, .balancedVirtual] {
+            let group = rawPostings.filter { $0.kind == kind }
+            let elided = group.count(where: { $0.amount == nil })
+            guard elided <= 1 else { throw LedgerError.multipleElidedPostings }
+            if elided == 1 { fills[kind] = try remainder(of: group, in: rawPostings) }
+        }
+
+        return try rawPostings.map { raw in
+            if let amount = raw.amount { return Self.posting(from: raw, amount: amount) }
+            if raw.kind == .virtual {
+                return try Self.posting(from: raw, amount: zeroAmount(matching: rawPostings))
+            }
+            guard let fill = fills[raw.kind] else { throw LedgerError.cannotResolveElision }
+            return Self.posting(from: raw, amount: fill)
+        }
+    }
+
+    /// What the one posting of a group that elided its amount takes: minus the
+    /// sum of what the rest of its own group wrote. A priced posting
+    /// contributes what it cost, not what it moved, so that a share purchase
+    /// can balance an elided cash leg. A group in which nobody wrote an amount
+    /// leaves zero to absorb, in whatever commodity the entry is written in.
+    func remainder(of group: [RawPosting], in transaction: [RawPosting]) throws -> Amount {
+        let written = group.compactMap { raw in
+            raw.amount.map { raw.price?.cost(of: $0.quantity) ?? $0 }
+        }
+        guard let first = written.first else { return try zeroAmount(matching: transaction) }
+        guard Set(written.map(\.commodity)).count == 1 else {
+            throw LedgerError.cannotResolveElision
+        }
+        let sum = written.reduce(Decimal.zero) { $0 + $1.quantity }
+        return Amount(
+            quantity: -sum, commodity: first.commodity, commodityIsPrefix: first.commodityIsPrefix,
+        )
+    }
+
+    /// Zero, written in the commodity the entry itself is written in: the first
+    /// amount any posting of the transaction wrote, whichever group it belongs
+    /// to.
+    ///
+    /// An entry of `$` amounts should not sprout a `USD` one because a
+    /// parenthesised leg left its amount off — the balance would read `0 USD`
+    /// and a rebuild would write `0 USD` into a dollar journal. Only an entry
+    /// in which nobody wrote an amount at all has nothing to take a commodity
+    /// from, and that falls back to `parseAmount`, so a written `0` and an
+    /// elided one still produce the very same amount.
+    func zeroAmount(matching rawPostings: [RawPosting]) throws -> Amount {
+        guard let written = rawPostings.compactMap(\.amount).first else {
+            return try parseAmount("0", lineNumber: 0)
+        }
+        return Amount(
+            quantity: .zero, commodity: written.commodity, commodityIsPrefix: written.commodityIsPrefix,
+        )
+    }
+
+    static func posting(from raw: RawPosting, amount: Amount) -> Posting {
+        Posting(
+            accountName: raw.accountName,
+            kind: raw.kind,
+            amount: amount,
+            price: raw.price,
+            balanceAssertion: raw.balanceAssertion,
+            status: raw.status,
+            comment: raw.comment,
+            trailingComments: raw.trailingComments,
+        )
+    }
+}
