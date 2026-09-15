@@ -72,6 +72,20 @@ import Testing
         #expect(entry.postings.map(\.amount.quantity) == [60, -60, -60, 60, 250])
     }
 
+    /// The example is also a style sample: every entry a reader adds to it,
+    /// and every entry SwiftLedger rebuilds in it, is laid out from what the
+    /// file already shows. An entry that lines its amounts up somewhere new,
+    /// or that writes the file's first negative amount the other way round,
+    /// moves that answer for the whole file. That is how the virtual-posting
+    /// entry silently flipped the margin from 27 to 31 and the sign from `-$`
+    /// to `$-` before it was aligned.
+    @Test
+    func `the example teaches one margin and one negative-sign style`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        #expect(journal.amountAlignment == .start(column: 27))
+        #expect(journal.commodityFormats["$"]?.signPrecedesCommodity == true)
+    }
+
     /// The library preserves a balance assertion without checking it, so the
     /// example has to be honest on its own: the figure it asserts is the
     /// balance the entries above it produce.

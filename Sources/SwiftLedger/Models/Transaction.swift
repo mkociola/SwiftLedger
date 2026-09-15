@@ -23,7 +23,10 @@ import Foundation
 /// this — they are preserved, never checked.
 ///
 /// Use `JournalParser` to build transactions from plain-text `.ledger` files,
-/// which also resolves elided amounts before constructing `Transaction` objects.
+/// which also resolves elided amounts before constructing `Transaction`
+/// objects. It follows hledger where hledger and ledger-cli differ: an elided
+/// `(account)` posting is in no balancing group, so it reads as zero rather
+/// than absorbing what the real postings leave over.
 /// A transaction that comes back from the parser also carries the lines it was
 /// read from, in `sourceText`, so that leaving it alone leaves the file alone.
 public struct Transaction: Identifiable, Sendable, Codable, Hashable {
@@ -82,9 +85,11 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     /// caller.
     ///
     /// - Throws: `LedgerError.unbalancedTransaction` if the real postings do
-    ///   not sum to zero for any commodity, or
+    ///   not sum to zero for any commodity,
     ///   `LedgerError.unbalancedBracketedPostings` if the balanced virtual ones
-    ///   do not sum to zero among themselves.
+    ///   do not sum to zero among themselves, or
+    ///   `LedgerError.unwritableAccountName` if a real posting is named a
+    ///   matched pair of parentheses or brackets.
     public init(
         id: UUID = UUID(),
         date: JournalDate,
@@ -96,6 +101,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         comment: String? = nil,
         leadingComments: [String] = [],
     ) throws {
+        try Self.validateAccountNames(postings)
         try Self.validateBalance(postings)
         self.id = id
         self.date = date
@@ -173,6 +179,27 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     }
 
     // MARK: - Private
+
+    /// Refuses a real posting a journal would read back as a virtual one.
+    ///
+    /// `(old)` is a legal `String` and an illegal account name: a real
+    /// posting's name is written bare, so the line `JournalSerializer`
+    /// produces for it is the line a virtual posting writes, and the next
+    /// parse puts the amount in the wrong balancing group, so the file
+    /// SwiftLedger itself has just written no longer loads, with an error that
+    /// names a commodity and not the account. Refusing the one entry is what
+    /// keeps the whole file readable, and a name is the only place this can be
+    /// caught, since nothing about the posting is wrong once it is written.
+    ///
+    /// The parser can never trip this: a name it read out of a matched pair is
+    /// not a real posting's.
+    private static func validateAccountNames(_ postings: [Posting]) throws {
+        for posting in postings where posting.kind == .real {
+            guard Posting.Kind.split(posting.accountName).kind == .real else {
+                throw LedgerError.unwritableAccountName(posting.accountName)
+            }
+        }
+    }
 
     /// Checks the two balancing groups, real postings first, so that the
     /// message an ordinary mistake produces is the ordinary one.

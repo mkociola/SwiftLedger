@@ -23,9 +23,15 @@ import Foundation
 ///   exempt from balancing against the real postings but the bracketed
 ///   postings of one transaction must sum to zero among themselves. The
 ///   delimiters are stripped from `Posting.accountName` and written back for a
-///   rebuilt posting. Both ends must match with something between them — an
-///   unmatched bracket is part of the name — and space just inside them is
-///   padding, so `( ACCOUNT )` names the same account as `(ACCOUNT)`.
+///   rebuilt posting, and `Posting ==` includes the kind, so a real posting
+///   never compares equal to a virtual one of the same account. Both ends must
+///   match with something between them, so an unmatched bracket is part of the
+///   name; only the outermost pair is stripped, so `((ACCOUNT))` is the
+///   virtual account `(ACCOUNT)`; and space just inside the delimiters is
+///   padding, so `( ACCOUNT )` names the same account as `(ACCOUNT)`. A real
+///   posting's name may not itself be a matched pair, since it would be
+///   written bare and read back virtual: `Transaction.init` refuses one
+///   (`LedgerError.unwritableAccountName`).
 /// - A transaction may carry any number of postings, none included: a dated
 ///   line on its own is a valid entry, as it is in ledger and hledger, and so
 ///   is a single posting of zero. The rule is that every commodity nets to
@@ -280,7 +286,7 @@ public struct JournalParser {
         // as the line writes it for the style observation below; the posting
         // stores the bare name.
         let (accountToken, amountStr) = splitAccountAndAmount(rest)
-        let (accountName, kind) = splitAccountKind(accountToken)
+        let (accountName, kind) = Posting.Kind.split(accountToken)
         style.observeIndent(String(line.prefix { $0 == " " || $0 == "\t" }))
         if let amountStr, let start = Self.amountColumn(in: line, after: accountToken) {
             style.observeAmountField(start: start, end: start + amountStr.count)

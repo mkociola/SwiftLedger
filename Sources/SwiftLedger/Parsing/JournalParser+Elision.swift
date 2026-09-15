@@ -43,7 +43,8 @@ extension JournalParser {
     /// sum of what the rest of its own group wrote. A priced posting
     /// contributes what it cost, not what it moved, so that a share purchase
     /// can balance an elided cash leg. A group in which nobody wrote an amount
-    /// leaves zero to absorb, in whatever commodity the entry is written in.
+    /// leaves zero to absorb, in the first commodity the entry writes (see
+    /// `zeroAmount(matching:)`, which is where file order decides).
     func remainder(of group: [RawPosting], in transaction: [RawPosting]) throws -> Amount {
         let written = group.compactMap { raw in
             raw.amount.map { raw.price?.cost(of: $0.quantity) ?? $0 }
@@ -58,16 +59,21 @@ extension JournalParser {
         )
     }
 
-    /// Zero, written in the commodity the entry itself is written in: the first
-    /// amount any posting of the transaction wrote, whichever group it belongs
-    /// to.
+    /// Zero in the first commodity the entry writes, **in file order**: the
+    /// amount of the first posting that wrote one, whichever group it belongs
+    /// to, and the amount it moved rather than what a price on it says that
+    /// cost.
     ///
     /// An entry of `$` amounts should not sprout a `USD` one because a
     /// parenthesised leg left its amount off — the balance would read `0 USD`
-    /// and a rebuild would write `0 USD` into a dollar journal. Only an entry
-    /// in which nobody wrote an amount at all has nothing to take a commodity
-    /// from, and that falls back to `parseAmount`, so a written `0` and an
-    /// elided one still produce the very same amount.
+    /// and a rebuild would write `0 USD` into a dollar journal. In an entry
+    /// written in one commodity that is simply the entry's commodity. In one
+    /// written in two it is a document-order answer and nothing better is
+    /// available: a posting in no balancing group has no commodity of its own,
+    /// so moving the postings around can move which commodity its zero is in.
+    /// Only an entry in which nobody wrote an amount at all has nothing to
+    /// take a commodity from, and that falls back to `parseAmount`, so a
+    /// written `0` and an elided one still produce the very same amount.
     func zeroAmount(matching rawPostings: [RawPosting]) throws -> Amount {
         guard let written = rawPostings.compactMap(\.amount).first else {
             return try parseAmount("0", lineNumber: 0)

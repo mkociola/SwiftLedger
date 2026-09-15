@@ -200,6 +200,31 @@ public extension Posting.Kind {
 }
 
 extension Posting.Kind {
+    /// The bare name and the kind a written account token states: `(name)` is
+    /// virtual, `[name]` balanced virtual, anything else real and taken
+    /// verbatim.
+    ///
+    /// Both ends must match and there must be something between them, so an
+    /// unmatched bracket (`[Reserve:capital`) is part of the name, as are
+    /// parentheses in the middle of one (`Assets:Car (old)`) and an empty pair
+    /// (`()`). Only the outermost pair is stripped: `((A))` is the virtual
+    /// account named `(A)`. Space just inside the delimiters is padding rather
+    /// than name, so `( Reserve:capital )` is the same account as
+    /// `(Reserve:capital)` and is written back without the padding.
+    ///
+    /// The parser reads every posting line through this, on the token past the
+    /// status marker and the two-space gap. `Transaction` refuses a real
+    /// posting whose name this does not answer `.real` for, because such a
+    /// name is written bare and would come back from the next parse virtual.
+    static func split(_ token: String) -> (name: String, kind: Posting.Kind) {
+        guard token.count >= 3,
+              let open = token.first, let close = token.last,
+              let kind = Posting.Kind(open: open, close: close) else { return (token, .real) }
+        let inner = token.dropFirst().dropLast().trimmingCharacters(in: .whitespaces)
+        guard !inner.isEmpty else { return (token, .real) }
+        return (inner, kind)
+    }
+
     /// The kind a pair of delimiters states, or `nil` when they are not a
     /// matched virtual-posting pair.
     init?(open: Character, close: Character) {

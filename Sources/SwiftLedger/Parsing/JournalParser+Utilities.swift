@@ -105,25 +105,4 @@ extension JournalParser {
         let amount = String(str[str.index(after: split)...]).trimmingCharacters(in: .whitespaces)
         return (account, amount.isEmpty ? nil : amount)
     }
-
-    /// Splits an account token into the bare name and the kind its delimiters
-    /// state: `(name)` is virtual, `[name]` balanced virtual, anything else
-    /// real and taken verbatim.
-    ///
-    /// Both ends must match and there must be something between them, so an
-    /// unmatched bracket (`[Reserve:capital`) is part of the name, as are
-    /// parentheses in the middle of one (`Assets:Car (old)`) and an empty pair
-    /// (`()`). Space inside the delimiters is padding rather than name, so
-    /// `( Reserve:capital )` is the same account as `(Reserve:capital)` and is
-    /// rebuilt without the padding. Run on the token `splitAccountAndAmount`
-    /// returns, which is past the status marker and past the two-space gap
-    /// already.
-    func splitAccountKind(_ token: String) -> (name: String, kind: Posting.Kind) {
-        guard token.count >= 3,
-              let open = token.first, let close = token.last,
-              let kind = Posting.Kind(open: open, close: close) else { return (token, .real) }
-        let inner = token.dropFirst().dropLast().trimmingCharacters(in: .whitespaces)
-        guard !inner.isEmpty else { return (token, .real) }
-        return (inner, kind)
-    }
 }

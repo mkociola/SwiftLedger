@@ -342,10 +342,47 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     @Test
     func `two postings differing only in kind are not equal`() {
         let amount = usd(60)
-        #expect(
-            Posting(accountName: "Reserve:capital", amount: amount)
-                != Posting(accountName: "Reserve:capital", kind: .virtual, amount: amount),
+        let real = Posting(accountName: "Reserve:capital", amount: amount)
+        let virtual = Posting(accountName: "Reserve:capital", kind: .virtual, amount: amount)
+        #expect(real != virtual)
+        #expect(Set([real, virtual]).count == 2)
+    }
+
+    /// A real posting's name is written bare, so a name that is itself a
+    /// matched pair would be the line a virtual posting writes and would come
+    /// back from the next parse in the other balancing group: the real group
+    /// loses the leg, the entry no longer balances, and the whole file stops
+    /// loading over one account somebody named `(old)`. The name is the only
+    /// place to catch it.
+    @Test(arguments: ["(old)", "[Reserved]", "( spaced )"])
+    func `a real posting may not be named a matched pair of delimiters`(name: String) throws {
+        let date = try makeDate(2024, 1, 1)
+        #expect(throws: LedgerError.unwritableAccountName(name)) {
+            try Transaction(
+                date: date, description: "typed by a user",
+                postings: [
+                    Posting(accountName: name, amount: usd(5)),
+                    Posting(accountName: "Assets:Bank", amount: usd(-5)),
+                ],
+            )
+        }
+    }
+
+    /// Only a whole matched pair is refused. Delimiters anywhere else in a
+    /// name survive a round trip untouched, and a virtual posting may be named
+    /// anything at all: its own delimiters go on top.
+    @Test
+    func `delimiters that are not the whole name are still allowed`() throws {
+        let date = try makeDate(2024, 1, 1)
+        let transaction = try Transaction(
+            date: date, description: "typed by a user",
+            postings: [
+                Posting(accountName: "Assets:Car (old)", amount: usd(5)),
+                Posting(accountName: "Assets:Bank", amount: usd(-5)),
+                Posting(accountName: "(old)", kind: .virtual, amount: usd(1)),
+            ],
         )
+        #expect(transaction.postings.map(\.accountName) == ["Assets:Car (old)", "Assets:Bank", "(old)"])
     }
 
     @Test
@@ -3340,6 +3377,27 @@ private let mixedMarginRows = [
         #expect(ledger.balance(for: "Reserve:launch").map(\.quantity) == [300_000])
     }
 
+    /// The other half of the same reading, and the one that costs somebody
+    /// something: a journal that spelled an ordinary account `(Reserve:capital)`
+    /// loaded before, because both legs were real and netted to zero. The
+    /// parenthesised leg is out of the real group now, so the entry is $5
+    /// short and the file refuses to load. hledger reads such a file the same
+    /// way, which is why the reading wins over the compatibility. It is still
+    /// a change to a file that used to parse, and the README says so.
+    @Test(arguments: ["(Reserve:capital)", "[Envelope:Food]"])
+    func `an entry that balanced only through a literal delimited name now throws`(
+        account: String,
+    ) throws {
+        let text = """
+        2026-01-01 old file
+            \(account)   $5.00
+            Assets:Cash        $-5.00
+        """
+        #expect(throws: LedgerError.unbalancedTransaction(commodity: "$", imbalance: -5)) {
+            try JournalParser().parse(text)
+        }
+    }
+
     @Test
     func `hledger's mixed entry reads as three kinds of posting`() throws {
         let journal = try JournalParser().parse(envelopeJournal)
@@ -3503,6 +3561,10 @@ private let mixedMarginRows = [
 /// parenthesised posting — the rule hledger states and the one place ledger-cli
 /// would answer differently.
 @Suite("virtual posting elision") struct VirtualPostingElisionTests {
+    /// The parenthesised leg is what makes this a test rather than a reading:
+    /// the bracketed pair nets to zero and so would leave the answer alone
+    /// either way, but a remainder taken over the whole entry would hand
+    /// `Assets:Checking` the reserve's $5 as well and answer -65.
     @Test
     func `an elided real posting balances the real group alone`() throws {
         let text = """
@@ -3511,12 +3573,15 @@ private let mixedMarginRows = [
             Assets:Checking
             [Assets:Checking:Envelope]  $-25.00
             [Assets:Checking:Free]       $25.00
+            (Reserve:capital)             $5.00
         """
         let transaction = try #require(JournalParser().parse(text).transactions.first)
         #expect(transaction.postings[1].amount.quantity == -60)
         #expect(transaction.postings[1].amount.commodity == "$")
     }
 
+    /// Mirror of the above, and the parenthesised leg earns its place the same
+    /// way: over the whole entry the remainder would be 20, not 25.
     @Test
     func `an elided bracketed posting balances the bracketed group alone`() throws {
         let text = """
@@ -3525,6 +3590,7 @@ private let mixedMarginRows = [
             Assets:Checking             $-60.00
             [Assets:Checking:Envelope]  $-25.00
             [Assets:Checking:Free]
+            (Reserve:capital)             $5.00
         """
         let transaction = try #require(JournalParser().parse(text).transactions.first)
         #expect(transaction.postings[3].amount.quantity == 25)
@@ -3591,6 +3657,66 @@ private let mixedMarginRows = [
         let written = JournalSerializer().serialize(journal)
         #expect(!written.contains("USD"))
         #expect(written.contains("(Reserve:capital)"))
+    }
+
+    /// The change this commit makes to a file that already parsed: a written
+    /// `(…)` amount used to be part of the one remainder every elision was
+    /// computed from, so `Assets:Petty` came back -$5. The parenthesised leg is
+    /// in no group now, the real group is empty, and an empty group leaves
+    /// zero, in the entry's own commodity, which only the reserve wrote.
+    @Test
+    func `a written parenthesised amount does not feed a real elision`() throws {
+        let text = """
+        2026-01-07 note
+            Assets:Petty
+            (Reserve:capital)  $5.00
+        """
+        let transaction = try #require(JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.map(\.kind) == [.real, .virtual])
+        #expect(transaction.postings.map(\.amount.quantity) == [0, 5])
+        #expect(transaction.postings[0].amount.commodity == "$")
+    }
+
+    /// In an entry written in one commodity, "the entry's commodity" is not
+    /// ambiguous. In one written in two it is the first amount *in file
+    /// order*, whichever group wrote it. Pinned here so that a reordering
+    /// changing the answer is a decision somebody made and not a surprise.
+    @Test
+    func `an elided parenthesised posting takes the first commodity in file order`() throws {
+        let text = """
+        2026-01-01 mixed
+            Assets:Savings      10 EUR
+            Assets:Checking    -10 EUR
+            [Envelope:One]       $5.00
+            [Envelope:Two]      $-5.00
+            (Reserve:capital)
+        """
+        let reserve = try #require(JournalParser().parse(text).transactions.first?.postings.last)
+        #expect(reserve.amount.quantity == 0)
+        #expect(reserve.amount.commodity == "EUR")
+    }
+
+    /// The commodity a price is written in never wins: the zero is taken from
+    /// what the first posting *moved*, not from what it cost. So a share
+    /// purchase hands an elided parenthesised leg `AAPL`, and that is the
+    /// commodity a rebuild writes into the file.
+    @Test
+    func `an elided parenthesised posting takes the moved commodity, not the priced one`() throws {
+        let text = """
+        2026-01-01 shares
+            Assets:Brokerage   10 AAPL @ $150.00
+            Assets:Cash       $-1,500.00
+            (Reserve:units)
+        """
+        var journal = try JournalParser().parse(text)
+        let entry = try #require(journal.transactions.first)
+        let reserve = try #require(entry.postings.last)
+        #expect(reserve.amount.quantity == 0)
+        #expect(reserve.amount.commodity == "AAPL")
+        #expect(!reserve.amount.commodityIsPrefix)
+
+        try renaming(entry, to: "shares and a reserve", in: &journal)
+        #expect(JournalSerializer().serialize(journal).contains("0 AAPL"))
     }
 
     @Test
