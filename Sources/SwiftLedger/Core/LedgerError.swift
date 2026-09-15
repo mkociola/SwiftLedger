@@ -13,6 +13,18 @@ public enum LedgerError: Error, Sendable, Equatable {
     // MARK: - Transaction
 
     case unbalancedTransaction(commodity: String, imbalance: Decimal)
+    /// The bracketed (balanced virtual) postings of a transaction do not sum
+    /// to zero among themselves. Real postings are checked separately and
+    /// report `unbalancedTransaction`; parenthesised postings are never
+    /// checked at all.
+    case unbalancedBracketedPostings(commodity: String, imbalance: Decimal)
+    /// A real posting is named a matched pair of parentheses or brackets
+    /// (`(old)`, `[Reserved]`). A real posting's name is written bare, so the
+    /// line would be the line a virtual posting writes and the next parse
+    /// would read the name back as virtual, leaving the real group short and
+    /// the whole file unloadable. Virtual and balanced virtual postings are
+    /// unaffected: their delimiters are added on top of whatever the name is.
+    case unwritableAccountName(String)
 
     // MARK: - Commodity
 
@@ -38,6 +50,11 @@ extension LedgerError: LocalizedError {
             "Cannot resolve elided amount: remaining postings span multiple commodities"
         case let .unbalancedTransaction(commodity, imbalance):
             "Transaction is unbalanced in \(commodity): off by \(imbalance)"
+        case let .unbalancedBracketedPostings(commodity, imbalance):
+            "Balanced virtual postings are off by \(imbalance) in \(commodity)"
+        case let .unwritableAccountName(name):
+            "Account name '\(name)' cannot be written: a real posting's name may not be "
+                + "a matched pair of parentheses or brackets"
         case let .commodityMismatch(first, second):
             "Commodity mismatch: '\(first)' vs '\(second)'"
         case let .storeError(msg):

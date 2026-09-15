@@ -3,12 +3,18 @@ import Foundation
 /// An immutable, balanced journal transaction.
 ///
 /// A transaction is a dated financial event recorded as a list of postings.
-/// The sum of all posting amounts must be zero for each commodity present,
-/// and that invariant is enforced at construction time. It is the only rule
+/// The real postings must sum to zero for each commodity present, and so must
+/// the bracketed (balanced virtual) ones among themselves; a parenthesised
+/// posting is exempt from both, which is the whole point of the parentheses.
+/// Those invariants are enforced at construction time. They are the only rule
 /// on how many postings there may be: none at all sums to zero, so a dated
 /// line with nothing but a description is a transaction, and so is a single
 /// posting of zero. Both are what ledger and hledger accept, and a bare dated
 /// line is a common way to keep a note in a journal.
+///
+/// `Posting.kind` is what tells the three apart, and it takes part in
+/// `Posting ==`: two postings that differ only in their delimiters are not the
+/// same posting.
 ///
 /// A posting that carries a price balances at that price rather than at face
 /// value (`Posting.balancingAmount`), which is what lets a two-commodity trade
@@ -17,7 +23,10 @@ import Foundation
 /// this — they are preserved, never checked.
 ///
 /// Use `JournalParser` to build transactions from plain-text `.ledger` files,
-/// which also resolves elided amounts before constructing `Transaction` objects.
+/// which also resolves elided amounts before constructing `Transaction`
+/// objects. It follows hledger where hledger and ledger-cli differ: an elided
+/// `(account)` posting is in no balancing group, so it reads as zero rather
+/// than absorbing what the real postings leave over.
 /// A transaction that comes back from the parser also carries the lines it was
 /// read from, in `sourceText`, so that leaving it alone leaves the file alone.
 public struct Transaction: Identifiable, Sendable, Codable, Hashable {
@@ -70,12 +79,17 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     /// Creates a validated transaction.
     ///
     /// Any number of postings is allowed, none included, as long as every
-    /// commodity present nets to zero. A lone posting of zero therefore
-    /// builds; a lone posting of anything else does not, and says which
-    /// commodity it is off in rather than counting postings at the caller.
+    /// commodity present nets to zero in each balancing group. A lone posting
+    /// of zero therefore builds; a lone posting of anything else does not, and
+    /// says which commodity it is off in rather than counting postings at the
+    /// caller.
     ///
-    /// - Throws: `LedgerError.unbalancedTransaction` if postings do not sum to zero
-    ///   for any commodity.
+    /// - Throws: `LedgerError.unbalancedTransaction` if the real postings do
+    ///   not sum to zero for any commodity,
+    ///   `LedgerError.unbalancedBracketedPostings` if the balanced virtual ones
+    ///   do not sum to zero among themselves, or
+    ///   `LedgerError.unwritableAccountName` if a real posting is named a
+    ///   matched pair of parentheses or brackets.
     public init(
         id: UUID = UUID(),
         date: JournalDate,
@@ -87,6 +101,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         comment: String? = nil,
         leadingComments: [String] = [],
     ) throws {
+        try Self.validateAccountNames(postings)
         try Self.validateBalance(postings)
         self.id = id
         self.date = date
@@ -165,14 +180,52 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
 
     // MARK: - Private
 
+    /// Refuses a real posting a journal would read back as a virtual one.
+    ///
+    /// `(old)` is a legal `String` and an illegal account name: a real
+    /// posting's name is written bare, so the line `JournalSerializer`
+    /// produces for it is the line a virtual posting writes, and the next
+    /// parse puts the amount in the wrong balancing group, so the file
+    /// SwiftLedger itself has just written no longer loads, with an error that
+    /// names a commodity and not the account. Refusing the one entry is what
+    /// keeps the whole file readable, and a name is the only place this can be
+    /// caught, since nothing about the posting is wrong once it is written.
+    ///
+    /// The parser can never trip this: a name it read out of a matched pair is
+    /// not a real posting's.
+    private static func validateAccountNames(_ postings: [Posting]) throws {
+        for posting in postings where posting.kind == .real {
+            guard Posting.Kind.split(posting.accountName).kind == .real else {
+                throw LedgerError.unwritableAccountName(posting.accountName)
+            }
+        }
+    }
+
+    /// Checks the two balancing groups, real postings first, so that the
+    /// message an ordinary mistake produces is the ordinary one.
     private static func validateBalance(_ postings: [Posting]) throws {
+        try validate(postings.filter { $0.kind == .real }) {
+            LedgerError.unbalancedTransaction(commodity: $0, imbalance: $1)
+        }
+        try validate(postings.filter { $0.kind == .balancedVirtual }) {
+            LedgerError.unbalancedBracketedPostings(commodity: $0, imbalance: $1)
+        }
+    }
+
+    /// Throws `error` for the first commodity in `group` that does not net to
+    /// zero. `.virtual` postings never reach here: they take part in no
+    /// balance, which is the whole point of the parentheses.
+    private static func validate(
+        _ group: [Posting],
+        error: (String, Decimal) -> LedgerError,
+    ) throws {
         var sums: [String: Decimal] = [:]
-        for posting in postings {
+        for posting in group {
             let balancing = posting.balancingAmount
             sums[balancing.commodity, default: .zero] += balancing.quantity
         }
         for (commodity, sum) in sums where sum != .zero {
-            throw LedgerError.unbalancedTransaction(commodity: commodity, imbalance: sum)
+            throw error(commodity, sum)
         }
     }
 }

@@ -8,7 +8,7 @@ A plain-text accounting library for Swift, implementing the [plain-text accounti
 
 SwiftLedger parses `.ledger` / `.journal` files, enforces double-entry balance rules, and provides balance queries, reports, and persistence — designed to be embedded in iOS and macOS apps.
 
-> **Compatibility:** SwiftLedger supports a useful subset of the ledger-cli file format. Anything outside that subset — `include`, `P`, `commodity`, `alias`, `D`, `year`, indented sub-directives — is preserved verbatim rather than interpreted, so saving a journal never rewrites what SwiftLedger cannot read. Within the supported subset, elided posting amounts are written back as explicit values and amount formatting is normalised.
+> **Compatibility:** SwiftLedger supports a useful subset of the ledger-cli file format. Anything outside that subset — `include`, `P`, `commodity`, `alias`, `D`, `year`, indented sub-directives — is preserved verbatim rather than interpreted, so saving a journal never rewrites what SwiftLedger cannot read. Virtual postings are understood: `(account)` and `[account]` postings are parsed, kept apart in balancing, and written back with their delimiters. Within the supported subset, elided posting amounts are written back as explicit values and amount formatting is normalised. Where ledger-cli and hledger differ on how an elided amount is inferred, hledger is the reference: an elided `(account)` posting has no group to balance against and reads as zero, rather than absorbing the real remainder. One kind of journal changes meaning on this version: an account name a file wrapped in `(…)` or `[…]` used to be a literal name and is now a virtual-posting marker, so an entry that balanced only because such a posting counted as a real one is now reported unbalanced and the file does not load. hledger reads those files the same way, which is why the reading wins over the compatibility. For the same reason a real posting built in code may not be *named* a matched pair: `Transaction.init` throws `LedgerError.unwritableAccountName` rather than write a line the parser would read back as virtual.
 
 ## Requirements
 
@@ -90,6 +90,8 @@ account Income:Salary
 ; Transactions: DATE [=AUXDATE] [* | !] [(CODE)] DESCRIPTION [  ; comment]
 ;     [* | !] ACCOUNT  AMOUNT [  ; comment]
 ;     [* | !] ACCOUNT  (elided — computed automatically)
+;     [* | !] (ACCOUNT)  AMOUNT   ; virtual: takes no part in balancing
+;     [* | !] [ACCOUNT]  AMOUNT   ; balanced virtual: balances among brackets
 
 2024-01-15 * Salary received
     Assets:Checking        $3200.00
@@ -103,6 +105,13 @@ account Income:Salary
     ; an indented full-line comment is commentary, not a posting
     Assets:Checking        800 USD
     Income:Freelance
+
+2024-03-01 Groceries, and move the envelope
+    Expenses:Food:Groceries             $60.00
+    Assets:Checking
+    [Assets:Checking:Envelope:Food]     -$60.00
+    [Assets:Checking:Available]         $60.00
+    (Reserve:Capital)                   $250.00
 ```
 
 Supported:
@@ -110,7 +119,13 @@ Supported:
 - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `£500.00`
 - Status: `*` cleared, `!` pending
 - Codes: `(REF-042)`
-- One elided posting per transaction (amount computed to balance)
+- One elided posting per balancing group — the real postings and the bracketed
+  ones each infer at most one amount (computed to balance that group)
+- Virtual postings: `(account)` takes no part in balancing, `[account]` balances
+  among the bracketed postings alone; the name is stored bare (`Posting.kind`
+  says which it is) and written back delimited. `Posting ==` includes the kind,
+  so a real posting never compares equal to a virtual one of the same account,
+  and a real posting may not itself be named `(…)` or `[…]`
 - `account NAME` directives (with optional type), optionally followed by `  ; comment`
 - Inline comments after two or more spaces + `;`
 - Indented full-line comments inside a transaction, kept verbatim on the

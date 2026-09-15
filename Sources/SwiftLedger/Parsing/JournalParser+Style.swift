@@ -32,14 +32,21 @@ extension JournalParser {
         style.declare(sample, commodity: amount.commodity)
     }
 
-    /// The column `line`'s amount field starts at: past the account name, past
-    /// the run of two or more spaces that ends it.
+    /// The column `line`'s amount field starts at: past the account token,
+    /// past the run of two or more spaces that ends it.
+    ///
+    /// `accountToken` must be the account exactly as the line writes it,
+    /// delimiters included: searching for the bare name of `(Reserve:capital)`
+    /// lands inside the parentheses, where the next character is `)` rather
+    /// than the gap, and this would answer `nil` for every virtual posting —
+    /// an envelope journal would teach the collector nothing and its margin
+    /// would silently become the library default.
     ///
     /// Measured on the original line, indentation included, because that is
     /// what a column is. Characters, not display width — a tab counts once,
     /// which is what the serializer will write against anyway.
-    static func amountColumn(in line: String, after accountName: String) -> Int? {
-        guard !accountName.isEmpty, let account = line.range(of: accountName) else { return nil }
+    static func amountColumn(in line: String, after accountToken: String) -> Int? {
+        guard !accountToken.isEmpty, let account = line.range(of: accountToken) else { return nil }
         var index = account.upperBound
         var spaces = 0
         while index < line.endIndex, line[index] == " " || line[index] == "\t" {

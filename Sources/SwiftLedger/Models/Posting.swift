@@ -56,9 +56,41 @@ public enum PostingPrice: Sendable, Codable, Hashable {
 ///
 /// Positive `amount.quantity` = inflow to the account (debit in traditional terms).
 /// Negative `amount.quantity` = outflow from the account (credit).
+///
+/// A posting is real unless the journal wrapped its account name in `(…)` or
+/// `[…]`, which ledger and hledger read as virtual-posting markers — see
+/// `Kind`. The delimiters are not part of the name.
 public struct Posting: Sendable, Codable, Hashable {
-    /// Full account name (e.g. `"Expenses:Food:Groceries"`).
+    /// Whether this posting takes part in its transaction's balance, and how
+    /// the journal writes its account name.
+    ///
+    /// The raw values are the JSON spelling; a posting encoded before this
+    /// existed decodes as `.real`.
+    public enum Kind: String, Sendable, Codable, Hashable {
+        /// An ordinary posting, written bare. Real postings must sum to zero
+        /// per commodity.
+        case real
+        /// Written `(account)`: money moved outside the double-entry books,
+        /// taking no part in any balance and never checked.
+        case virtual
+        /// Written `[account]`: exempt from balancing against the real
+        /// postings, but the bracketed postings of one transaction must sum to
+        /// zero per commodity among themselves.
+        case balancedVirtual
+    }
+
+    /// Full account name (e.g. `"Expenses:Food:Groceries"`), always bare: a
+    /// virtual posting's `(…)` / `[…]` delimiters are stripped by the parser
+    /// and written back by the serializer, so every query matches one spelling.
     public let accountName: String
+    /// Whether the posting is real, virtual, or balanced virtual.
+    ///
+    /// `Hashable`/`Equatable` are synthesized, so this takes part in
+    /// `Posting ==`. That is deliberate: a real posting is not the same posting
+    /// as a bracketed one, and callers that compare postings by content — an
+    /// edit re-anchoring itself after a reparse, a conflict merge weighing two
+    /// versions of a file — have to see the difference.
+    public let kind: Kind
     /// The signed amount. Always present in the stored model; elision is
     /// resolved during parsing before `Posting` objects are created.
     public let amount: Amount
@@ -105,8 +137,20 @@ public struct Posting: Sendable, Codable, Hashable {
         price?.cost(of: amount.quantity) ?? amount
     }
 
+    /// The account name written the way a journal writes it for this kind of
+    /// posting: bare for a real one, `(name)` for a virtual one, `[name]` for a
+    /// balanced virtual one.
+    ///
+    /// This is the spelling `JournalSerializer` puts back on the line, and the
+    /// one a register or an account picker should show, so that a reader can
+    /// tell an envelope leg from an ordinary one at a glance.
+    public var delimitedAccountName: String {
+        kind.delimited(accountName)
+    }
+
     public init(
         accountName: String,
+        kind: Kind = .real,
         amount: Amount,
         price: PostingPrice? = nil,
         balanceAssertion: Amount? = nil,
@@ -115,6 +159,7 @@ public struct Posting: Sendable, Codable, Hashable {
         trailingComments: [String] = [],
     ) {
         self.accountName = accountName
+        self.kind = kind
         self.amount = amount
         self.price = price
         self.balanceAssertion = balanceAssertion
@@ -123,17 +168,70 @@ public struct Posting: Sendable, Codable, Hashable {
         self.trailingComments = trailingComments
     }
 
-    /// Decodes a posting, treating a missing `trailingComments`, `price` or
-    /// `balanceAssertion` key as absent so that JSON written before those keys
-    /// existed still decodes.
+    /// Decodes a posting, treating a missing `kind`, `trailingComments`,
+    /// `price` or `balanceAssertion` key as absent so that JSON written before
+    /// those keys existed still decodes — a posting with no `kind` is real,
+    /// which is what every posting written before virtual ones were modelled
+    /// was.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         accountName = try container.decode(String.self, forKey: .accountName)
+        kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .real
         amount = try container.decode(Amount.self, forKey: .amount)
         price = try container.decodeIfPresent(PostingPrice.self, forKey: .price)
         balanceAssertion = try container.decodeIfPresent(Amount.self, forKey: .balanceAssertion)
         status = try container.decodeIfPresent(ClearingStatus.self, forKey: .status)
         comment = try container.decodeIfPresent(String.self, forKey: .comment)
         trailingComments = try container.decodeIfPresent([String].self, forKey: .trailingComments) ?? []
+    }
+}
+
+// MARK: - Delimiters
+
+public extension Posting.Kind {
+    /// `name` written the way a journal writes it for this kind.
+    func delimited(_ name: String) -> String {
+        switch self {
+        case .real: name
+        case .virtual: "(\(name))"
+        case .balancedVirtual: "[\(name)]"
+        }
+    }
+}
+
+extension Posting.Kind {
+    /// The bare name and the kind a written account token states: `(name)` is
+    /// virtual, `[name]` balanced virtual, anything else real and taken
+    /// verbatim.
+    ///
+    /// Both ends must match and there must be something between them, so an
+    /// unmatched bracket (`[Reserve:capital`) is part of the name, as are
+    /// parentheses in the middle of one (`Assets:Car (old)`) and an empty pair
+    /// (`()`). Only the outermost pair is stripped: `((A))` is the virtual
+    /// account named `(A)`. Space just inside the delimiters is padding rather
+    /// than name, so `( Reserve:capital )` is the same account as
+    /// `(Reserve:capital)` and is written back without the padding.
+    ///
+    /// The parser reads every posting line through this, on the token past the
+    /// status marker and the two-space gap. `Transaction` refuses a real
+    /// posting whose name this does not answer `.real` for, because such a
+    /// name is written bare and would come back from the next parse virtual.
+    static func split(_ token: String) -> (name: String, kind: Posting.Kind) {
+        guard token.count >= 3,
+              let open = token.first, let close = token.last,
+              let kind = Posting.Kind(open: open, close: close) else { return (token, .real) }
+        let inner = token.dropFirst().dropLast().trimmingCharacters(in: .whitespaces)
+        guard !inner.isEmpty else { return (token, .real) }
+        return (inner, kind)
+    }
+
+    /// The kind a pair of delimiters states, or `nil` when they are not a
+    /// matched virtual-posting pair.
+    init?(open: Character, close: Character) {
+        switch (open, close) {
+        case ("(", ")"): self = .virtual
+        case ("[", "]"): self = .balancedVirtual
+        default: return nil
+        }
     }
 }
