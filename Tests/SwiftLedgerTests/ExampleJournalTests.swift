@@ -72,6 +72,42 @@ import Testing
         #expect(entry.postings.map(\.amount.quantity) == [60, -60, -60, 60, 250])
     }
 
+    /// The opening entry for the accounts abroad is the hledger idiom the
+    /// parser used to reject: two commodities and one elided line to absorb
+    /// both. It reads as one posting per commodity, and a commodity the
+    /// written postings already net to zero gets no posting at all.
+    @Test
+    func `the example shows an elided posting absorbing several commodities`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let byPayee = Dictionary(
+            journal.transactions.map { ($0.description, $0) },
+            uniquingKeysWith: { first, _ in first },
+        )
+
+        let opening = try #require(byPayee["Opening balances for the accounts abroad"])
+        #expect(opening.postings.map(\.accountName) == [
+            "Assets:EuroAccount", "Assets:PoundAccount", "Equity:Opening", "Equity:Opening",
+        ])
+        #expect(opening.postings.map(\.amount) == [
+            Amount(quantity: 1500, commodity: "€", commodityIsPrefix: true),
+            Amount(quantity: 400, commodity: "£", commodityIsPrefix: true),
+            Amount(quantity: -1500, commodity: "€", commodityIsPrefix: true),
+            Amount(quantity: -400, commodity: "£", commodityIsPrefix: true),
+        ])
+
+        let abroad = try #require(byPayee["Lunch and a train abroad"])
+        #expect(abroad.postings.count == 4)
+        #expect(abroad.postings.last?.accountName == "Assets:PoundAccount")
+        #expect(abroad.postings.last?.amount == Amount(quantity: -25, commodity: "£", commodityIsPrefix: true))
+
+        let ledger = try Ledger(journal: journal)
+        #expect(ledger.balance(for: "Equity:Opening") == [
+            Amount(quantity: -7500, commodity: "$", commodityIsPrefix: true),
+            Amount(quantity: -400, commodity: "£", commodityIsPrefix: true),
+            Amount(quantity: -1500, commodity: "€", commodityIsPrefix: true),
+        ])
+    }
+
     /// The example is also a style sample: every entry a reader adds to it,
     /// and every entry SwiftLedger rebuilds in it, is laid out from what the
     /// file already shows. An entry that lines its amounts up somewhere new,

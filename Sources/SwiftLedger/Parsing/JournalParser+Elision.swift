@@ -11,6 +11,15 @@ extension JournalParser {
     /// among the bracketed ones. The two groups never see each other, so an
     /// elided cash leg is not quietly paid for by an envelope.
     ///
+    /// What the elided posting leaves over is a remainder per commodity, not a
+    /// single amount: the standard opening-balances entry writes a dollar leg
+    /// and a pound leg and lets one `equity:opening balances` line absorb both.
+    /// Since `Posting` carries one amount, such a line expands here into one
+    /// posting per commodity with something left to absorb, in the order the
+    /// commodities first appear, sitting where the elided line was. That is
+    /// what ledger and hledger infer, and it is how hledger prints the entry
+    /// back.
+    ///
     /// A parenthesised posting takes part in no balance, so there is nothing to
     /// infer its amount from and any number of them may elide one: each reads
     /// as zero, exactly as if the user had written it, which is also how an
@@ -21,42 +30,65 @@ extension JournalParser {
     /// A transaction with no postings has nothing to resolve and comes back
     /// empty.
     func resolveElisions(_ rawPostings: [RawPosting]) throws -> [Posting] {
-        var fills: [Posting.Kind: Amount] = [:]
+        var fills: [Posting.Kind: [Amount]] = [:]
         for kind in [Posting.Kind.real, .balancedVirtual] {
             let group = rawPostings.filter { $0.kind == kind }
             let elided = group.count(where: { $0.amount == nil })
             guard elided <= 1 else { throw LedgerError.multipleElidedPostings }
-            if elided == 1 { fills[kind] = try remainder(of: group, in: rawPostings) }
+            if elided == 1 { fills[kind] = try remainders(of: group, in: rawPostings) }
         }
 
-        return try rawPostings.map { raw in
-            if let amount = raw.amount { return Self.posting(from: raw, amount: amount) }
+        return try rawPostings.flatMap { raw -> [Posting] in
+            if let amount = raw.amount { return [Self.posting(from: raw, amount: amount)] }
             if raw.kind == .virtual {
-                return try Self.posting(from: raw, amount: zeroAmount(matching: rawPostings))
+                return try [Self.posting(from: raw, amount: zeroAmount(matching: rawPostings))]
             }
-            guard let fill = fills[raw.kind] else { throw LedgerError.cannotResolveElision }
-            return Self.posting(from: raw, amount: fill)
+            guard let fill = fills[raw.kind], !fill.isEmpty else {
+                throw LedgerError.cannotResolveElision
+            }
+            return Self.postings(from: raw, amounts: fill)
         }
     }
 
     /// What the one posting of a group that elided its amount takes: minus the
-    /// sum of what the rest of its own group wrote. A priced posting
-    /// contributes what it cost, not what it moved, so that a share purchase
-    /// can balance an elided cash leg. A group in which nobody wrote an amount
-    /// leaves zero to absorb, in the first commodity the entry writes (see
-    /// `zeroAmount(matching:)`, which is where file order decides).
-    func remainder(of group: [RawPosting], in transaction: [RawPosting]) throws -> Amount {
+    /// sum of what the rest of its own group wrote, one amount per commodity
+    /// that does not already net to zero, in order of first appearance. A
+    /// priced posting contributes what it cost, not what it moved, so that a
+    /// share purchase can balance an elided cash leg. A group in which nobody
+    /// wrote an amount leaves zero to absorb, in the first commodity the entry
+    /// writes (see `zeroAmount(matching:)`, which is where file order decides).
+    ///
+    /// A group whose written amounts already balance leaves one zero rather
+    /// than nothing, in the first commodity written, so that the line the user
+    /// wrote is still a posting. Only commodities past the first are dropped
+    /// when they net out: an entry does not need a `0` leg per commodity to
+    /// say what it already said.
+    func remainders(of group: [RawPosting], in transaction: [RawPosting]) throws -> [Amount] {
         let written = group.compactMap { raw in
             raw.amount.map { raw.price?.cost(of: $0.quantity) ?? $0 }
         }
-        guard let first = written.first else { return try zeroAmount(matching: transaction) }
-        guard Set(written.map(\.commodity)).count == 1 else {
-            throw LedgerError.cannotResolveElision
+        guard let first = written.first else { return try [zeroAmount(matching: transaction)] }
+
+        var order: [String] = []
+        var sums: [String: (quantity: Decimal, isPrefix: Bool)] = [:]
+        for amount in written {
+            if sums[amount.commodity] == nil {
+                order.append(amount.commodity)
+                sums[amount.commodity] = (.zero, amount.commodityIsPrefix)
+            }
+            sums[amount.commodity]?.quantity += amount.quantity
         }
-        let sum = written.reduce(Decimal.zero) { $0 + $1.quantity }
-        return Amount(
-            quantity: -sum, commodity: first.commodity, commodityIsPrefix: first.commodityIsPrefix,
-        )
+
+        let remainders = order.compactMap { commodity -> Amount? in
+            guard let sum = sums[commodity], sum.quantity != .zero else { return nil }
+            return Amount(
+                quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix,
+            )
+        }
+        guard remainders.isEmpty else { return remainders }
+        return [Amount(
+            quantity: .zero, commodity: first.commodity, commodityIsPrefix: first.commodityIsPrefix,
+        )]
     }
 
     /// Zero in the first commodity the entry writes, **in file order**: the
@@ -94,5 +126,35 @@ extension JournalParser {
             comment: raw.comment,
             trailingComments: raw.trailingComments,
         )
+    }
+
+    /// One posting per amount, sharing the account, kind and status the elided
+    /// line wrote, with the fields that belong to the line rather than to an
+    /// amount handed to one of them.
+    ///
+    /// Which one is a question of where the reader would look for it. The
+    /// inline comment sat at the end of the first line and the full-line
+    /// comments sat under the last, so they go there. A balance assertion
+    /// names a commodity and belongs to the posting in that commodity, falling
+    /// back to the first when it names one the line did not absorb, since the
+    /// assertion is preserved and never checked either way. A price on a line
+    /// that wrote no amount prices nothing, and stays on the first posting,
+    /// which is where it was before an elision could expand.
+    static func postings(from raw: RawPosting, amounts: [Amount]) -> [Posting] {
+        guard amounts.count > 1 else { return amounts.map { posting(from: raw, amount: $0) } }
+        let assertionIndex = raw.balanceAssertion
+            .flatMap { assertion in amounts.firstIndex { $0.commodity == assertion.commodity } } ?? 0
+        return amounts.enumerated().map { index, amount in
+            Posting(
+                accountName: raw.accountName,
+                kind: raw.kind,
+                amount: amount,
+                price: index == 0 ? raw.price : nil,
+                balanceAssertion: index == assertionIndex ? raw.balanceAssertion : nil,
+                status: raw.status,
+                comment: index == 0 ? raw.comment : nil,
+                trailingComments: index == amounts.count - 1 ? raw.trailingComments : [],
+            )
+        }
     }
 }

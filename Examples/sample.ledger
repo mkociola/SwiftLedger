@@ -7,6 +7,8 @@ account Assets:Checking
 account Assets:Savings
 account Assets:Brokerage
 account Assets:PettyCash
+account Assets:EuroAccount
+account Assets:PoundAccount
 account Liabilities:CreditCard
 account Equity:Opening
 account Income:Salary
@@ -122,3 +124,22 @@ account Expenses:Utilities
     [Assets:Checking:Envelope:Food]     -$60.00
     [Assets:Checking:Available]         $60.00
     (Reserve:Capital)                   $250.00
+
+; ── Several commodities ─────────────────────────────────────────────────────
+; Each commodity balances on its own, and one elided posting absorbs the
+; remainder of every commodity in the entry, which is how ledger and hledger
+; read it. The equity line below is read as two postings, -€1500.00 and
+; -£400.00, though the file keeps the one line as written.
+
+2024-03-05 * Opening balances for the accounts abroad
+    Assets:EuroAccount     €1500.00
+    Assets:PoundAccount    £400.00
+    Equity:Opening
+
+; A commodity the written postings already net to zero leaves nothing to
+; absorb, so the elided line gets no posting in it: here only -£25.00.
+2024-03-09 Lunch and a train abroad
+    Expenses:Transport     €30.00
+    Expenses:Food:Restaurants  £25.00
+    Assets:EuroAccount     -€30.00
+    Assets:PoundAccount
