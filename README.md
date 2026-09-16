@@ -8,7 +8,7 @@ A plain-text accounting library for Swift, implementing the [plain-text accounti
 
 SwiftLedger parses `.ledger` / `.journal` files, enforces double-entry balance rules, and provides balance queries, reports, and persistence — designed to be embedded in iOS and macOS apps.
 
-> **Compatibility:** SwiftLedger supports a useful subset of the ledger-cli file format. Anything outside that subset — `include`, `P`, `commodity`, `alias`, `D`, `year`, indented sub-directives — is preserved verbatim rather than interpreted, so saving a journal never rewrites what SwiftLedger cannot read. Virtual postings are understood: `(account)` and `[account]` postings are parsed, kept apart in balancing, and written back with their delimiters. Within the supported subset, elided posting amounts are written back as explicit values and amount formatting is normalised. An elided amount takes the remainder of every commodity in its balancing group, as it does in both tools, so a rebuilt entry that elided two commodities on one line writes that account on one line per commodity. Where ledger-cli and hledger differ on how an elided amount is inferred, hledger is the reference: an elided `(account)` posting has no group to balance against and reads as zero, rather than absorbing the real remainder. One kind of journal changes meaning on this version: an account name a file wrapped in `(…)` or `[…]` used to be a literal name and is now a virtual-posting marker, so an entry that balanced only because such a posting counted as a real one is now reported unbalanced and the file does not load. hledger reads those files the same way, which is why the reading wins over the compatibility. For the same reason a real posting built in code may not be *named* a matched pair: `Transaction.init` throws `LedgerError.unwritableAccountName` rather than write a line the parser would read back as virtual.
+> **Compatibility:** SwiftLedger supports a useful subset of the ledger-cli file format. Anything outside that subset — `include`, `P`, `commodity`, `alias`, `D`, `year`, indented sub-directives — is preserved verbatim rather than interpreted, so saving a journal never rewrites what SwiftLedger cannot read. A `comment` … `end comment` block is skipped and preserved the same way: nothing written inside one is read as data. Virtual postings are understood: `(account)` and `[account]` postings are parsed, kept apart in balancing, and written back with their delimiters. Within the supported subset, elided posting amounts are written back as explicit values and amount formatting is normalised. An elided amount takes the remainder of every commodity in its balancing group, as it does in both tools, so a rebuilt entry that elided two commodities on one line writes that account on one line per commodity. Where ledger-cli and hledger differ on how an elided amount is inferred, hledger is the reference: an elided `(account)` posting has no group to balance against and reads as zero, rather than absorbing the real remainder. One kind of journal changes meaning on this version: an account name a file wrapped in `(…)` or `[…]` used to be a literal name and is now a virtual-posting marker, so an entry that balanced only because such a posting counted as a real one is now reported unbalanced and the file does not load. hledger reads those files the same way, which is why the reading wins over the compatibility. For the same reason a real posting built in code may not be *named* a matched pair: `Transaction.init` throws `LedgerError.unwritableAccountName` rather than write a line the parser would read back as virtual.
 
 ## Requirements
 
@@ -81,7 +81,7 @@ See [`Examples/sample.ledger`](Examples/sample.ledger) for a complete journal fi
 ## Plain-text format
 
 ```ledger
-; Full-line comments start with ; or #
+; Full-line comments start with ; # * % or |
 
 ; Optional account declarations
 account Assets:Checking
@@ -130,10 +130,16 @@ Supported:
   so a real posting never compares equal to a virtual one of the same account,
   and a real posting may not itself be named `(…)` or `[…]`
 - `account NAME` directives (with optional type), optionally followed by `  ; comment`
+- Full-line comments marked `;`, `#`, `*`, `%` or `|`
 - Inline comments after two or more spaces + `;`
 - Indented full-line comments inside a transaction, kept verbatim on the
   posting above them (`Posting.trailingComments`) or on the transaction when
   they precede the first posting (`Transaction.leadingComments`)
+- Block comments: a `comment` line at column 0 opens one, the next
+  `end comment` closes it (end of file does too). Every line between them,
+  keywords included, is kept verbatim as a `JournalItem.directive` and none of
+  it is interpreted, so a transaction written inside a block is text rather
+  than data
 
 ### Unsupported directives
 

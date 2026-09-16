@@ -17,7 +17,12 @@ import Foundation
 ///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
 ///   balancing; assertions are preserved but never checked.
 /// - Status: `*` = cleared, `!` = pending
-/// - Comments: `;` or `#` at line start; inline `  ;` after 2+ spaces
+/// - Comments: `;`, `#`, `*`, `%` or `|` at line start; inline `  ;` after
+///   2+ spaces
+/// - A `comment` line at column 0 opens a block comment running to the next
+///   `end comment`, or to the end of the file. Everything between the two,
+///   the keywords included, is kept verbatim and none of it is interpreted:
+///   a transaction written there is text, not data.
 /// - `account NAME` directives, with an optional inline comment
 /// - Virtual postings: `(ACCOUNT)` takes no part in balancing; `[ACCOUNT]` is
 ///   exempt from balancing against the real postings but the bracketed
@@ -80,30 +85,30 @@ public struct JournalParser {
                 continue
             }
 
+            // A `comment` … `end comment` block: text, not data. Nothing inside
+            // it is interpreted, not even the display style a commented-out `D`
+            // line would otherwise teach the style collector.
+            if isCommentBlockStart(line) {
+                let block = parseCommentBlock(lines: lines, from: index)
+                items.append(contentsOf: block)
+                index += block.count // one item per line consumed
+                continue
+            }
+
             // Full-line comment — stored verbatim so indentation survives a round-trip.
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix(";") || trimmed.hasPrefix("#") || trimmed.hasPrefix("*") && !startsWithDate(trimmed) {
+            if isFullLineComment(trimmed) {
                 items.append(.comment(line))
                 index += 1
                 continue
             }
 
-            // account directive, with its inline comment split off so the
-            // comment text never becomes part of the declared account name.
-            if trimmed.lowercased().hasPrefix("account ") {
-                let (mainPart, comment) = splitInlineComment(trimmed)
-                let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
-                if !name.isEmpty {
-                    let directive = AccountDirective(
-                        name: name,
-                        comment: comment?.trimmingCharacters(in: .whitespaces),
-                    )
-                    items.append(.accountDirective(directive))
-                    index += 1
-                    continue
-                }
-                // A nameless `account` line is not a directive we can model;
-                // fall through and keep it verbatim.
+            // account directive. A nameless `account` line is not one we can
+            // model, and falls through to be kept verbatim.
+            if let directive = parseAccountDirective(trimmed) {
+                items.append(.accountDirective(directive))
+                index += 1
+                continue
             }
 
             // Transaction header (starts with a date)
@@ -130,6 +135,24 @@ public struct JournalParser {
             commodityFormats: style.formats,
             amountAlignment: style.amountAlignment,
             postingIndent: style.postingIndent,
+        )
+    }
+
+    // MARK: - account directives
+
+    /// Reads an `account NAME` line, with its inline comment split off so the
+    /// comment text never becomes part of the declared account name.
+    ///
+    /// Returns `nil` when the line is not an `account` directive, or names no
+    /// account at all.
+    private func parseAccountDirective(_ trimmed: String) -> AccountDirective? {
+        guard trimmed.lowercased().hasPrefix("account ") else { return nil }
+        let (mainPart, comment) = splitInlineComment(trimmed)
+        let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return nil }
+        return AccountDirective(
+            name: name,
+            comment: comment?.trimmingCharacters(in: .whitespaces),
         )
     }
 

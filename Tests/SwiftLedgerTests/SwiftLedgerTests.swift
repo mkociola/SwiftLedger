@@ -1212,6 +1212,174 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     }
 }
 
+// MARK: - JournalParser: comment blocks
+
+@Suite("comment blocks") struct CommentBlockTests {
+    private static let oneDollar = Amount(quantity: 1, commodity: "$", commodityIsPrefix: true)
+
+    @Test
+    func `a transaction inside a comment block is text, not data`() throws {
+        let text = """
+        comment
+        scratch notes
+        2024-01-01 not a transaction
+            a  $1
+            b  $-1
+        end comment
+
+        2024-01-02 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(Ledger(journal: journal).balance(for: "a") == [Self.oneDollar])
+        #expect(journal.directives == [
+            "comment",
+            "scratch notes",
+            "2024-01-01 not a transaction",
+            "    a  $1",
+            "    b  $-1",
+            "end comment",
+        ])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `an unterminated block runs to the end of the file`() throws {
+        let text = """
+        comment
+        scratch notes
+        2024-01-02 swallowed
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.isEmpty)
+        #expect(journal.directives == text.components(separatedBy: "\n"))
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `trailing whitespace on either keyword still marks the block`() throws {
+        let text = "comment  \n"
+            + "2024-01-01 not a transaction\n"
+            + "end comment\t\n"
+            + "\n"
+            + "2024-01-02 real\n"
+            + "    a  $1\n"
+            + "    b  $-1"
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(journal.directives == ["comment  ", "2024-01-01 not a transaction", "end comment\t"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `a comment line with text after the keyword is a plain directive`() throws {
+        let text = """
+        comment notes
+        2024-01-02 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(journal.directives == ["comment notes"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `an indented keyword neither opens nor closes a block`() throws {
+        let indentedStart = """
+            comment
+        2024-01-02 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(indentedStart)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(journal.directives == ["    comment"])
+        #expect(JournalSerializer().serialize(journal) == indentedStart)
+
+        // …and inside a block the same indentation leaves `end comment` as
+        // content, so the transaction below it stays commented out.
+        let indentedEnd = """
+        comment
+          end comment
+        2024-01-02 not a transaction
+            a  $1
+            b  $-1
+        """
+        let blocked = try JournalParser().parse(indentedEnd)
+        #expect(blocked.transactions.isEmpty)
+        #expect(blocked.directives == indentedEnd.components(separatedBy: "\n"))
+    }
+
+    @Test
+    func `a block teaches the parser no styles and declares no accounts`() throws {
+        let text = """
+        comment
+        D $1,000.00
+        account Assets:Imaginary
+        end comment
+
+        2024-01-02 real
+            a  100.00 EUR
+            b  -100.00 EUR
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["$"] == nil)
+        #expect(journal.commodityFormats["EUR"] != nil)
+        #expect(journal.accountDirectives.isEmpty)
+        #expect(!Ledger(journal: journal).accounts.map(\.name).contains("Assets:Imaginary"))
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `blank lines inside a block survive a round-trip`() throws {
+        let text = """
+        comment
+
+        scratch notes
+
+        end comment
+
+        2024-01-02 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(Array(journal.items.prefix(5)) == [
+            .directive("comment"),
+            .blank,
+            .directive("scratch notes"),
+            .blank,
+            .directive("end comment"),
+        ])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `percent and pipe lines are comments, not directives`() throws {
+        let text = """
+        % a note in the hledger style
+        | another one
+        2024-01-02 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(Array(journal.items.prefix(2)) == [
+            .comment("% a note in the hledger style"),
+            .comment("| another one"),
+        ])
+        #expect(journal.directives.isEmpty)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+}
+
 // MARK: - Ledger
 
 @Suite("Ledger") struct LedgerTests {
