@@ -11,7 +11,8 @@ import Foundation
 /// - Full-line comments inside a transaction are written back verbatim, in
 ///   place, from `Transaction.leadingComments` and `Posting.trailingComments`.
 /// - Lines the parser does not model (`include`, `P`, `commodity`, `alias`,
-///   `D`, `year`, indented sub-directives, …) are written back verbatim.
+///   `D`, `year`, indented sub-directives, …) are written back verbatim, as
+///   are the lines of a block comment.
 ///
 /// The rules below describe the formatting applied to a transaction the caller
 /// built or changed — one with no source lines of its own:
@@ -81,7 +82,10 @@ public struct JournalSerializer {
     /// parser would read back as something other than a comment.
     private func isCommentLine(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
-        return trimmed.hasPrefix(";") || trimmed.hasPrefix("#") || trimmed.hasPrefix("*")
+        guard let first = trimmed.first else { return false }
+        // The parser's own list, so that every marker it reads as a comment is
+        // one this writes back untouched.
+        return JournalParser.fullLineCommentMarkers.contains(first)
     }
 
     /// Renders one full-line comment belonging to a transaction body.

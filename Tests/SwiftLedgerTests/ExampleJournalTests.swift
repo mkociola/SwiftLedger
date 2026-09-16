@@ -133,4 +133,35 @@ import Testing
         #expect(ledger.balance(for: "Assets:Brokerage").allSatisfy { $0.quantity == 0 })
         #expect(ledger.balance(for: "Assets:PettyCash").allSatisfy { $0.quantity == 0 })
     }
+
+    /// The comment block in the example parks a rent entry that must not be
+    /// booked. If it were, rent would be three months rather than two and the
+    /// block's lines would not come back as the directives the round-trip
+    /// relies on.
+    @Test
+    func `the example's comment block is text, not data`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        #expect(!journal.transactions.contains { $0.description == "Rent for March" })
+        #expect(journal.directives == [
+            "comment",
+            "Draft of the March rent, not yet due. Everything in here is text.",
+            "2024-03-01 * Rent for March",
+            "    Expenses:Rent          $1200.00",
+            "    Assets:Checking",
+            "end comment",
+        ])
+        let rent = Ledger(journal: journal).balance(for: "Expenses:Rent")
+        #expect(rent.map(\.quantity) == [2400])
+    }
+
+    @Test
+    func `the example's % and | lines are comments`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let markers = journal.items.compactMap { item -> Character? in
+            guard case let .comment(text) = item else { return nil }
+            return text.first
+        }
+        #expect(markers.contains("%"))
+        #expect(markers.contains("|"))
+    }
 }

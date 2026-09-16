@@ -16,12 +16,83 @@ extension JournalParser {
             chars[8].isNumber && chars[9].isNumber
     }
 
+    /// The markers that make a line outside a transaction a full-line comment.
+    ///
+    /// ledger and hledger read all five this way. `JournalSerializer` writes a
+    /// comment back untouched when it starts with one of them, so the two
+    /// lists have to say the same thing: widening one without the other would
+    /// turn a parsed `% note` into `; % note` on the way out.
+    static let fullLineCommentMarkers: Set<Character> = [";", "#", "*", "%", "|"]
+
+    /// Whether a line outside a transaction is a full-line comment.
+    ///
+    /// Takes the line already trimmed: an indented `  ; note` between entries
+    /// is a comment too, and keeps its indentation in the item.
+    func isFullLineComment(_ trimmed: String) -> Bool {
+        guard let first = trimmed.first else { return false }
+        return Self.fullLineCommentMarkers.contains(first)
+    }
+
+    /// Whether `line` opens a block comment: `comment` or `test` at column 0.
+    ///
+    /// Read as ledger reads it, which is by the line's first word: anything
+    /// after the keyword is ignored, so `comment draft entries` opens a block
+    /// just as a bare `comment` does. hledger is stricter and takes only the
+    /// bare keyword, rejecting the rest outright, so no hledger journal
+    /// contains a line this reading treats differently from hledger's. Getting
+    /// it the other way round is what issue #17 is about: a ledger user's
+    /// parked entries would be read as data and booked.
+    ///
+    /// The keyword is case-sensitive and must start the line: `Comment`,
+    /// `comments` and an indented `  comment` are all something else.
+    func isCommentBlockStart(_ line: String) -> Bool {
+        ["comment", "test"].contains { startsWithKeyword(line, keyword: $0) }
+    }
+
+    /// Whether `line` closes a block comment, read the same way as the opening
+    /// keyword. Either keyword closes either kind of block, as in ledger, and
+    /// an indented `  end comment` is block content rather than its end.
+    func isCommentBlockEnd(_ line: String) -> Bool {
+        ["end comment", "end test"].contains { startsWithKeyword(line, keyword: $0) }
+    }
+
+    /// Whether `line` is `keyword` at column 0, standing alone (trailing
+    /// spaces or tabs aside) or followed by whitespace and anything at all.
+    /// The whitespace is what keeps `comments` from reading as `comment`.
+    private func startsWithKeyword(_ line: String, keyword: String) -> Bool {
+        guard line.hasPrefix(keyword) else { return false }
+        let rest = line.dropFirst(keyword.count)
+        guard let next = rest.first else { return true }
+        return next == " " || next == "\t"
+    }
+
+    /// Reads the block comment opening at `start` and returns one item per
+    /// line it spans, the opening and closing keyword lines included.
+    ///
+    /// The block runs to the first `end comment` or `end test` at column 0, or
+    /// to the end of the file when nothing closes it, as in ledger and
+    /// hledger. Its lines are kept verbatim as directives so the file goes
+    /// back byte for byte; a whitespace-only line among them becomes `.blank`,
+    /// exactly as it would at the top level, and writes back the same either
+    /// way.
+    func parseCommentBlock(lines: [String], from start: Int) -> [JournalItem] {
+        var items: [JournalItem] = [.directive(lines[start])]
+        var index = start + 1
+        while index < lines.count {
+            let line = lines[index]
+            items.append(line.trimmingCharacters(in: .whitespaces).isEmpty ? .blank : .directive(line))
+            index += 1
+            if isCommentBlockEnd(line) { break }
+        }
+        return items
+    }
+
     /// Whether an indented line inside a transaction is a full-line comment
     /// rather than a posting.
     ///
     /// Only `;` and `#` mark a comment here: a leading `*` or `!` inside a
     /// transaction is a posting status marker, unlike at the top level where
-    /// `*` starts a comment too.
+    /// `*` starts a comment too (see `fullLineCommentMarkers`).
     func isTransactionComment(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         return trimmed.hasPrefix(";") || trimmed.hasPrefix("#")

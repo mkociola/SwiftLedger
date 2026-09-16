@@ -143,3 +143,19 @@ account Expenses:Utilities
     Expenses:Food:Restaurants  £25.00
     Assets:EuroAccount     -€30.00
     Assets:PoundAccount
+
+; ── Comment blocks ──────────────────────────────────────────────────────────
+; A `comment` line on its own opens a block that runs to `end comment`, or
+; to the end of the file. Nothing inside it is read: the entry below is
+; parked, not booked, so it touches no balance and appears in no report,
+; and the file is written back with the block exactly as it was.
+
+comment
+Draft of the March rent, not yet due. Everything in here is text.
+2024-03-01 * Rent for March
+    Expenses:Rent          $1200.00
+    Assets:Checking
+end comment
+
+% Lines starting with % or | are full-line comments too, as in ledger
+| and hledger. So is a line starting with *, the org-mode heading.
