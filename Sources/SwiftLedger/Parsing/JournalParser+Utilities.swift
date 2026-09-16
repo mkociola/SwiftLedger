@@ -176,4 +176,24 @@ extension JournalParser {
         let amount = String(str[str.index(after: split)...]).trimmingCharacters(in: .whitespaces)
         return (account, amount.isEmpty ? nil : amount)
     }
+
+    /// Splits text at the first `;` into what comes before it and the comment
+    /// the `;` opens.
+    ///
+    /// The sample amount of a `D`, `commodity` or `format` directive is cut
+    /// this way: `D $1,000.00 ; house style` states a style and says why, and
+    /// the amount parser must be handed the style alone.
+    ///
+    /// Everything from the first `;` is the comment, so a `;` inside one stays
+    /// inside it. The text comes back `nil` when there is nothing but the
+    /// comment, and is trimmed either way.
+    func splitPostingComment(_ field: String?) -> (String?, String?) {
+        guard let field else { return (nil, nil) }
+        guard let marker = field.firstIndex(of: ";") else {
+            let text = field.trimmingCharacters(in: .whitespaces)
+            return (text.isEmpty ? nil : text, nil)
+        }
+        let text = String(field[..<marker]).trimmingCharacters(in: .whitespaces)
+        return (text.isEmpty ? nil : text, String(field[field.index(after: marker)...]))
+    }
 }

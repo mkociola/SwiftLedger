@@ -108,6 +108,22 @@ import Testing
         ])
     }
 
+    /// The comma in `€12,50` divides the fraction, so the coffee cost twelve
+    /// euros fifty rather than the twelve hundred and fifty the parser used to
+    /// read once it had stripped the comma out.
+    @Test
+    func `the example shows a comma decimal mark`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let entry = try #require(
+            journal.transactions.first { $0.description == "Coffee in Vienna" },
+        )
+        #expect(try entry.postings.map(\.amount.quantity) == [
+            #require(Decimal(string: "12.50")), #require(Decimal(string: "-12.50")),
+        ])
+        #expect(entry.postings.allSatisfy { $0.amount.commodity == "€" })
+        #expect(journal.commodityFormats["€"]?.fractionDigits == 2)
+    }
+
     /// The example is also a style sample: every entry a reader adds to it,
     /// and every entry SwiftLedger rebuilds in it, is laid out from what the
     /// file already shows. An entry that lines its amounts up somewhere new,

@@ -11,7 +11,29 @@ import Foundation
 /// ```
 ///
 /// - Date formats: `YYYY-MM-DD` or `YYYY/MM/DD`
-/// - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `100.00 EUR`, `£500`
+/// - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `100.00 EUR`, `£500`.
+///   The number is ASCII digits, at most one decimal mark and any number of
+///   digit-group marks, and nothing else: `$1e5`, `$0x10`, `$1_000`, `$1x2y`
+///   and `1 000 EUR` are `LedgerError.invalidAmount` rather than the 100000,
+///   0, 1, 1 and 1 that keeping the longest numeric prefix would make of them.
+///   Digits followed by letters still name a commodity, as `10AAPL` does in
+///   both tools, but an unquoted commodity symbol carries no digit of its own
+///   there or here, so a bare `1e5` is invalid too rather than one unit of a
+///   commodity called `e5`. A quoted symbol may carry anything and is kept as
+///   written, quotes included: `10 "AAPL 2"`.
+/// - Decimal marks: both marks are written `.` or `,` depending on where the
+///   file comes from, so which is which is read out of the number, as hledger
+///   reads it. Two different marks make the last one the decimal mark, so
+///   `1,000.00` and `1.000,00` are both a thousand; one mark written more than
+///   once groups, so `1.000.000` is a million; one mark with any count of
+///   digits after it other than three divides, so `€12,50` is twelve fifty;
+///   and one mark with nothing but zeros in front of it divides whatever
+///   follows, since there is nothing there to group, so `€0,750` is three
+///   quarters. One mark with exactly three digits after it is the one shape
+///   the number cannot settle, and it keeps the reading this library and
+///   ledger-cli have always had: `1,000` is a thousand and `1.000` is one,
+///   where hledger would read `1,000` as one. A `commodity` or `D` directive
+///   is read for the display style it states, never for this.
 /// - A posting amount may be followed by a price (`@` per unit, `@@` total)
 ///   and/or a balance assertion (`=`), in that order, each written in either
 ///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
@@ -329,19 +351,19 @@ public struct JournalParser {
         if let rawAmount = amountStr {
             let field = splitAmountField(rawAmount)
             if !field.amount.isEmpty {
-                let parsed = try parseAmount(field.amount, lineNumber: lineNumber)
-                style.observe(field.amount, as: parsed)
-                amount = parsed
+                let parsed = try parseShapedAmount(field.amount, lineNumber: lineNumber)
+                style.observe(field.amount, shape: parsed.shape, as: parsed.amount)
+                amount = parsed.amount
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
-                let priced = try parseAmount(rawPrice, lineNumber: lineNumber)
-                style.observe(rawPrice, as: priced)
-                price = field.priceIsTotal ? .total(priced) : .perUnit(priced)
+                let priced = try parseShapedAmount(rawPrice, lineNumber: lineNumber)
+                style.observe(rawPrice, shape: priced.shape, as: priced.amount)
+                price = field.priceIsTotal ? .total(priced.amount) : .perUnit(priced.amount)
             }
             if let rawAssertion = field.assertion, !rawAssertion.isEmpty {
-                let asserted = try parseAmount(rawAssertion, lineNumber: lineNumber)
-                style.observe(rawAssertion, as: asserted)
-                balanceAssertion = asserted
+                let asserted = try parseShapedAmount(rawAssertion, lineNumber: lineNumber)
+                style.observe(rawAssertion, shape: asserted.shape, as: asserted.amount)
+                balanceAssertion = asserted.amount
             }
         }
 

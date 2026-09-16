@@ -23,13 +23,18 @@ extension JournalParser {
         guard let keyword else { return }
         guard keyword != "format " || isIndented else { return }
 
-        let sample = String(trimmed.dropFirst(keyword.count)).trimmingCharacters(in: .whitespaces)
+        // A directive may carry a comment of its own, and `D $1,000.00 ; house
+        // style` states a style all the same, so the sample is what precedes
+        // the `;`. Handing the comment to the amount parser loses the whole
+        // declaration, silently, since a directive that does not parse is left
+        // alone by design.
+        let (sample, _) = splitPostingComment(String(trimmed.dropFirst(keyword.count)))
         // `commodity $` names a commodity without stating a style; only the
         // sample-amount forms say anything to record.
-        guard sample.contains(where: \.isNumber),
-              let amount = try? parseAmount(sample, lineNumber: 0),
-              !amount.commodity.isEmpty else { return }
-        style.declare(sample, commodity: amount.commodity)
+        guard let sample, sample.contains(where: \.isNumber),
+              let parsed = try? parseShapedAmount(sample, lineNumber: 0),
+              !parsed.amount.commodity.isEmpty else { return }
+        style.declare(parsed.shape, commodity: parsed.amount.commodity)
     }
 
     /// The column `line`'s amount field starts at: past the account token,

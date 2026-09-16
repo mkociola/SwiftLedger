@@ -144,6 +144,20 @@ account Expenses:Utilities
     Assets:EuroAccount     -€30.00
     Assets:PoundAccount
 
+; ── Decimal marks ───────────────────────────────────────────────────────────
+; Which mark divides the fraction is read out of the number: a mark with
+; anything other than three digits after it divides, so €12,50 is twelve euros
+; fifty, as most of Europe writes it, and €1.500,00 would be fifteen hundred.
+; hledger and ledger 3 both read €12,50 that way, so the entry below means the
+; same in either tool. A mark with exactly three digits after it is the one
+; form the number cannot settle, and it keeps ledger's reading, where $1,000 is
+; a thousand and $1.000 is one; hledger reads $1,000 as one unless a directive
+; declares the commodity.
+
+2024-03-12 Coffee in Vienna
+    Expenses:Food:Restaurants  €12,50
+    Assets:EuroAccount     -€12,50
+
 ; ── Comment blocks ──────────────────────────────────────────────────────────
 ; A `comment` line on its own opens a block that runs to `end comment`, or
 ; to the end of the file. Nothing inside it is read: the entry below is
