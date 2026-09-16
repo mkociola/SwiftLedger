@@ -40,7 +40,12 @@ import Foundation
 ///   balancing; assertions are preserved but never checked.
 /// - Status: `*` = cleared, `!` = pending
 /// - Comments: `;`, `#`, `*`, `%` or `|` at line start; inline `  ;` after
-///   2+ spaces
+///   2+ spaces. On a posting line the two-space rule ends the account name
+///   rather than the amount, so once a name has ended, a `;` opens the
+///   posting's comment however few spaces come before it: `$66.00 ; an
+///   expense` is an amount and a comment, as it is in ledger and hledger. A
+///   posting that writes no amount has no field for that to apply to, so its
+///   `;` still needs the two spaces.
 /// - A `comment` or `test` line at column 0 opens a block comment, anything
 ///   after the keyword being ignored, and the block runs to the next
 ///   `end comment` or `end test` line at column 0, or to the end of the file.
@@ -320,10 +325,6 @@ public struct JournalParser {
     ) throws -> RawPosting {
         var rest = line.trimmingCharacters(in: .whitespaces)
 
-        // Extract inline comment (2+ spaces then ;)
-        let (mainPart, comment) = splitInlineComment(rest)
-        rest = mainPart.trimmingCharacters(in: .init(charactersIn: " \t"))
-
         // Optional status (* or !)
         var postingStatus: ClearingStatus?
         if rest.hasPrefix("* ") || rest.hasPrefix("! ") {
@@ -333,8 +334,12 @@ public struct JournalParser {
 
         // Account name ends at 2+ spaces, or at end of line. The token is kept
         // as the line writes it for the style observation below; the posting
-        // stores the bare name.
-        let (accountToken, amountStr) = splitAccountAndAmount(rest)
+        // stores the bare name. The comment is split off what follows the
+        // name rather than off the whole line, because there the `;` needs no
+        // two spaces in front of it, and the field the margin is measured
+        // against is the one with the comment already gone.
+        let (accountToken, field) = splitAccountAndAmount(rest)
+        let (amountStr, comment) = splitPostingComment(field)
         let (accountName, kind) = Posting.Kind.split(accountToken)
         style.observeIndent(String(line.prefix { $0 == " " || $0 == "\t" }))
         if let amountStr, let start = Self.amountColumn(in: line, after: accountToken) {

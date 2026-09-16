@@ -117,6 +117,14 @@ extension JournalParser {
         return (date, rest)
     }
 
+    /// Splits the inline comment off a transaction header or an `account`
+    /// directive: two or more spaces, then `;`.
+    ///
+    /// A posting line goes through `splitPostingComment` instead, which takes
+    /// a `;` after one space as well. The two-space rule is there to end an
+    /// account name, and past the name a posting line is an amount field,
+    /// where ledger and hledger open a comment at the first `;` however few
+    /// spaces come before it.
     func splitInlineComment(_ str: String) -> (String, String?) {
         // Inline comment: 2+ spaces followed by ;
         var prevWasSpace = false
@@ -180,13 +188,23 @@ extension JournalParser {
     /// Splits text at the first `;` into what comes before it and the comment
     /// the `;` opens.
     ///
+    /// A posting's amount field is cut this way: `    expenses    $66.00 ; an
+    /// expense` is an amount and a comment in ledger and in hledger, and one
+    /// space before the `;` is enough, because the two spaces belong to the
+    /// rule that ends the account name and that rule has already done its work
+    /// by the time this is called. Reading the line the other way is what
+    /// issue #18 reported from a real journal, where the amount came through
+    /// as 66, the comment was dropped without a word, and any edit to the
+    /// entry wrote the line back without it.
+    ///
     /// The sample amount of a `D`, `commodity` or `format` directive is cut
-    /// this way: `D $1,000.00 ; house style` states a style and says why, and
-    /// the amount parser must be handed the style alone.
+    /// the same way: `D $1,000.00 ; house style` states a style and says why,
+    /// and the amount parser must be handed the style alone.
     ///
     /// Everything from the first `;` is the comment, so a `;` inside one stays
     /// inside it. The text comes back `nil` when there is nothing but the
-    /// comment, and is trimmed either way.
+    /// comment, which is the `Assets:Checking  ; note` line that writes no
+    /// amount at all, and is trimmed either way.
     func splitPostingComment(_ field: String?) -> (String?, String?) {
         guard let field else { return (nil, nil) }
         guard let marker = field.firstIndex(of: ";") else {

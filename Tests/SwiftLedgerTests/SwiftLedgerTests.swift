@@ -1268,6 +1268,118 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     }
 }
 
+// MARK: - JournalParser: a comment after an amount
+
+/// The two-space rule ends an account name, not an amount, so once the name
+/// has ended a `;` opens the posting's comment however few spaces sit before
+/// it. The entry below came in on issue #18 from a real journal that hledger
+/// reads without complaint; here the amount came through as 66 and the comment
+/// was dropped in silence.
+@Suite("comments after an amount") struct PostingCommentTests {
+    private static let oneSpace = """
+    2026-08-04 An expense
+        assets                            $-66.00
+        expenses                           $66.00 ; an expense
+    """
+
+    @Test
+    func `a comment one space after an amount is a comment`() throws {
+        let entry = try #require(JournalParser().parse(Self.oneSpace).transactions.first)
+        #expect(entry.postings.map(\.amount.quantity) == [-66, 66])
+        #expect(entry.postings.map(\.comment) == [nil, "an expense"])
+    }
+
+    @Test
+    func `the entry with the comment goes back byte for byte`() throws {
+        let journal = try JournalParser().parse(Self.oneSpace)
+        #expect(JournalSerializer().serialize(journal) == Self.oneSpace)
+    }
+
+    /// No space at all is the same line: what ends the amount is the `;`, not
+    /// the gap in front of it.
+    @Test
+    func `a comment written straight after an amount is a comment`() throws {
+        let text = """
+        2026-08-04 An expense
+            assets                            $-66.00
+            expenses                           $66.00; an expense
+        """
+        let journal = try JournalParser().parse(text)
+        let entry = try #require(journal.transactions.first)
+        #expect(entry.postings.map(\.amount.quantity) == [-66, 66])
+        #expect(entry.postings.map(\.comment) == [nil, "an expense"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    /// An untouched file always survived a save, since it is replayed from its
+    /// own lines. The comment was lost the moment anything rebuilt the entry,
+    /// which is what an edit, a rename or a reconcile does.
+    @Test
+    func `a rebuilt entry writes the comment back`() throws {
+        var journal = try JournalParser().parse(Self.oneSpace)
+        try renaming(#require(journal.transactions.first), to: "An expense (revised)", in: &journal)
+        #expect(JournalSerializer().serialize(journal).contains("$66.00  ; an expense"))
+    }
+
+    @Test
+    func `the two-space form reads the same way`() throws {
+        let text = """
+        2026-08-04 An expense
+            assets                            $-66.00
+            expenses                           $66.00  ; an expense
+        """
+        let journal = try JournalParser().parse(text)
+        let entry = try #require(journal.transactions.first)
+        #expect(entry.postings.map(\.comment) == [nil, "an expense"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    /// Everything from the first `;` is the comment, so a `;` written inside
+    /// one stays inside it rather than starting a second.
+    @Test
+    func `only the first semicolon opens the comment`() throws {
+        let text = """
+        2026-08-04 An expense
+            assets                            $-66.00
+            expenses                           $66.00 ; an expense ; paid in cash
+        """
+        let entry = try #require(JournalParser().parse(text).transactions.first)
+        #expect(entry.postings.last?.comment == "an expense ; paid in cash")
+    }
+
+    /// A posting that writes no amount has no amount field for the rule to
+    /// apply to, so its `;` still needs the two spaces that end an account
+    /// name. With one space the `;` is part of the name, which is what this
+    /// has always done.
+    @Test
+    func `a posting with no amount keeps the two-space rule`() throws {
+        let text = """
+        2026-08-04 A note
+            expenses ; not a comment
+        """
+        let entry = try #require(JournalParser().parse(text).transactions.first)
+        #expect(entry.postings.map(\.accountName) == ["expenses ; not a comment"])
+        #expect(entry.postings.first?.comment == nil)
+
+        let spaced = try JournalParser().parse("""
+        2026-08-04 A note
+            expenses  ; a comment
+        """)
+        #expect(spaced.transactions.first?.postings.first?.accountName == "expenses")
+        #expect(spaced.transactions.first?.postings.first?.comment == "a comment")
+    }
+
+    /// The margin is measured on the field the comment has already been taken
+    /// out of. This entry ends both its amounts at column 45; counting the
+    /// comment as part of the field would put one of them at 58 and hand the
+    /// file a margin no amount in it stands at.
+    @Test
+    func `a comment does not move the margin the file teaches`() throws {
+        let journal = try JournalParser().parse(Self.oneSpace)
+        #expect(journal.amountAlignment == .end(column: 45))
+    }
+}
+
 // MARK: - JournalParser: prices and balance assertions
 
 @Suite("prices and balance assertions") struct PriceAndAssertionTests {

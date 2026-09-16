@@ -110,9 +110,11 @@ import Testing
 
     /// The comma in `€12,50` divides the fraction, so the coffee cost twelve
     /// euros fifty rather than the twelve hundred and fifty the parser used to
-    /// read once it had stripped the comma out.
+    /// read once it had stripped the comma out. One space before the `;` on
+    /// the same line is enough to open the comment, which the parser used to
+    /// swallow into the amount and drop.
     @Test
-    func `the example shows a comma decimal mark`() throws {
+    func `the example shows a comma decimal mark and a comment after an amount`() throws {
         let journal = try JournalParser().parse(Self.exampleText)
         let entry = try #require(
             journal.transactions.first { $0.description == "Coffee in Vienna" },
@@ -121,6 +123,7 @@ import Testing
             #require(Decimal(string: "12.50")), #require(Decimal(string: "-12.50")),
         ])
         #expect(entry.postings.allSatisfy { $0.amount.commodity == "€" })
+        #expect(entry.postings.map(\.comment) == ["one space is enough to start a comment", nil])
         #expect(journal.commodityFormats["€"]?.fractionDigits == 2)
     }
 

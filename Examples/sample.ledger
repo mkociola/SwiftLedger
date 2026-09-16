@@ -144,7 +144,7 @@ account Expenses:Utilities
     Assets:EuroAccount     -€30.00
     Assets:PoundAccount
 
-; ── Decimal marks ───────────────────────────────────────────────────────────
+; ── Decimal marks and a comment after an amount ─────────────────────────────
 ; Which mark divides the fraction is read out of the number: a mark with
 ; anything other than three digits after it divides, so €12,50 is twelve euros
 ; fifty, as most of Europe writes it, and €1.500,00 would be fifteen hundred.
@@ -152,10 +152,12 @@ account Expenses:Utilities
 ; same in either tool. A mark with exactly three digits after it is the one
 ; form the number cannot settle, and it keeps ledger's reading, where $1,000 is
 ; a thousand and $1.000 is one; hledger reads $1,000 as one unless a directive
-; declares the commodity.
+; declares the commodity. A ; after an amount opens the posting's comment even
+; with one space in front of it, as it does in ledger and in hledger, since two
+; spaces are what end an account name and the name has ended by then.
 
 2024-03-12 Coffee in Vienna
-    Expenses:Food:Restaurants  €12,50
+    Expenses:Food:Restaurants  €12,50 ; one space is enough to start a comment
     Assets:EuroAccount     -€12,50
 
 ; ── Comment blocks ──────────────────────────────────────────────────────────
