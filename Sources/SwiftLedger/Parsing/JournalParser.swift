@@ -37,10 +37,12 @@ import Foundation
 ///   is a single posting of zero. The rule is that every commodity nets to
 ///   zero in each balancing group, never a posting count.
 /// - At most one posting per balancing group may elide its amount, and it
-///   takes what the rest of its own group leaves over. An elided
-///   parenthesised posting has no group to balance against and reads as zero,
-///   which is hledger's reading; ledger-cli would hand it the real remainder
-///   instead.
+///   takes what the rest of its own group leaves over in every commodity, so
+///   an opening-balances entry in dollars and pounds resolves. Since a
+///   `Posting` holds one amount, such a line becomes one posting per commodity
+///   left to absorb, where the elided line was. An elided parenthesised
+///   posting has no group to balance against and reads as zero, which is
+///   hledger's reading; ledger-cli would hand it the real remainder instead.
 /// - Blank lines and full-line comments are preserved in the AST.
 /// - Every parsed transaction keeps its own source lines verbatim
 ///   (`Transaction.sourceText`), so serialising a journal nobody edited

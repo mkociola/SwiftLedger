@@ -8,6 +8,9 @@ public enum LedgerError: Error, Sendable, Equatable {
     case invalidDate(String)
     case invalidAmount(String)
     case multipleElidedPostings
+    /// An elided amount has nothing to balance against. An elided posting
+    /// spanning several commodities is not this error: it absorbs the
+    /// remainder of each one.
     case cannotResolveElision
 
     // MARK: - Transaction
@@ -47,7 +50,7 @@ extension LedgerError: LocalizedError {
         case .multipleElidedPostings:
             "A transaction may have at most one posting with an elided amount"
         case .cannotResolveElision:
-            "Cannot resolve elided amount: remaining postings span multiple commodities"
+            "Cannot resolve elided amount: no explicit amount to balance it against"
         case let .unbalancedTransaction(commodity, imbalance):
             "Transaction is unbalanced in \(commodity): off by \(imbalance)"
         case let .unbalancedBracketedPostings(commodity, imbalance):

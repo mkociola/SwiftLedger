@@ -24,9 +24,12 @@ import Foundation
 ///
 /// Use `JournalParser` to build transactions from plain-text `.ledger` files,
 /// which also resolves elided amounts before constructing `Transaction`
-/// objects. It follows hledger where hledger and ledger-cli differ: an elided
-/// `(account)` posting is in no balancing group, so it reads as zero rather
-/// than absorbing what the real postings leave over.
+/// objects. An elided amount absorbs the remainder of every commodity its
+/// group leaves over, so one elided line in an entry written in two
+/// commodities arrives here as two postings of the same account, one per
+/// commodity. The parser follows hledger where hledger and ledger-cli differ:
+/// an elided `(account)` posting is in no balancing group, so it reads as zero
+/// rather than absorbing what the real postings leave over.
 /// A transaction that comes back from the parser also carries the lines it was
 /// read from, in `sourceText`, so that leaving it alone leaves the file alone.
 public struct Transaction: Identifiable, Sendable, Codable, Hashable {

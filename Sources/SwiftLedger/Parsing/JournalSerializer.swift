@@ -15,7 +15,11 @@ import Foundation
 ///
 /// The rules below describe the formatting applied to a transaction the caller
 /// built or changed — one with no source lines of its own:
-/// - Elided postings (resolved during parsing) are written with explicit amounts.
+/// - Elided postings (resolved during parsing) are written with explicit
+///   amounts. An elided line that absorbed more than one commodity was
+///   resolved into one posting per commodity, so it comes back as one line
+///   per commodity with the account name repeated, which is how hledger
+///   prints such an entry.
 /// - Amounts are formatted using the stored `commodityIsPrefix` flag, in the
 ///   decimal places, thousands separators and minus-sign placement the rest of
 ///   the journal uses for that commodity (`Journal.commodityFormats`). A

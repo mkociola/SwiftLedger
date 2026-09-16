@@ -762,6 +762,115 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     }
 }
 
+// MARK: - JournalParser: multi-commodity elision
+
+/// An elided amount takes the remainder of every commodity its balancing
+/// group leaves over, which is what lets the standard opening-balances entry
+/// load. One written line therefore becomes one posting per commodity.
+@Suite("multi-commodity elision") struct MultiCommodityElisionTests {
+    /// The opening-balances entry every hledger tutorial starts with: two
+    /// commodities, one line to absorb both. Since a `Posting` holds a single
+    /// amount, that line resolves into one posting per commodity, in the order
+    /// the entry writes them.
+    @Test
+    func `an elided posting absorbs the remainder of every commodity in the entry`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:bank:checking   $1000
+            assets:bank:savings    £500
+            equity:opening balances
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.count == 4)
+        #expect(transaction.postings[2].accountName == "equity:opening balances")
+        #expect(transaction.postings[3].accountName == "equity:opening balances")
+        #expect(transaction.postings[2].amount == Amount(quantity: -1000, commodity: "$", commodityIsPrefix: true))
+        #expect(transaction.postings[3].amount == Amount(quantity: -500, commodity: "£", commodityIsPrefix: true))
+    }
+
+    /// A commodity the written legs already balance leaves nothing to absorb,
+    /// so the elided line gets no leg in it. An entry does not need a `$0`
+    /// posting to say what its dollar legs already said.
+    @Test
+    func `a commodity that already balances gets no leg from the elided posting`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:cash             $100
+            assets:petty            $-100
+            assets:bank:savings     £50
+            equity:opening balances
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.count == 4)
+        #expect(transaction.postings[3].accountName == "equity:opening balances")
+        #expect(transaction.postings[3].amount == Amount(quantity: -50, commodity: "£", commodityIsPrefix: true))
+    }
+
+    /// A priced leg is absorbed at what it cost, in the price's commodity, so
+    /// a share purchase and a pound leg leave a dollar remainder and a pound
+    /// one rather than an `AAPL` remainder.
+    @Test
+    func `an elided posting absorbs a priced leg at cost alongside another commodity`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:brokerage        10 AAPL @ $150.00
+            assets:bank:savings     £100
+            equity:opening balances
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.count == 4)
+        #expect(transaction.postings[2].amount == Amount(quantity: -1500, commodity: "$", commodityIsPrefix: true))
+        #expect(transaction.postings[3].amount == Amount(quantity: -100, commodity: "£", commodityIsPrefix: true))
+    }
+
+    /// One written line becomes several postings, so the fields that belong to
+    /// the line rather than to an amount have to land somewhere a reader would
+    /// look for them: the status on every posting, the inline comment on the
+    /// first, the comments written underneath on the last, and the assertion
+    /// on the posting in the commodity it names.
+    @Test
+    func `an expanded elided posting spreads the fields of the line it was written on`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:bank:checking   $1000
+            assets:bank:savings    £500
+            ! equity:opening balances  = £-500  ; the pair of them
+            ; counted on the first of the year
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        let expanded = transaction.postings.filter { $0.accountName == "equity:opening balances" }
+        #expect(expanded.count == 2)
+        #expect(expanded.map(\.status) == [.pending, .pending])
+        #expect(expanded.map(\.comment) == ["the pair of them", nil])
+        #expect(expanded[0].trailingComments.isEmpty)
+        #expect(expanded[1].trailingComments == ["    ; counted on the first of the year"])
+        #expect(expanded[0].balanceAssertion == nil)
+        #expect(expanded[1].amount.commodity == "£")
+        #expect(expanded[1].balanceAssertion == Amount(quantity: -500, commodity: "£", commodityIsPrefix: true))
+    }
+
+    /// `cannotResolveElision` used to be what a two-commodity entry got, and
+    /// nothing throws it from a parse any more: an elision with nothing to
+    /// balance against reads as zero, the way hledger reads it, and a second
+    /// elided posting in the same group is `multipleElidedPostings`. The case
+    /// stays in `LedgerError` because it is public API, and it still says what
+    /// it is for.
+    @Test
+    func `an elided posting with nothing to balance against reads as zero`() throws {
+        let text = """
+        2024-01-01 opening balances
+            equity:opening balances
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.count == 1)
+        #expect(transaction.postings[0].amount.quantity == .zero)
+        #expect(
+            LedgerError.cannotResolveElision.errorDescription
+                == "Cannot resolve elided amount: no explicit amount to balance it against",
+        )
+    }
+}
+
 // MARK: - JournalParser: in-transaction comments
 
 @Suite("in-transaction comments") struct InTransactionCommentTests {
@@ -1117,6 +1226,26 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         #expect(bal.count == 1)
         #expect(bal[0].quantity == 50)
         #expect(bal[0].commodity == "USD")
+    }
+
+    /// The account an opening-balances entry elides reports both commodities,
+    /// because the elided line resolved into a posting in each. `balance(for:)`
+    /// nets by commodity and sorts by the commodity symbol, which puts `$`
+    /// before `£`.
+    @Test
+    func `balance reports every commodity an elided opening entry left to one account`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:bank:checking   $1000
+            assets:bank:savings    £500
+            equity:opening balances
+        """
+        let ledger = try Ledger(journal: JournalParser().parse(text))
+        let balance = ledger.balance(for: "equity:opening balances")
+        #expect(balance == [
+            Amount(quantity: -1000, commodity: "$", commodityIsPrefix: true),
+            Amount(quantity: -500, commodity: "£", commodityIsPrefix: true),
+        ])
     }
 
     @Test
@@ -1487,6 +1616,61 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         #expect(written.contains("2024-03-01 Salary (adjusted)"))
         #expect(written.contains(where: { $0.hasPrefix("    Assets:Checking") && $0.hasSuffix("3,000.00 EUR") }))
         #expect(written.contains(where: { $0.hasPrefix("    Income:Salary") && $0.hasSuffix("-3,000.00 EUR") }))
+    }
+
+    /// An elided line that absorbed two commodities is still one line in the
+    /// file, and a transaction nobody edited is written from the lines it was
+    /// read from, so the expansion never reaches the file.
+    @Test
+    func `an elided posting that absorbed two commodities is written back as the one line it was`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:bank:checking   $1000
+            assets:bank:savings    £500
+            equity:opening balances
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.first?.postings.count == 4)
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    /// Rebuilding the transaction drops its source lines, so the entry is
+    /// formatted afresh and the expansion does show: one line per commodity,
+    /// the account name repeated, which is how hledger prints such an entry.
+    /// What it prints reads back as the very postings it was written from.
+    @Test
+    func `a rebuilt multi-commodity elision is written as one line per commodity`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:bank:checking   $1000
+            assets:bank:savings    £500
+            equity:opening balances
+        """
+        var journal = try JournalParser().parse(text)
+        let parsed = try #require(journal.transactions.first)
+        let rebuilt = try Transaction(
+            id: parsed.id,
+            date: parsed.date,
+            status: parsed.status,
+            code: parsed.code,
+            description: parsed.description,
+            postings: parsed.postings,
+            comment: parsed.comment,
+            leadingComments: parsed.leadingComments,
+        )
+        let removed = journal.remove(.transaction(parsed))
+        #expect(removed)
+        journal.append(.transaction(rebuilt))
+
+        let written = JournalSerializer().serialize(journal)
+        let equityLines = written.components(separatedBy: "\n")
+            .filter { $0.contains("equity:opening balances") }
+        #expect(equityLines.count == 2)
+        #expect(equityLines[0].hasSuffix("-$1000"))
+        #expect(equityLines[1].hasSuffix("-£500"))
+
+        let reparsed = try #require(try JournalParser().parse(written).transactions.first)
+        #expect(reparsed.postings == rebuilt.postings)
     }
 
     @Test
