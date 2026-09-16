@@ -28,8 +28,9 @@ public enum JournalItem: Sendable, Codable, Hashable {
     /// `include`, `P`, `commodity`, `alias`, `D` or `year`, an indented
     /// sub-directive, or any other content outside the supported grammar.
     ///
-    /// Every line of a `comment` … `end comment` block lands here too, the two
-    /// keyword lines included (a whitespace-only line inside one is `.blank`).
+    /// Every line of a block comment lands here too, the `comment` or `test`
+    /// line that opens it and the `end comment` or `end test` line that closes
+    /// it included (a whitespace-only line inside one is `.blank`).
     /// The block's contents are text the file tells the reader to skip, so a
     /// transaction written there arrives as directive lines rather than as a
     /// `.transaction`.

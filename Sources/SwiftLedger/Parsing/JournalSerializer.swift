@@ -12,7 +12,7 @@ import Foundation
 ///   place, from `Transaction.leadingComments` and `Posting.trailingComments`.
 /// - Lines the parser does not model (`include`, `P`, `commodity`, `alias`,
 ///   `D`, `year`, indented sub-directives, …) are written back verbatim, as
-///   are the lines of a `comment` … `end comment` block.
+///   are the lines of a block comment.
 ///
 /// The rules below describe the formatting applied to a transaction the caller
 /// built or changed — one with no source lines of its own:

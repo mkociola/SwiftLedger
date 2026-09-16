@@ -33,34 +33,48 @@ extension JournalParser {
         return Self.fullLineCommentMarkers.contains(first)
     }
 
-    /// Whether `line` opens a `comment` block.
+    /// Whether `line` opens a block comment: `comment` or `test` at column 0.
     ///
-    /// The keyword stands alone at column 0, with nothing after it but
-    /// whitespace: `comment foo` is a directive, and an indented `comment` is
-    /// a posting or a sub-directive.
+    /// Read as ledger reads it, which is by the line's first word: anything
+    /// after the keyword is ignored, so `comment draft entries` opens a block
+    /// just as a bare `comment` does. hledger is stricter and takes only the
+    /// bare keyword, rejecting the rest outright, so no hledger journal
+    /// contains a line this reading treats differently from hledger's. Getting
+    /// it the other way round is what issue #17 is about: a ledger user's
+    /// parked entries would be read as data and booked.
+    ///
+    /// The keyword is case-sensitive and must start the line: `Comment`,
+    /// `comments` and an indented `  comment` are all something else.
     func isCommentBlockStart(_ line: String) -> Bool {
-        isBareKeywordLine(line, keyword: "comment")
+        ["comment", "test"].contains { startsWithKeyword(line, keyword: $0) }
     }
 
-    /// Whether `line` closes a `comment` block, read the same way as the
-    /// opening keyword. An indented `  end comment` is block content.
+    /// Whether `line` closes a block comment, read the same way as the opening
+    /// keyword. Either keyword closes either kind of block, as in ledger, and
+    /// an indented `  end comment` is block content rather than its end.
     func isCommentBlockEnd(_ line: String) -> Bool {
-        isBareKeywordLine(line, keyword: "end comment")
+        ["end comment", "end test"].contains { startsWithKeyword(line, keyword: $0) }
     }
 
-    private func isBareKeywordLine(_ line: String, keyword: String) -> Bool {
+    /// Whether `line` is `keyword` at column 0, standing alone (trailing
+    /// spaces or tabs aside) or followed by whitespace and anything at all.
+    /// The whitespace is what keeps `comments` from reading as `comment`.
+    private func startsWithKeyword(_ line: String, keyword: String) -> Bool {
         guard line.hasPrefix(keyword) else { return false }
-        return line.dropFirst(keyword.count).allSatisfy { $0 == " " || $0 == "\t" }
+        let rest = line.dropFirst(keyword.count)
+        guard let next = rest.first else { return true }
+        return next == " " || next == "\t"
     }
 
-    /// Reads the `comment` block opening at `start` and returns one item per
-    /// line it spans, the `comment` and `end comment` keywords included.
+    /// Reads the block comment opening at `start` and returns one item per
+    /// line it spans, the opening and closing keyword lines included.
     ///
-    /// The block runs to the first `end comment` at column 0, or to the end of
-    /// the file when nothing closes it, as it does in ledger and hledger. Its
-    /// lines are kept verbatim as directives so the file goes back byte for
-    /// byte; a whitespace-only line among them becomes `.blank`, exactly as it
-    /// would at the top level, and writes back the same either way.
+    /// The block runs to the first `end comment` or `end test` at column 0, or
+    /// to the end of the file when nothing closes it, as in ledger and
+    /// hledger. Its lines are kept verbatim as directives so the file goes
+    /// back byte for byte; a whitespace-only line among them becomes `.blank`,
+    /// exactly as it would at the top level, and writes back the same either
+    /// way.
     func parseCommentBlock(lines: [String], from start: Int) -> [JournalItem] {
         var items: [JournalItem] = [.directive(lines[start])]
         var index = start + 1

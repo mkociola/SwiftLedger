@@ -1276,16 +1276,125 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     }
 
     @Test
-    func `a comment line with text after the keyword is a plain directive`() throws {
+    func `text after the keyword is ignored, as ledger ignores it`() throws {
+        // ledger matches the first word of the line, so `comment notes` opens
+        // a block. Reading it as a directive instead would book the entry
+        // below it, which is the bug this suite is about.
         let text = """
         comment notes
+        2024-01-02 parked
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.isEmpty)
+        #expect(journal.directives == text.components(separatedBy: "\n"))
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `a test line opens a block the same way comment does`() throws {
+        let text = """
+        test
+        2024-01-01 not a transaction
+            a  $1
+            b  $-1
+        end test
+
         2024-01-02 real
             a  $1
             b  $-1
         """
         let journal = try JournalParser().parse(text)
         #expect(journal.transactions.map(\.description) == ["real"])
-        #expect(journal.directives == ["comment notes"])
+        #expect(Ledger(journal: journal).balance(for: "a") == [Self.oneDollar])
+        #expect(journal.directives == [
+            "test",
+            "2024-01-01 not a transaction",
+            "    a  $1",
+            "    b  $-1",
+            "end test",
+        ])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `either end keyword closes either kind of block`() throws {
+        // ledger reads one list of closing keywords, whichever keyword opened
+        // the block, so a file that crosses them still parks its contents.
+        let crossed = """
+        comment
+        2024-01-01 not a transaction
+        end test
+        test
+        2024-01-02 not one either
+        end comment
+
+        2024-01-03 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(crossed)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(journal.directives == [
+            "comment",
+            "2024-01-01 not a transaction",
+            "end test",
+            "test",
+            "2024-01-02 not one either",
+            "end comment",
+        ])
+        #expect(JournalSerializer().serialize(journal) == crossed)
+    }
+
+    @Test
+    func `an end keyword closes the block whatever follows it`() throws {
+        let text = """
+        comment
+        2024-01-01 not a transaction
+        end comment  ; back to real entries
+
+        2024-01-02 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(journal.directives == [
+            "comment",
+            "2024-01-01 not a transaction",
+            "end comment  ; back to real entries",
+        ])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `a longer word starting with the keyword opens nothing`() throws {
+        // The keyword ends at whitespace, so `comments` is its own word and
+        // its own directive, and what follows is data.
+        let text = """
+        comments
+        2024-01-02 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(journal.directives == ["comments"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `the keyword is case-sensitive`() throws {
+        let text = """
+        Comment
+        2024-01-02 real
+            a  $1
+            b  $-1
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.map(\.description) == ["real"])
+        #expect(journal.directives == ["Comment"])
         #expect(JournalSerializer().serialize(journal) == text)
     }
 

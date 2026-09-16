@@ -19,10 +19,12 @@ import Foundation
 /// - Status: `*` = cleared, `!` = pending
 /// - Comments: `;`, `#`, `*`, `%` or `|` at line start; inline `  ;` after
 ///   2+ spaces
-/// - A `comment` line at column 0 opens a block comment running to the next
-///   `end comment`, or to the end of the file. Everything between the two,
-///   the keywords included, is kept verbatim and none of it is interpreted:
-///   a transaction written there is text, not data.
+/// - A `comment` or `test` line at column 0 opens a block comment, anything
+///   after the keyword being ignored, and the block runs to the next
+///   `end comment` or `end test` line at column 0, or to the end of the file.
+///   Everything between the two, the keyword lines included, is kept verbatim
+///   and none of it is interpreted: a transaction written there is text, not
+///   data.
 /// - `account NAME` directives, with an optional inline comment
 /// - Virtual postings: `(ACCOUNT)` takes no part in balancing; `[ACCOUNT]` is
 ///   exempt from balancing against the real postings but the bracketed
