@@ -56,3 +56,35 @@ parser reads or the serializer writes comes with both:
 The example has to keep parsing and serialising byte for byte, and any balance
 assertion it carries has to be the balance its own entries produce, because the
 library preserves assertions without checking them.
+
+## hledger conformance
+
+hledger is the reference for how a journal is read. The journals under
+`Tests/SwiftLedgerTests/Conformance/` are each kept beside what hledger made
+of them, and `HledgerConformanceTests` reads every journal with
+`JournalParser` and compares the two: every transaction, posting, amount,
+cost and assertion, then the flat balance report. A journal hledger refuses
+has to be refused too.
+
+The tests never run hledger. The fixtures are generated once and committed:
+
+```bash
+brew install hledger jq
+Scripts/hledger-fixtures.sh
+```
+
+The script writes `NAME.print.json` and `NAME.balance.json` for a journal
+hledger reads, or `NAME.error.txt` for one it refuses, and records the hledger
+version in `hledger-version.txt`. CI regenerates them and fails if the
+committed files differ, so a fixture cannot be edited by hand and a new
+hledger release that reads a journal differently shows up as a diff.
+
+A journal SwiftLedger is known to read differently is named in
+`knownDivergences` at the top of the test. Its case then passes only while the
+divergence remains, so fixing one means removing its name, and the list is the
+distance to hledger the repository currently admits to.
+
+To pin down a behaviour: write the smallest journal that shows it, run the
+script, commit the fixtures, and add the name to `knownDivergences` if the
+test fails. A file whose name starts with `_` is a part other journals
+`include`, not a case of its own.

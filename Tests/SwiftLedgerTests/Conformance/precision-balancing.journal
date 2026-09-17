@@ -1,0 +1,6 @@
+; The declared display precision decides whether a rounded cash leg balances.
+commodity $1000.00
+
+2024-01-01 Card payment abroad
+    Expenses:Travel    1.00 EUR @ $1.0851
+    Liabilities:Card   $-1.09

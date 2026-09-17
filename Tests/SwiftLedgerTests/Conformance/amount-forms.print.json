@@ -1,0 +1,176 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Amount spellings",
+    "postings": [
+      {
+        "account": "Expenses:A",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 100000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Expenses:B",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -100000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Expenses:C",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -100000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Expenses:D",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": 100000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Expenses:E",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": 100000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Expenses:F",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "Mutual Fund",
+            "mantissa": 10,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Expenses:G",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 5,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 100000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -200000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Fund",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "Mutual Fund",
+            "mantissa": -10,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Euro",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -5,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

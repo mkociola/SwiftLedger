@@ -1,0 +1,4 @@
+; Two commodities and no price written: the cost is inferred.
+2024-01-01 Buy shares
+    Assets:Brokerage     10 AAPL
+    Assets:Checking    $-1500.00

@@ -1,0 +1,9 @@
+hledger: Error: two-elided.journal:1-4:
+1 | 2024-01-01 Two missing amounts
+  |     Expenses:Rent           $100.00
+  |     Assets:Checking
+  |     Assets:Savings
+
+This multi-commodity transaction is unbalanced.
+There can't be more than one real posting with no amount.
+(Remember to put two or more spaces between account and amount.)

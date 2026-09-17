@@ -1,0 +1,12 @@
+[
+  {
+    "account": "Reserve:Capital",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 25000,
+        "places": 2
+      }
+    ]
+  }
+]

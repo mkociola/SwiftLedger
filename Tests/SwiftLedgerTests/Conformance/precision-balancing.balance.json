@@ -1,0 +1,22 @@
+[
+  {
+    "account": "Expenses:Travel",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 100,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Liabilities:Card",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -109,
+        "places": 2
+      }
+    ]
+  }
+]

@@ -1,0 +1,5 @@
+D $1,000.00
+
+2024-01-01 Bare numbers take the default commodity
+    Expenses:Rent    1200
+    Assets:Checking

@@ -1,0 +1,95 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Cleared",
+    "code": "INV-1",
+    "description": "Cleared with a code",
+    "postings": [
+      {
+        "account": "Expenses:Rent",
+        "kind": "RegularPosting",
+        "status": "Cleared",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 120000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Pending",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -120000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Savings",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 0,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-02",
+    "date2": null,
+    "status": "Pending",
+    "code": "",
+    "description": "Pending",
+    "postings": [
+      {
+        "account": "Expenses:Rent",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 100,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -100,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

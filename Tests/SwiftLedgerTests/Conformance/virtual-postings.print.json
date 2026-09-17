@@ -1,0 +1,86 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Groceries, and move the food envelope",
+    "postings": [
+      {
+        "account": "Expenses:Food:Groceries",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 6000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -6000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking:Envelope:Food",
+        "kind": "BalancedVirtualPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -6000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking:Available",
+        "kind": "BalancedVirtualPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 6000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Reserve:Capital",
+        "kind": "VirtualPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 25000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,12 @@
+2024-01-01 Amount spellings
+    Expenses:A    $1,000.00
+    Expenses:B    -$1,000.00
+    Expenses:C    $-1,000.00
+    Expenses:D    1,000.00 USD
+    Expenses:E    USD 1,000.00
+    Expenses:F    10 "Mutual Fund"
+    Expenses:G    +5 EUR
+    Assets:Checking    $1,000.00
+    Assets:Checking    -2,000.00 USD
+    Assets:Fund    -10 "Mutual Fund"
+    Assets:Euro    -5 EUR
