@@ -128,33 +128,40 @@ account Expenses:Utilities
 ; ── Several commodities ─────────────────────────────────────────────────────
 ; Each commodity balances on its own, and one elided posting absorbs the
 ; remainder of every commodity in the entry, which is how ledger and hledger
-; read it. The equity line below is read as two postings, -€1500.00 and
-; -£400.00, though the file keeps the one line as written.
+; read it. The equity line below is read as two postings, -€1.500,00 and
+; -£400.00, though the file keeps the one line as written. The euro account is
+; written the way a European statement writes it, with a comma dividing the
+; fraction and a point grouping the thousands.
 
 2024-03-05 * Opening balances for the accounts abroad
-    Assets:EuroAccount     €1500.00
+    Assets:EuroAccount     €1.500,00
     Assets:PoundAccount    £400.00
     Equity:Opening
 
 ; A commodity the written postings already net to zero leaves nothing to
 ; absorb, so the elided line gets no posting in it: here only -£25.00.
 2024-03-09 Lunch and a train abroad
-    Expenses:Transport     €30.00
+    Expenses:Transport     €30,00
     Expenses:Food:Restaurants  £25.00
-    Assets:EuroAccount     -€30.00
+    Assets:EuroAccount     -€30,00
     Assets:PoundAccount
 
 ; ── Decimal marks and a comment after an amount ─────────────────────────────
 ; Which mark divides the fraction is read out of the number: a mark with
 ; anything other than three digits after it divides, so €12,50 is twelve euros
-; fifty, as most of Europe writes it, and €1.500,00 would be fifteen hundred.
-; hledger and ledger 3 both read €12,50 that way, so the entry below means the
-; same in either tool. A mark with exactly three digits after it is the one
-; form the number cannot settle, and it keeps ledger's reading, where $1,000 is
-; a thousand and $1.000 is one; hledger reads $1,000 as one unless a directive
-; declares the commodity. A ; after an amount opens the posting's comment even
-; with one space in front of it, as it does in ledger and in hledger, since two
-; spaces are what end an account name and the name has ended by then.
+; fifty, as most of Europe writes it, and the €1.500,00 in the opening entry
+; above is fifteen hundred. hledger and ledger 3 both read €12,50 that way, so
+; the entry below means the same in either tool. A mark with exactly three
+; digits after it is the one form the number cannot settle, and it keeps
+; ledger's reading, where $1,000 is a thousand and $1.000 is one; hledger reads
+; $1,000 as one unless a directive declares the commodity. An entry SwiftLedger
+; rebuilds is written back with the marks the file uses for that commodity, and
+; this file uses both: an edited euro entry comes back €12,50 while an edited
+; dollar entry comes back $1200.00, each in the style its own amounts are
+; written in.
+; A ; after an amount opens the posting's comment even with one space in front
+; of it, as it does in ledger and in hledger, since two spaces are what end an
+; account name and the name has ended by then.
 
 2024-03-12 Coffee in Vienna
     Expenses:Food:Restaurants  €12,50 ; one space is enough to start a comment

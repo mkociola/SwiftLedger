@@ -1,18 +1,21 @@
 import Foundation
 
 /// How one commodity's amounts are written in a particular journal: how many
-/// digits follow the decimal point — both the usual count and the most any one
-/// amount carries — whether the integer part carries thousands separators, and
-/// which side of the symbol a minus sign goes on.
+/// digits follow the decimal mark (both the usual count and the most any one
+/// amount carries), which characters divide the fraction and separate the digit
+/// groups, whether the integer part carries those separators at all, and which
+/// side of the symbol a minus sign goes on.
 ///
-/// `Decimal` cannot answer either question. It normalises its own scale on
-/// construction — `Decimal(string: "1240.50")` and `Decimal(string: "1240.5")`
-/// are the same value, exponent and all — and the parser strips `,` before it
-/// ever reaches a number. So an amount read back out of the model has no memory
-/// of the way it was written, and a posting the caller rebuilt would be written
-/// `$1240.5` where the user had `$1,240.50`.
+/// `Decimal` can answer none of it. It normalises its own scale on
+/// construction (`Decimal(string: "1240.50")` and `Decimal(string: "1240.5")`
+/// are the same value, exponent and all), and the parser reads the marks out of
+/// the number and then hands on a value that remembers neither them nor the
+/// scale. So an amount read back out of the model has no memory of the way it
+/// was written, and a posting the caller rebuilt would be written `$1240.5`
+/// where the user had `$1,240.50`, or `€1,500.00` where the user had
+/// `€1.500,00`.
 ///
-/// A journal answers both questions about itself, which is what this type
+/// A journal answers all of it about itself, which is what this type
 /// records. `JournalParser` watches how each commodity is written and hands
 /// `Journal.commodityFormats` the house style it found; `JournalSerializer`
 /// writes a rebuilt posting in that style. The two rules compose:
@@ -58,7 +61,7 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
     public var maxFractionDigits: Int
 
     /// Whether the integer part is written in three-digit groups separated by
-    /// `,` — `$1,234.50` rather than `$1234.50`.
+    /// the group mark: `$1,234.50` rather than `$1234.50`.
     public var groupsThousands: Bool
 
     /// Where the minus sign goes on a negative amount whose commodity comes
@@ -69,16 +72,40 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
     /// default because it is what SwiftLedger has always written.
     public var signPrecedesCommodity: Bool
 
+    /// The character that divides the fraction: `.` in `$1,240.50`, `,` in
+    /// `€1.500,00`.
+    ///
+    /// Which one a file uses is the author's convention, the way the sign's
+    /// placement is, and a journal whose every line writes `€12,50` should not
+    /// get `€12.50` back the moment an entry is edited. `.` is the default
+    /// because it is what SwiftLedger has always written, so a format nobody
+    /// set still says what it always said.
+    public var decimalMark: Character
+
+    /// The character that separates the digit groups of the integer part, the
+    /// counterpart of `decimalMark`: `,` in `$1,240.50`, `.` in `€1.500,00`.
+    ///
+    /// A written number has two marks to choose between, `.` and `,`, and
+    /// whichever one divides the fraction the other groups. Derived rather than
+    /// stored so that no caller can build a format whose two marks are the same
+    /// character, which writes `1.500.00` for fifteen hundred and is a number
+    /// nothing reads back.
+    public var groupMark: Character {
+        decimalMark == "," ? "." : ","
+    }
+
     public init(
         fractionDigits: Int = 0,
         maxFractionDigits: Int = 0,
         groupsThousands: Bool = false,
         signPrecedesCommodity: Bool = true,
+        decimalMark: Character = ".",
     ) {
         self.fractionDigits = fractionDigits
         self.maxFractionDigits = max(maxFractionDigits, fractionDigits)
         self.groupsThousands = groupsThousands
         self.signPrecedesCommodity = signPrecedesCommodity
+        self.decimalMark = decimalMark
     }
 
     /// The style to write a commodity in when the journal shows no example of
@@ -121,19 +148,54 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
             fractionDigits += String(repeating: "0", count: self.fractionDigits - fractionDigits.count)
         }
         if groupsThousands {
-            integerDigits = Self.grouped(integerDigits)
+            integerDigits = Self.grouped(integerDigits, by: groupMark)
         }
-        return fractionDigits.isEmpty ? integerDigits : "\(integerDigits).\(fractionDigits)"
+        return fractionDigits.isEmpty ? integerDigits : "\(integerDigits)\(decimalMark)\(fractionDigits)"
     }
 
-    /// `1234567` → `1,234,567`.
-    private static func grouped(_ digits: String) -> String {
+    /// `1234567` → `1,234,567`, or `1.234.567` in a file that groups with `.`.
+    private static func grouped(_ digits: String, by mark: Character) -> String {
         guard digits.count > 3 else { return digits }
         var reversed: [Character] = []
         for (offset, digit) in digits.reversed().enumerated() {
-            if offset > 0, offset.isMultiple(of: 3) { reversed.append(",") }
+            if offset > 0, offset.isMultiple(of: 3) { reversed.append(mark) }
             reversed.append(digit)
         }
         return String(reversed.reversed())
+    }
+
+    // MARK: - Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case fractionDigits, maxFractionDigits, groupsThousands, signPrecedesCommodity, decimalMark
+    }
+
+    /// Written by hand for one reason: `Character` is not `Codable`, so the
+    /// mark travels as the one-character string a file writes it as.
+    ///
+    /// A payload with no mark in it at all, which is every payload written
+    /// before this property existed, decodes to the `.` those versions wrote,
+    /// and so does a string that is not exactly one character. A value of some
+    /// other type there is a payload that disagrees about what this field is,
+    /// and that still throws.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let mark = try container.decodeIfPresent(String.self, forKey: .decimalMark)
+        try self.init(
+            fractionDigits: container.decode(Int.self, forKey: .fractionDigits),
+            maxFractionDigits: container.decode(Int.self, forKey: .maxFractionDigits),
+            groupsThousands: container.decode(Bool.self, forKey: .groupsThousands),
+            signPrecedesCommodity: container.decode(Bool.self, forKey: .signPrecedesCommodity),
+            decimalMark: mark.flatMap { $0.count == 1 ? $0.first : nil } ?? ".",
+        )
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(fractionDigits, forKey: .fractionDigits)
+        try container.encode(maxFractionDigits, forKey: .maxFractionDigits)
+        try container.encode(groupsThousands, forKey: .groupsThousands)
+        try container.encode(signPrecedesCommodity, forKey: .signPrecedesCommodity)
+        try container.encode(String(decimalMark), forKey: .decimalMark)
     }
 }

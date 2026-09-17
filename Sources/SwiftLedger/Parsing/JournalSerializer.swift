@@ -22,11 +22,12 @@ import Foundation
 ///   per commodity with the account name repeated, which is how hledger
 ///   prints such an entry.
 /// - Amounts are formatted using the stored `commodityIsPrefix` flag, in the
-///   decimal places, thousands separators and minus-sign placement the rest of
-///   the journal uses for that commodity (`Journal.commodityFormats`). A
-///   `Decimal` has forgotten all three by the time it gets here, so without
-///   that an edit to a payee would also restyle that entry's `$-1,234.50` to
-///   `-$1234.5`.
+///   decimal places, decimal and group marks, thousands separators and
+///   minus-sign placement the rest of the journal uses for that commodity
+///   (`Journal.commodityFormats`). A `Decimal` has forgotten every one of them
+///   by the time it gets here, so without that an edit to a payee would also
+///   restyle that entry's `$-1,234.50` to `-$1234.5`, and a European file's
+///   `€1.500,00` to `€1,500.00`.
 /// - A posting's price and balance assertion are re-emitted after its amount,
 ///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
 /// - A virtual posting's account name is written back inside its own

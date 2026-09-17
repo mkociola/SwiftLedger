@@ -937,13 +937,15 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         #expect(JournalSerializer().serialize(journal) == text)
         #expect(journal.commodityFormats["EUR"]?.fractionDigits == 2)
         #expect(journal.commodityFormats["EUR"]?.groupsThousands == true)
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
+        #expect(journal.commodityFormats["EUR"]?.groupMark == ".")
         #expect(journal.commodityFormats["€"]?.fractionDigits == 2)
+        #expect(journal.commodityFormats["€"]?.decimalMark == ",")
     }
 
     /// A file written with a comma decimal mark says two fraction digits and
-    /// no grouping, and a posting rebuilt from it still means what it meant.
-    /// What it is spelled with on the way out is a separate question: the
-    /// serializer writes `.` for the decimal mark whatever the file uses.
+    /// no grouping, and a posting rebuilt from it still means what it meant
+    /// and is still spelled the way the file spells it.
     @Test
     func `a comma-decimal file records two fraction digits and no grouping`() throws {
         let text = """
@@ -956,7 +958,10 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         #expect(journal.commodityFormats["€"]?.groupsThousands == false)
 
         try renaming(#require(journal.transactions.first), to: "groceries (revised)", in: &journal)
-        let rebuilt = try JournalParser().parse(JournalSerializer().serialize(journal))
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("€12,50"))
+        #expect(written.contains("€-12,50"))
+        let rebuilt = try JournalParser().parse(written)
         let entry = try #require(rebuilt.transactions.first)
         #expect(try entry.postings.map(\.amount.quantity) == [
             #require(Decimal(string: "12.50")), #require(Decimal(string: "-12.50")),
@@ -974,8 +979,10 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         """)
         #expect(journal.commodityFormats["$"]?.fractionDigits == 2)
         #expect(journal.commodityFormats["$"]?.groupsThousands == true)
+        #expect(journal.commodityFormats["$"]?.decimalMark == ".")
         #expect(journal.commodityFormats["EUR"]?.fractionDigits == 2)
         #expect(journal.commodityFormats["EUR"]?.groupsThousands == true)
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
     }
 
     /// A journal saved on Windows. `parse` splits on `\n`, so every line
@@ -2413,11 +2420,11 @@ private func renaming(
 
 // MARK: - JournalSerializer: writing a rebuilt entry the way the file writes
 
-/// `Decimal` forgets how a number was written — it normalises its own scale on
-/// construction, and the parser strips thousands separators before it — so an
-/// amount rebuilt through `Transaction.init` used to come back as whatever
-/// `Decimal.description` printed: `$1,240.50` written as `$1240.5`, `@ $150.00`
-/// as `@ $150`.
+/// `Decimal` forgets how a number was written. It normalises its own scale on
+/// construction, and the marks the parser read the number by are gone with the
+/// text, so an amount rebuilt through `Transaction.init` used to come back as
+/// whatever `Decimal.description` printed: `$1,240.50` written as `$1240.5`,
+/// `@ $150.00` as `@ $150`.
 ///
 /// That was survivable while every save reformatted the whole file. Once an
 /// untouched transaction started replaying its own source lines, it stopped
@@ -2683,6 +2690,232 @@ private func renaming(
         let plain = CommodityFormat()
         #expect(try plain.render(#require(Decimal(string: "1234567.5"))) == "1234567.5")
         #expect(plain.render(10) == "10")
+    }
+}
+
+// MARK: - Which characters the marks are written with
+
+/// A number carries two marks, and which character plays which part is the
+/// file's convention rather than the library's. Writing a rebuilt amount with
+/// the other one restyles every figure in the entry the user edited, and in a
+/// file carrying an hledger `commodity €1.000,00` declaration it writes a line
+/// that tool then refuses to load (issue #27).
+@Suite("decimal marks") struct DecimalMarkTests {
+    /// The journal from the issue: an edit to the payee used to come back with
+    /// every number in the entry respelled.
+    private static let europeanJournal = """
+    2024-01-01 opening
+        assets:bank      €1.000,00
+        equity:opening  €-1.000,00
+
+    2024-01-02 groceries
+        expenses:food       €12,50
+        assets:bank        €-12,50
+    """
+
+    @Test
+    func `an edited entry keeps the marks the rest of the file uses`() throws {
+        var journal = try JournalParser().parse(Self.europeanJournal)
+        #expect(journal.commodityFormats["€"]?.decimalMark == ",")
+        #expect(journal.commodityFormats["€"]?.groupMark == ".")
+
+        try renaming(#require(journal.transactions.first), to: "opening (revised)", in: &journal)
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("€1.000,00"))
+        #expect(written.contains("€12,50"))
+        #expect(!written.contains("€1,000.00"))
+
+        // Read back in, the rebuilt entry is the same thousand it always was,
+        // which is what writing it this way round is for.
+        let reparsed = try JournalParser().parse(written)
+        #expect(try #require(reparsed.transactions.last).postings.map(\.amount.quantity) == [1000, -1000])
+    }
+
+    @Test
+    func `a rewritten entry in such a file is stable, so the next save changes nothing`() throws {
+        let parser = JournalParser()
+        let serializer = JournalSerializer()
+        var journal = try parser.parse(Self.europeanJournal)
+        try renaming(#require(journal.transactions.first), to: "opening (revised)", in: &journal)
+
+        let once = serializer.serialize(journal)
+        #expect(try serializer.serialize(parser.parse(once)) == once)
+    }
+
+    /// The other convention is not a special case: it is the default, and a
+    /// file that writes it gets back exactly what it always got.
+    @Test
+    func `a file written with a point keeps the point`() throws {
+        let text = """
+        2026-01-05 * Rent
+            Expenses:Rent      $1,000.00
+            Assets:Checking   $-1,000.00
+        """
+        var journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["$"]?.decimalMark == ".")
+        #expect(journal.commodityFormats["$"]?.groupMark == ",")
+        #expect(CommodityFormat().decimalMark == ".")
+        #expect(CommodityFormat().groupMark == ",")
+
+        try renaming(#require(journal.transactions.first), to: "Rent (Jan)", in: &journal)
+        #expect(JournalSerializer().serialize(journal).contains("$1,000.00"))
+    }
+
+    /// A file may be inconsistent, so the marks are counted like everything
+    /// else the collector learns, and the count decides.
+    @Test
+    func `the mark most of the amounts use is the one a rebuilt amount gets`() throws {
+        let text = """
+        2026-01-01 opening
+            assets:bank      100,50 EUR
+            equity:opening  -100,50 EUR
+
+        2026-01-02 groceries
+            expenses:food     20,25 EUR
+            assets:bank      -20,25 EUR
+
+        2026-01-03 lunch
+            expenses:food     10.75 EUR
+            assets:bank      -10.75 EUR
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
+    }
+
+    /// Ties go to the point, which is the default and what SwiftLedger has
+    /// always written, so a file that says nothing clear is left as it was.
+    @Test
+    func `a file split evenly keeps the point`() throws {
+        let text = """
+        2026-01-01 opening
+            assets:bank      100,50 EUR
+            equity:opening  -100,50 EUR
+
+        2026-01-02 lunch
+            expenses:food     10.75 EUR
+            assets:bank      -10.75 EUR
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ".")
+    }
+
+    /// `€1.000` could be a thousand grouped or one written to three places,
+    /// and the scanner settles it by a rule rather than by anything the number
+    /// says. A number read that way abstains here, so the file's one piece of
+    /// real evidence is not outvoted by three pieces of none.
+    @Test
+    func `a number that cannot say which mark is which casts no vote`() throws {
+        let commaFile = """
+        2026-01-01 opening
+            assets:bank      €1.000
+            equity:opening  €-1.000
+
+        2026-01-02 second
+            assets:bank      €2.000
+            equity:opening  €-2.000
+
+        2026-01-03 third
+            assets:bank      €3.000
+            equity:opening  €-3.000
+
+        2026-01-04 coffee
+            expenses:food     €12,50
+            assets:bank      €-12,50
+        """
+        #expect(try JournalParser().parse(commaFile).commodityFormats["€"]?.decimalMark == ",")
+
+        let pointFile = """
+        2026-01-01 opening
+            assets:bank      $1,000
+            equity:opening  $-1,000
+
+        2026-01-02 second
+            assets:bank      $2,000
+            equity:opening  $-2,000
+
+        2026-01-03 coffee
+            expenses:food     $12.50
+            assets:bank      $-12.50
+        """
+        #expect(try JournalParser().parse(pointFile).commodityFormats["$"]?.decimalMark == ".")
+    }
+
+    /// A file with no fraction anywhere still shows which convention it
+    /// follows: the mark it groups with is the one it does not divide with.
+    @Test
+    func `a group mark alone says which mark divides`() throws {
+        let text = """
+        2026-01-01 opening
+            assets:bank      1.000.000 EUR
+            equity:opening  -1.000.000 EUR
+        """
+        var journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
+        #expect(journal.commodityFormats["EUR"]?.groupsThousands == true)
+
+        try journal.append(.transaction(Transaction(
+            date: makeDate(2026, 1, 2),
+            description: "second",
+            postings: [
+                Posting(accountName: "assets:bank", amount: Amount(quantity: 2_000_000, commodity: "EUR")),
+                Posting(accountName: "equity:opening", amount: Amount(quantity: -2_000_000, commodity: "EUR")),
+            ],
+        )))
+        #expect(JournalSerializer().serialize(journal).contains("2.000.000 EUR"))
+    }
+
+    /// A declaration is the user stating their house style, so it settles the
+    /// marks the way it settles the digit count, against whatever the amounts
+    /// happen to show.
+    @Test(arguments: [
+        "D 1.000,00 EUR",
+        "commodity 1.000,00 EUR",
+        "commodity EUR\n    format 1.000,00 EUR",
+    ])
+    func `a directive states which mark divides`(directive: String) throws {
+        var journal = try JournalParser().parse("""
+        \(directive)
+
+        2026-01-01 lunch
+            expenses:food     12.50 EUR
+            assets:bank      -12.50 EUR
+        """)
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
+
+        try renaming(#require(journal.transactions.first), to: "lunch (revised)", in: &journal)
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("12,50 EUR"))
+        #expect(!written.contains("12.50 EUR"))
+    }
+
+    /// A declaration whose own sample cannot tell its marks apart declares a
+    /// digit count and nothing else, and the amounts settle the rest.
+    @Test
+    func `a declaration that shows no mark leaves the marks to the amounts`() throws {
+        var journal = try JournalParser().parse("""
+        D 1.000 EUR
+
+        2026-01-01 lunch
+            expenses:food     12,50 EUR
+            assets:bank      -12,50 EUR
+        """)
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
+
+        // Three places because the declaration says three, a comma because the
+        // postings say comma: the two questions are answered separately.
+        try renaming(#require(journal.transactions.first), to: "lunch (revised)", in: &journal)
+        #expect(JournalSerializer().serialize(journal).contains("12,500 EUR"))
+    }
+
+    @Test
+    func `rendering writes both marks the file's way round`() throws {
+        let euros = CommodityFormat(fractionDigits: 2, groupsThousands: true, decimalMark: ",")
+        #expect(try euros.render(#require(Decimal(string: "1234567.5"))) == "1.234.567,50")
+        #expect(euros.render(1000) == "1.000,00")
+        #expect(euros.render(999) == "999,00")
+
+        let ungrouped = CommodityFormat(fractionDigits: 2, decimalMark: ",")
+        #expect(try ungrouped.render(#require(Decimal(string: "1234.5"))) == "1234,50")
     }
 }
 
@@ -2958,6 +3191,42 @@ private func renaming(
 // MARK: - Codable
 
 @Suite("Codable") struct CodableTests {
+    /// `Character` is not `Codable`, so the decimal mark is written and read
+    /// by hand, as the one-character string a file writes it as.
+    @Test
+    func `a round-tripped commodity format keeps the mark it was written with`() throws {
+        let format = CommodityFormat(fractionDigits: 2, groupsThousands: true, decimalMark: ",")
+        let decoded = try JSONDecoder().decode(CommodityFormat.self, from: JSONEncoder().encode(format))
+        #expect(decoded == format)
+        #expect(decoded.decimalMark == ",")
+        #expect(decoded.groupMark == ".")
+    }
+
+    /// Every format encoded before the mark existed was written by a version
+    /// that wrote `.`, so that is what one decodes as, and an archive keeps the
+    /// style it was made in.
+    @Test
+    func `a commodity format encoded before decimalMark existed still decodes`() throws {
+        let json = """
+        {"fractionDigits":2,"maxFractionDigits":2,
+         "groupsThousands":true,"signPrecedesCommodity":false}
+        """
+        let format = try JSONDecoder().decode(CommodityFormat.self, from: Data(json.utf8))
+        #expect(format.fractionDigits == 2)
+        #expect(format.signPrecedesCommodity == false)
+        #expect(format.decimalMark == ".")
+        #expect(format.groupMark == ",")
+
+        // A string that is not one character is not a mark either, and falls
+        // back the same way.
+        let empty = """
+        {"fractionDigits":0,"maxFractionDigits":0,"groupsThousands":false,
+         "signPrecedesCommodity":true,"decimalMark":""}
+        """
+        let decoded = try JSONDecoder().decode(CommodityFormat.self, from: Data(empty.utf8))
+        #expect(decoded.decimalMark == ".")
+    }
+
     @Test
     func `a posting encoded before trailingComments existed still decodes`() throws {
         let json = """
