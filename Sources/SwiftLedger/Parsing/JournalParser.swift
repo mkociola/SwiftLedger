@@ -81,6 +81,15 @@ import Foundation
 /// - Every parsed transaction keeps its own source lines verbatim
 ///   (`Transaction.sourceText`), so serialising a journal nobody edited
 ///   reproduces the file byte for byte.
+/// - A transaction in a file with Windows line endings is read as though the
+///   file had Unix ones. `parse` splits on `\n` alone, so each line arrives
+///   with the `\r` that closed it, and that `\r` is the line ending rather
+///   than part of the field in front of it: a description, an account name or
+///   a comment that runs to the end of its line comes back without it. The
+///   lines themselves are still kept exactly as they came, so the file goes
+///   back byte for byte. Only a transaction's own lines are read this way: a
+///   blank CRLF line is still the item `.directive("\r")`, and an `account`
+///   directive keeps the `\r` in the name it declares.
 /// - Indented full-line comments inside a transaction are commentary, not
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
@@ -201,7 +210,7 @@ public struct JournalParser {
         from start: Int,
         into style: inout JournalStyleCollector,
     ) throws -> (Transaction, Int) {
-        let headerLine = lines[start]
+        let headerLine = contentOf(line: lines[start])
         let lineNumber = start + 1 // 1-based for errors
 
         let header = try parseHeader(headerLine, lineNumber: lineNumber)
@@ -214,7 +223,7 @@ public struct JournalParser {
         var leadingComments: [String] = []
         var index = start + 1
         while index < lines.count {
-            let currentLine = lines[index]
+            let currentLine = contentOf(line: lines[index])
             if currentLine.isEmpty || currentLine.trimmingCharacters(in: .whitespaces).isEmpty {
                 break // blank line ends the transaction
             }

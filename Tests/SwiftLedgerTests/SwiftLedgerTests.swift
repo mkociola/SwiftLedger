@@ -231,6 +231,64 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
 
 // MARK: - Transaction
 
+/// One of the fields a journal has to write on a single line, with the path
+/// `LedgerError.lineBreakInField` reports it under. A parameterised test walks
+/// every case, so a field that gains a line of its own and no check shows up
+/// here as a case nobody wrote.
+enum OneLineField: CaseIterable {
+    case description
+    case code
+    case comment
+    case leadingComment
+    case accountName
+    case virtualAccountName
+    case postingComment
+    case trailingComment
+
+    /// The path the error names when this is the broken field.
+    var path: String {
+        switch self {
+        case .description: "description"
+        case .code: "code"
+        case .comment: "comment"
+        case .leadingComment: "leadingComments[0]"
+        case .accountName: "postings[1].accountName"
+        case .virtualAccountName: "postings[2].accountName"
+        case .postingComment: "postings[1].comment"
+        case .trailingComment: "postings[1].trailingComments[1]"
+        }
+    }
+
+    /// A balanced transaction that is valid in every way but this one field,
+    /// which is written as `text`.
+    func transaction(holding text: String) throws -> Transaction {
+        try Transaction(
+            date: makeDate(2024, 1, 1),
+            code: self == .code ? text : "CHQ001",
+            description: self == .description ? text : "Groceries",
+            postings: [
+                Posting(accountName: "Expenses:Food", amount: usd(5)),
+                Posting(
+                    accountName: self == .accountName ? text : "Assets:Cash",
+                    amount: usd(-5),
+                    comment: self == .postingComment ? text : "paid in cash",
+                    trailingComments: [
+                        "    ; a note",
+                        self == .trailingComment ? text : "    ; a second note",
+                    ],
+                ),
+                Posting(
+                    accountName: self == .virtualAccountName ? text : "Reserve:capital",
+                    kind: .virtual,
+                    amount: usd(1),
+                ),
+            ],
+            comment: self == .comment ? text : "weekly shop",
+            leadingComments: [self == .leadingComment ? text : "    ; invoice 42"],
+        )
+    }
+}
+
 @Suite("Transaction") struct TransactionTests {
     @Test
     func `balanced transaction stores all fields correctly`() throws {
@@ -385,6 +443,75 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         #expect(transaction.postings.map(\.accountName) == ["Assets:Car (old)", "Assets:Bank", "(old)"])
     }
 
+    /// A journal writes each of these fields on a line of its own and the
+    /// serializer writes the value verbatim, so a break inside one puts the
+    /// rest of it on a line where the next parse reads it as a directive or as
+    /// a lone elided posting. A postingless entry being valid, nothing
+    /// downstream objects and the amounts below the break stop counting, so
+    /// this is the one place to refuse it.
+    ///
+    /// All three spellings a file can carry a break in are tried. `\r\n` is
+    /// the one that matters: Swift folds it into a single `Character` that is
+    /// neither `\n` nor `\r`, so a check written over characters rather than
+    /// scalars waves through exactly the spelling Windows produces.
+    @Test(arguments: OneLineField.allCases, ["\n", "\r", "\r\n"])
+    func `a field a journal writes on one line refuses a line break`(
+        field: OneLineField, lineBreak: String,
+    ) throws {
+        #expect(throws: LedgerError.lineBreakInField(field.path)) {
+            try field.transaction(holding: "Multi\(lineBreak)line")
+        }
+    }
+
+    /// A value that cannot be written is the more basic complaint, so it is
+    /// the one the caller hears, ahead of both the other checks. An entry
+    /// whose description holds a break and whose postings do not add up names
+    /// the description rather than the dollars, and an account name that
+    /// holds one is reported for the break rather than for the matched pair
+    /// it also happens to be.
+    @Test
+    func `a line break is reported before the imbalance or the bare name`() throws {
+        #expect(throws: LedgerError.lineBreakInField("description")) {
+            try Transaction(
+                date: makeDate(2024, 1, 1),
+                description: "Multi\nline",
+                postings: [Posting(accountName: "Assets:Cash", amount: usd(100))],
+            )
+        }
+        #expect(throws: LedgerError.lineBreakInField("postings[0].accountName")) {
+            try Transaction(
+                date: makeDate(2024, 1, 1),
+                description: "Groceries",
+                postings: [Posting(accountName: "(a\nb)", amount: usd(0))],
+            )
+        }
+    }
+
+    @Test
+    func `the line-break message names the field path`() {
+        let error = LedgerError.lineBreakInField("postings[1].accountName")
+        #expect(error.errorDescription == "Field 'postings[1].accountName' contains a line break "
+            + "and cannot be written on one line")
+    }
+
+    /// Only a break is refused. Tabs and runs of spaces are ordinary content
+    /// of a one-line field and have to go on building.
+    @Test
+    func `other whitespace in a one-line field still builds`() throws {
+        let transaction = try Transaction(
+            date: makeDate(2024, 1, 1),
+            code: "CHQ 001",
+            description: "Corner\tShop  supplies",
+            postings: [
+                Posting(accountName: "Expenses:Food", amount: usd(5), comment: "two  spaces"),
+                Posting(accountName: "Assets:Cash", amount: usd(-5)),
+            ],
+            comment: "weekly  shop",
+        )
+        #expect(transaction.description == "Corner\tShop  supplies")
+        #expect(transaction.postings[0].comment == "two  spaces")
+    }
+
     @Test
     func `multi-commodity balance is validated independently per commodity`() throws {
         let date = try makeDate(2024, 1, 1)
@@ -526,6 +653,17 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
 }
 
 // MARK: - JournalParser
+
+/// Every text a transaction holds that a journal writes on one line, the
+/// verbatim comment lines included, for a test that none of them kept the
+/// `\r` of a Windows line ending.
+private func oneLineTexts(of transaction: Transaction) -> [String] {
+    [transaction.description, transaction.code, transaction.comment].compactMap(\.self)
+        + transaction.leadingComments
+        + transaction.postings.flatMap { posting in
+            [posting.accountName, posting.comment].compactMap(\.self) + posting.trailingComments
+        }
+}
 
 @Suite("JournalParser") struct JournalParserTests {
     @Test
@@ -985,11 +1123,12 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
     }
 
-    /// A journal saved on Windows. `parse` splits on `\n`, so every line
-    /// arrives with its `\r` still attached and an amount at the end of a line
-    /// reaches the scanner with the `\r` on it. The file loaded before this
-    /// validation existed, and has to go on loading and going back byte for
-    /// byte.
+    /// A journal saved on Windows, read for its amounts. `parse` splits on
+    /// `\n` and `parseTransaction` takes the `\r` off each of a transaction's
+    /// lines, so an amount that ends its line reaches the scanner spelled the
+    /// way the same file with Unix endings spells it. The file loaded before
+    /// any of that existed, and has to go on loading and going back byte for
+    /// byte. What its fields hold is the test below.
     @Test
     func `a journal with windows line endings still loads`() throws {
         let text = [
@@ -1006,6 +1145,76 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         #expect(amounts.map(\.quantity) == [-66, 66, 100, -100])
         #expect(amounts.map(\.commodity) == ["$", "$", "EUR", "EUR"])
         #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    /// The same file read for what its fields say rather than for its amounts.
+    /// Every field that runs to the end of a line used to keep the `\r` that
+    /// closed it: a description, an inline comment, a full-line comment, and
+    /// worst of them an elided posting's account name, which named an account
+    /// no other entry named and so left the amount it should have absorbed out
+    /// of every balance.
+    ///
+    /// The margin the file teaches is checked against the same file written
+    /// with Unix endings, since an amount that ends its own line used to be
+    /// measured one column wider than the file draws it.
+    @Test
+    func `a windows file keeps its line endings out of the fields`() throws {
+        let lines = [
+            "2026-08-04 * (CHQ001) Groceries  ; weekly shop",
+            "    ; invoice 42, paid late",
+            "    Expenses:Food:Groceries                 $66.00  ; the usual",
+            "    ; the receipt is in the folder",
+            "    Expenses:Food:Drinks                     $4.00",
+            "    Assets:Checking",
+            "",
+            "2026-08-05 A note to self",
+        ]
+        let text = lines.joined(separator: "\r\n")
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.count == 2)
+
+        let groceries = try #require(journal.transactions.first)
+        #expect(groceries.code == "CHQ001")
+        #expect(groceries.description == "Groceries")
+        #expect(groceries.comment == "weekly shop")
+        #expect(groceries.leadingComments == ["    ; invoice 42, paid late"])
+        #expect(groceries.postings[0].comment == "the usual")
+        #expect(groceries.postings[0].trailingComments == ["    ; the receipt is in the folder"])
+        // The elided line names the account the file names, not a second one
+        // spelled with a line ending on the end of it.
+        #expect(groceries.postings[2].accountName == "Assets:Checking")
+        #expect(groceries.postings.map(\.amount.quantity) == [66, 4, -70])
+
+        let note = journal.transactions[1]
+        #expect(note.description == "A note to self")
+        #expect(note.postings.isEmpty)
+
+        let texts = journal.transactions.flatMap(oneLineTexts(of:))
+        #expect(!texts.contains { $0.unicodeScalars.contains("\r") })
+        #expect(JournalSerializer().serialize(journal) == text)
+
+        // The margin the file teaches, against the same file written with Unix
+        // endings. The amount that ends its own line used to be measured a
+        // character wider here than there, which moved the margin with it.
+        let unix = try JournalParser().parse(lines.joined(separator: "\n"))
+        #expect(unix.amountAlignment == .end(column: 50))
+        #expect(journal.amountAlignment == unix.amountAlignment)
+    }
+
+    /// A `\r` anywhere but at the end of a line is not a line ending, and the
+    /// field it lands in really is one a journal cannot write. The file says
+    /// so and refuses to load, rather than being quietly mended into a
+    /// description nobody typed.
+    @Test
+    func `a carriage return inside a header line refuses to load`() throws {
+        let text = [
+            "2026-08-04 Corner\rShop",
+            "    Expenses:Food:Groceries  $1.00",
+            "    Assets:Checking  $-1.00",
+        ].joined(separator: "\r\n")
+        #expect(throws: LedgerError.lineBreakInField("description")) {
+            try JournalParser().parse(text)
+        }
     }
 
     @Test

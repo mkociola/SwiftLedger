@@ -87,6 +87,32 @@ extension JournalParser {
         return items
     }
 
+    /// `line` with the `\r` a Windows line ending leaves on it taken off.
+    ///
+    /// `parse` splits the file on `\n` alone, so in a CRLF journal every line
+    /// arrives with the other half of its ending still attached, and any field
+    /// that runs to the end of its line would carry the `\r` into the
+    /// transaction: a description of `"Rent\r"`, an elided posting to
+    /// `"Assets:Checking\r"` that names no account any other entry names.
+    /// `Transaction.init` refuses a field with a line break in it, so the
+    /// stripping and that refusal have to arrive together.
+    ///
+    /// Only the last scalar, only when it is a `\r`, and only once. A `\r`
+    /// anywhere else on the line is not a line ending, and the field it lands
+    /// in really is one a journal cannot write, so it goes on to be refused by
+    /// name. The raw lines are what `sourceText` is built from either way, so
+    /// an entry nobody edits still goes back byte for byte.
+    ///
+    /// It also puts the amount column the style collector learns back where
+    /// the file draws it: the field it measures used to be one character wider
+    /// than it looked whenever an amount ended a CRLF line.
+    func contentOf(line: String) -> String {
+        guard line.unicodeScalars.last == "\r" else { return line }
+        var scalars = line.unicodeScalars
+        scalars.removeLast()
+        return String(scalars)
+    }
+
     /// Whether an indented line inside a transaction is a full-line comment
     /// rather than a posting.
     ///

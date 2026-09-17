@@ -29,6 +29,30 @@ public enum LedgerError: Error, Sendable, Equatable {
     /// unaffected: their delimiters are added on top of whatever the name is.
     case unwritableAccountName(String)
 
+    /// A field a journal has to write on one line contains a line break. The
+    /// associated value is the path of the field on the transaction, spelled
+    /// the way a caller reaches it: `"description"`, `"code"`, `"comment"`,
+    /// `"leadingComments[0]"`, `"postings[1].accountName"`,
+    /// `"postings[1].comment"`, `"postings[1].trailingComments[2]"`.
+    ///
+    /// `JournalSerializer` writes every one of those values verbatim, so a
+    /// break inside one puts the rest of the value on a line of its own, where
+    /// the next parse reads it as something else: a directive under the
+    /// header, a lone elided posting in the body. A dated line with no
+    /// postings being a valid entry, nothing downstream objects, and the
+    /// amounts that followed the broken line stop counting without a word.
+    ///
+    /// The parser takes the line ending off a transaction's lines before it
+    /// reads a field out of them, so a file with Unix or with Windows endings
+    /// never hands one of these back. A `\r` anywhere else on a line is not a
+    /// line ending, and the file refuses to load with this same error naming
+    /// the field it landed in, rather than being mended into text nobody
+    /// wrote. Everything else that reaches here is a transaction built in
+    /// code: a caller who forgot to strip the newlines out of pasted input
+    /// hears about it from the entry it typed, instead of from a file that
+    /// quietly stopped saying what it used to.
+    case lineBreakInField(String)
+
     // MARK: - Commodity
 
     case commodityMismatch(String, String)
@@ -58,6 +82,8 @@ extension LedgerError: LocalizedError {
         case let .unwritableAccountName(name):
             "Account name '\(name)' cannot be written: a real posting's name may not be "
                 + "a matched pair of parentheses or brackets"
+        case let .lineBreakInField(field):
+            "Field '\(field)' contains a line break and cannot be written on one line"
         case let .commodityMismatch(first, second):
             "Commodity mismatch: '\(first)' vs '\(second)'"
         case let .storeError(msg):
