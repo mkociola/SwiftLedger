@@ -1,0 +1,52 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -6000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Assets:Checking:Available",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 6000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Assets:Checking:Envelope:Food",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -6000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Food:Groceries",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 6000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Reserve:Capital",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 25000,
+        "places": 2
+      }
+    ]
+  }
+]

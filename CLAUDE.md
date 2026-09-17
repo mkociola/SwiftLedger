@@ -10,5 +10,10 @@ below in full.
   to `Examples/sample.ledger` and an assertion in
   `Tests/SwiftLedgerTests/ExampleJournalTests.swift`. See "The example journal"
   in `CONTRIBUTING.md` for the layout rules the file has to keep.
+- A change to how the parser reads a journal also removes every name from
+  `knownDivergences` in `Tests/SwiftLedgerTests/HledgerConformanceTests.swift`
+  that it makes pass, and pins new behaviour with a journal under
+  `Tests/SwiftLedgerTests/Conformance/` plus fixtures from
+  `Scripts/hledger-fixtures.sh`. See "hledger conformance" in `CONTRIBUTING.md`.
 - Doc comments explain the why in full sentences. Match the voice of the file
   you are editing.

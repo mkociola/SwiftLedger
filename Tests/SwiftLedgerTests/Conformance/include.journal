@@ -1,0 +1,5 @@
+include _include-part.journal
+
+2024-02-01 Rent
+    Expenses:Rent    $1200.00
+    Assets:Checking

@@ -26,3 +26,19 @@ jobs:
 
       - name: 🧪 Test
         run: swift test --parallel
+
+  hledger-fixtures:
+    name: hledger fixtures are current
+    runs-on: macos-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v6
+
+      - name: 📦 Install hledger
+        run: brew install hledger jq
+
+      - name: 🔁 Regenerate fixtures
+        run: Scripts/hledger-fixtures.sh
+
+      - name: 🔍 Compare with the committed fixtures
+        run: git diff --exit-code -- Tests/SwiftLedgerTests/Conformance

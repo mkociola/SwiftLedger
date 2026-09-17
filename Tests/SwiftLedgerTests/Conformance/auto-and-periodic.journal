@@ -1,0 +1,11 @@
+; Without --auto and --forecast hledger reads neither of these.
+= Expenses:Rent
+    (Budget:Rent)    *-1
+
+~ monthly  Budgeted rent
+    Expenses:Rent    $1200.00
+    Assets:Checking
+
+2024-01-01 Rent
+    Expenses:Rent    $1200.00
+    Assets:Checking

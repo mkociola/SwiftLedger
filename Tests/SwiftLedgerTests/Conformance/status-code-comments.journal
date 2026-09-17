@@ -1,0 +1,12 @@
+2024-01-01 * (INV-1) Cleared with a code  ; note: header comment
+    ; a full-line comment inside the entry
+    * Expenses:Rent    $1200.00  ; posting comment
+    ! Assets:Checking
+    Assets:Savings    $0.00
+
+# hash comment at column 0
+* star comment at column 0
+
+2024-01-02 ! Pending
+    Expenses:Rent    $1.00
+    Assets:Checking

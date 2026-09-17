@@ -1,0 +1,6 @@
+2024-01-01 Groceries, and move the food envelope
+    Expenses:Food:Groceries          $60.00
+    Assets:Checking                 $-60.00
+    [Assets:Checking:Envelope:Food]  $-60.00
+    [Assets:Checking:Available]      $60.00
+    (Reserve:Capital)               $250.00

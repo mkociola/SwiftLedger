@@ -1,0 +1,46 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Card payment abroad",
+    "postings": [
+      {
+        "account": "Expenses:Travel",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 2,
+            "cost": {
+              "total": false,
+              "commodity": "$",
+              "mantissa": 10851,
+              "places": 4
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Liabilities:Card",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -109,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,6 @@
+alias checking = Assets:Checking
+alias /^Exp:(.*)/ = Expenses:\1
+
+2024-01-01 Rent
+    Exp:Rent    $1200.00
+    checking

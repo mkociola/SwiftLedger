@@ -1,0 +1,12 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 100,
+        "places": 0
+      }
+    ]
+  }
+]

@@ -1,0 +1,11 @@
+apply account Personal
+
+2024-01-01 Rent
+    Expenses:Rent    $1200.00
+    Assets:Checking
+
+end apply account
+
+2024-01-02 Rent again
+    Expenses:Rent    $1200.00
+    Assets:Checking

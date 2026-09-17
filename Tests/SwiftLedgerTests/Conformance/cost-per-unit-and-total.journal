@@ -1,0 +1,7 @@
+2024-01-01 Buy shares
+    Assets:Brokerage     10 AAPL @ $150.00
+    Assets:Checking
+
+2024-01-02 Sell shares
+    Assets:Brokerage    -10 AAPL @@ $1600.00
+    Assets:Checking

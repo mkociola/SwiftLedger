@@ -1,0 +1,107 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 100000,
+        "places": 2
+      },
+      {
+        "commodity": "USD",
+        "mantissa": -200000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Assets:Euro",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": -5,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Assets:Fund",
+    "amounts": [
+      {
+        "commodity": "Mutual Fund",
+        "mantissa": -10,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Expenses:A",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 100000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:B",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -100000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:C",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -100000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:D",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": 100000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:E",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": 100000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:F",
+    "amounts": [
+      {
+        "commodity": "Mutual Fund",
+        "mantissa": 10,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Expenses:G",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 5,
+        "places": 0
+      }
+    ]
+  }
+]
