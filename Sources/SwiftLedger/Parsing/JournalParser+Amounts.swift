@@ -56,11 +56,15 @@ extension JournalParser {
     /// and `$1x2y` as 1, and a journal of such amounts balanced and reported
     /// figures nobody had written (issue #18).
     ///
-    /// The trimming here and below takes newlines as well as spaces. `parse`
-    /// splits a file on `\n`, so in a journal with Windows line endings every
-    /// amount that ends its line arrives with a `\r` still on it, and a
-    /// scanner that accepts nothing but digits and marks would refuse the
-    /// whole file.
+    /// The trimming here and below takes newlines as well as spaces, for the
+    /// sample amount of a top-level `D` or `commodity` directive. `parse`
+    /// splits a file on `\n` and hands `declareFormat` the line raw, so in a
+    /// journal with Windows line endings that sample arrives with the `\r`
+    /// that closed its line, and a scanner accepting nothing but digits and
+    /// marks would refuse it and drop the declaration without a word. A
+    /// posting's amount no longer arrives that way: `contentOf(line:)` takes
+    /// the ending off a transaction's lines before any field is read out of
+    /// them.
     func parseShapedAmount(_ raw: String, lineNumber _: Int) throws -> ShapedAmount {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw LedgerError.invalidAmount(raw) }

@@ -245,6 +245,17 @@ let bad = try Transaction(
 )
 ```
 
+**One line each:** a journal writes the description, the code, a comment, an
+account name and a full-line comment on a line of its own, and SwiftLedger
+writes each of them back verbatim, so none of them may hold `\n` or `\r`.
+`Transaction.init` throws `LedgerError.lineBreakInField` naming the field the
+break is in (`"description"`, `"postings[1].accountName"`, and so on). The
+parser takes the line ending off a transaction's lines before it reads a field
+out of them, so a file with Unix or with Windows endings never produces one of
+these. A `\r` stranded anywhere else on a line is not a line ending: the file
+refuses to load with the same error naming the field it landed in, rather than
+being mended into text nobody wrote.
+
 **Signs:** amounts are signed `Decimal` values. Positive = value flowing *into* an account; negative = value flowing *out*.
 
 **Comments:** `Posting.comment` and `Transaction.comment` hold the *inline*

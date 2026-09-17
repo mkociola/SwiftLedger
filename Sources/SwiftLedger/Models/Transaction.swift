@@ -12,6 +12,13 @@ import Foundation
 /// posting of zero. Both are what ledger and hledger accept, and a bare dated
 /// line is a common way to keep a note in a journal.
 ///
+/// A transaction also has to fit back on the page it came from: a journal
+/// writes the description, the code, an inline comment, every account name
+/// and each full-line comment in `leadingComments` and
+/// `Posting.trailingComments` on one line apiece, so none of them may hold a
+/// line break. `LedgerError.lineBreakInField` names the field that does, an
+/// index into those arrays included, and it is the first thing `init` checks.
+///
 /// `Posting.kind` is what tells the three apart, and it takes part in
 /// `Posting ==`: two postings that differ only in their delimiters are not the
 /// same posting.
@@ -87,7 +94,11 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     /// says which commodity it is off in rather than counting postings at the
     /// caller.
     ///
-    /// - Throws: `LedgerError.unbalancedTransaction` if the real postings do
+    /// - Throws: `LedgerError.lineBreakInField` if a field a journal writes
+    ///   on one line contains a line break: the description, the code, an
+    ///   inline comment, an account name, or one of the full-line comments in
+    ///   `leadingComments` or `Posting.trailingComments`,
+    ///   `LedgerError.unbalancedTransaction` if the real postings do
     ///   not sum to zero for any commodity,
     ///   `LedgerError.unbalancedBracketedPostings` if the balanced virtual ones
     ///   do not sum to zero among themselves, or
@@ -104,6 +115,13 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         comment: String? = nil,
         leadingComments: [String] = [],
     ) throws {
+        try Self.validateLineBreaks(
+            description: description,
+            code: code,
+            comment: comment,
+            leadingComments: leadingComments,
+            postings: postings,
+        )
         try Self.validateAccountNames(postings)
         try Self.validateBalance(postings)
         self.id = id
@@ -182,6 +200,66 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     }
 
     // MARK: - Private
+
+    /// Refuses a field a journal cannot write on one line.
+    ///
+    /// A journal writes the description, the code, each comment and every
+    /// account name on a line of its own, and `JournalSerializer` writes each
+    /// of them verbatim, so a break inside one puts the rest of the value on a
+    /// line by itself, where the next parse reads it as something else: a
+    /// directive under the header, a lone elided posting in the body. A dated
+    /// line with no postings being a valid entry, nothing downstream objects,
+    /// and the amounts below the broken line stop counting in silence. This is
+    /// the last place the field still has a name to report.
+    ///
+    /// Checked before the balance, because a value that cannot be written is
+    /// the more basic complaint of the two, and every posting kind is checked:
+    /// a virtual posting's name goes inside its delimiters on one line just
+    /// the same.
+    ///
+    /// Only `\n` and `\r` count. `\n` is what `JournalParser` splits a file
+    /// on, and `\r` is the other half of a Windows line ending and what an
+    /// editor draws as a break, so a stray one turns into a real `\n` the
+    /// first time the file is saved somewhere else. `Character.isNewline` and
+    /// `CharacterSet.newlines` would also match U+000B, U+000C, U+0085, U+2028
+    /// and U+2029, which nothing reading this format treats as a line break,
+    /// so either of them would refuse a value that round-trips perfectly well
+    /// and would refuse a parsed file that happens to contain one.
+    private static func validateLineBreaks(
+        description: String,
+        code: String?,
+        comment: String?,
+        leadingComments: [String],
+        postings: [Posting],
+    ) throws {
+        try requireOneLine(description, at: "description")
+        try requireOneLine(code, at: "code")
+        try requireOneLine(comment, at: "comment")
+        for (index, text) in leadingComments.enumerated() {
+            try requireOneLine(text, at: "leadingComments[\(index)]")
+        }
+        for (index, posting) in postings.enumerated() {
+            try requireOneLine(posting.accountName, at: "postings[\(index)].accountName")
+            try requireOneLine(posting.comment, at: "postings[\(index)].comment")
+            for (commentIndex, text) in posting.trailingComments.enumerated() {
+                try requireOneLine(text, at: "postings[\(index)].trailingComments[\(commentIndex)]")
+            }
+        }
+    }
+
+    /// Throws `LedgerError.lineBreakInField(field)` when `value` holds a line
+    /// break, and passes a `nil` value, which is a field nothing writes.
+    ///
+    /// The test reads unicode scalars because Swift folds `"\r\n"` into a
+    /// single `Character` that is neither `"\n"` nor `"\r"`, so
+    /// `"a\r\nb".contains("\n")` is `false` and a `Character`-based check
+    /// would wave through the one spelling every Windows editor produces.
+    private static func requireOneLine(_ value: String?, at field: String) throws {
+        guard let value else { return }
+        guard !value.unicodeScalars.contains(where: { $0 == "\n" || $0 == "\r" }) else {
+            throw LedgerError.lineBreakInField(field)
+        }
+    }
 
     /// Refuses a real posting a journal would read back as a virtual one.
     ///
