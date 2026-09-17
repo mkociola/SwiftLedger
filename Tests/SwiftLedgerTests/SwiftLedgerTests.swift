@@ -762,6 +762,266 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
     }
 }
 
+// MARK: - JournalParser: validating a number and reading its marks
+
+/// `parseAmount` used to strip every `,` and hand the rest to
+/// `Decimal(string:)`, which keeps the longest prefix that parses and drops
+/// the rest without a word. A journal of `$1e5` and `€12,50` therefore loaded,
+/// balanced, and reported figures nobody had written (issue #18). The number
+/// is validated here instead, and which of its marks divides the fraction is
+/// read out of the number itself.
+@Suite("amount validation") struct AmountValidationTests {
+    private func value(_ raw: String) throws -> Decimal {
+        try JournalParser().parseAmount(raw, lineNumber: 1).quantity
+    }
+
+    /// The rows of the issue's table that were read as a number they are not.
+    @Test(arguments: [
+        "$1x2y", "$-1x2y", "$1e5", "$-1e5", "$1_000", "$-1_000", "$0x10", "$-0x10", "$.",
+    ])
+    func `an amount that is not a number is refused`(raw: String) throws {
+        #expect(throws: LedgerError.invalidAmount(raw)) {
+            try JournalParser().parseAmount(raw, lineNumber: 1)
+        }
+    }
+
+    /// The other rows: a comma dividing the fraction was multiplying the
+    /// amount by a hundred.
+    @Test
+    func `a comma before two digits divides the fraction`() throws {
+        #expect(try value("€1,50") == Decimal(string: "1.5"))
+        #expect(try value("€-1,50") == Decimal(string: "-1.5"))
+        #expect(try value("1,50 EUR") == Decimal(string: "1.5"))
+        #expect(try value("-1,50 EUR") == Decimal(string: "-1.5"))
+    }
+
+    @Test
+    func `with two different marks the last one divides the fraction`() throws {
+        #expect(try value("1,000.00") == 1000)
+        #expect(try value("1.000,00") == 1000)
+        #expect(try value("12.345,678") == Decimal(string: "12345.678"))
+    }
+
+    @Test
+    func `one mark written more than once groups the digits`() throws {
+        #expect(try value("1,000,000") == 1_000_000)
+        #expect(try value("1.000.000") == 1_000_000)
+        // Indian grouping, which hledger reads this way too. ledger-cli wants
+        // groups of three and refuses it outright, so no journal either tool
+        // loads disagrees with this reading.
+        #expect(try value("1,00,000") == 100_000)
+    }
+
+    /// The one shape the number cannot settle on its own. Both readings are in
+    /// use in the wild, and the tie-break kept is the one this library and
+    /// ledger-cli have always had.
+    @Test
+    func `a mark before exactly three digits keeps the old reading`() throws {
+        #expect(try value("1,000") == 1000)
+        #expect(try value("1.000") == 1)
+    }
+
+    /// Nothing groups a zero, so the tie-break never reaches a number whose
+    /// integer part is one. hledger reads these the same way, and ledger's own
+    /// source carries the same exception. A three-decimal currency writes them
+    /// all day, which is what makes the old reading, `€0,750` as seven hundred
+    /// and fifty euros, worth ruling out.
+    @Test
+    func `a mark with only zeros in front of it divides the fraction`() throws {
+        #expect(try value("0,500") == Decimal(string: "0.5"))
+        #expect(try value("0,075") == Decimal(string: "0.075"))
+        #expect(try value("€0,750") == Decimal(string: "0.75"))
+        #expect(try value("10,500") == 10500)
+    }
+
+    @Test
+    func `a mark before any other count of digits divides the fraction`() throws {
+        #expect(try value("12,50") == Decimal(string: "12.5"))
+        #expect(try value("1,5") == Decimal(string: "1.5"))
+        #expect(try value("1,0000") == 1)
+        #expect(try value(".5") == Decimal(string: "0.5"))
+        #expect(try value(",5") == Decimal(string: "0.5"))
+        #expect(try value("5.") == 5)
+        #expect(try value("5,") == 5)
+    }
+
+    /// A group mark needs a digit on each side, and every group mark has to be
+    /// the same character.
+    @Test(arguments: [",000", "1,,000", "1,000,", "1,.5", "1.000,000.00", "."])
+    func `a number whose marks do not add up is refused`(raw: String) throws {
+        #expect(throws: LedgerError.invalidAmount(raw)) {
+            try JournalParser().parseAmount(raw, lineNumber: 1)
+        }
+    }
+
+    /// Nothing that is not a digit or a mark belongs in a number. With the
+    /// commodity in front, the whole of the rest of the text is the number, so
+    /// there is nowhere for the stray characters to hide.
+    @Test(arguments: ["$1e5", "$0x10", "$1_000", "$1x2y", "$1 000", "$1-2", "$100 USD"])
+    func `a number carrying anything else is refused`(raw: String) throws {
+        #expect(throws: LedgerError.invalidAmount(raw)) {
+            try JournalParser().parseAmount(raw, lineNumber: 1)
+        }
+    }
+
+    /// A digit is not a digit because Foundation says so. `Character.isNumber`
+    /// is true of half a dozen kinds of character `Decimal(string:)` cannot
+    /// read, and a range test over `"0" ... "9"` lets a combining accent in,
+    /// where `Decimal(string:)` takes the digits before it and drops the rest.
+    @Test(arguments: ["$5\u{0301}", "$1\u{0301},000", "5\u{0301} EUR", "$１", "$٣", "$½"])
+    func `a digit from outside ASCII is not a number`(raw: String) throws {
+        #expect(throws: LedgerError.invalidAmount(raw)) {
+            try JournalParser().parseAmount(raw, lineNumber: 1)
+        }
+    }
+
+    /// Written the other way round, what follows the digits is the commodity,
+    /// which is how `10AAPL` is a share count in both tools and how this has
+    /// always read. A quoted symbol is kept exactly as written, quotes and all,
+    /// since the quoting is not modelled here and a file using it loaded
+    /// before.
+    @Test
+    func `letters after a bare number name the commodity`() throws {
+        let shares = try JournalParser().parseAmount("10AAPL", lineNumber: 1)
+        #expect(shares.quantity == 10)
+        #expect(shares.commodity == "AAPL")
+
+        let dollars = try JournalParser().parseAmount("100USD", lineNumber: 1)
+        #expect(dollars.quantity == 100)
+        #expect(dollars.commodity == "USD")
+
+        let quoted = try JournalParser().parseAmount("10 \"AAPL 2\"", lineNumber: 1)
+        #expect(quoted.quantity == 10)
+        #expect(quoted.commodity == "\"AAPL 2\"")
+    }
+
+    /// An unquoted commodity symbol carries no digit in either tool, so the
+    /// bare forms from the issue are a mistyped number rather than one unit of
+    /// `e5` or of `x2y`. The number also has to stop of its own accord: text
+    /// beginning where the digits could have carried on means it was cut
+    /// short, not that the commodity began.
+    @Test(arguments: ["1e5", "0x10", "1_000", "1x2y", "1 000 EUR", "1-2"])
+    func `a bare number that runs into its commodity is refused`(raw: String) throws {
+        #expect(throws: LedgerError.invalidAmount(raw)) {
+            try JournalParser().parseAmount(raw, lineNumber: 1)
+        }
+    }
+
+    /// The journal from the issue, which used to load without complaint and
+    /// report `€-1249` where the file says nine hundred and eighty-seven fifty.
+    @Test
+    func `the european journal from the issue loads with its own numbers`() throws {
+        let text = """
+        commodity 1.000,00 EUR
+        D 1.000,00 EUR
+
+        2024-01-01 opening
+            assets:bank      €1.000,00
+            equity:opening  €-1.000,00
+
+        2024-01-02 groceries
+            expenses:food       €12,50
+            assets:bank        €-12,50
+        """
+        let journal = try JournalParser().parse(text)
+        let ledger = Ledger(journal: journal)
+        #expect(try ledger.balance(for: "assets:bank") == [
+            Amount(quantity: #require(Decimal(string: "987.50")), commodity: "€", commodityIsPrefix: true),
+        ])
+        #expect(try ledger.balance(for: "expenses:food") == [
+            Amount(quantity: #require(Decimal(string: "12.50")), commodity: "€", commodityIsPrefix: true),
+        ])
+        // The directives are read for the style they state and kept verbatim
+        // all the same, so the file still goes back byte for byte.
+        #expect(journal.directives == ["commodity 1.000,00 EUR", "D 1.000,00 EUR"])
+        #expect(JournalSerializer().serialize(journal) == text)
+        #expect(journal.commodityFormats["EUR"]?.fractionDigits == 2)
+        #expect(journal.commodityFormats["EUR"]?.groupsThousands == true)
+        #expect(journal.commodityFormats["€"]?.fractionDigits == 2)
+    }
+
+    /// A file written with a comma decimal mark says two fraction digits and
+    /// no grouping, and a posting rebuilt from it still means what it meant.
+    /// What it is spelled with on the way out is a separate question: the
+    /// serializer writes `.` for the decimal mark whatever the file uses.
+    @Test
+    func `a comma-decimal file records two fraction digits and no grouping`() throws {
+        let text = """
+        2024-01-02 groceries
+            expenses:food       €12,50
+            assets:bank        €-12,50
+        """
+        var journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["€"]?.fractionDigits == 2)
+        #expect(journal.commodityFormats["€"]?.groupsThousands == false)
+
+        try renaming(#require(journal.transactions.first), to: "groceries (revised)", in: &journal)
+        let rebuilt = try JournalParser().parse(JournalSerializer().serialize(journal))
+        let entry = try #require(rebuilt.transactions.first)
+        #expect(try entry.postings.map(\.amount.quantity) == [
+            #require(Decimal(string: "12.50")), #require(Decimal(string: "-12.50")),
+        ])
+    }
+
+    /// A directive states a style and may say why in the same breath. The
+    /// sample is what comes before the `;`, since a scanner handed the comment
+    /// refuses the lot and the declaration disappears without a word.
+    @Test
+    func `a directive with a comment still declares its style`() throws {
+        let journal = try JournalParser().parse("""
+        D $1,000.00 ; house style
+        commodity 1.000,00 EUR ; two decimals, points for thousands
+        """)
+        #expect(journal.commodityFormats["$"]?.fractionDigits == 2)
+        #expect(journal.commodityFormats["$"]?.groupsThousands == true)
+        #expect(journal.commodityFormats["EUR"]?.fractionDigits == 2)
+        #expect(journal.commodityFormats["EUR"]?.groupsThousands == true)
+    }
+
+    /// A journal saved on Windows. `parse` splits on `\n`, so every line
+    /// arrives with its `\r` still attached and an amount at the end of a line
+    /// reaches the scanner with the `\r` on it. The file loaded before this
+    /// validation existed, and has to go on loading and going back byte for
+    /// byte.
+    @Test
+    func `a journal with windows line endings still loads`() throws {
+        let text = [
+            "2026-08-04 An expense",
+            "    assets                            $-66.00",
+            "    expenses                           $66.00",
+            "",
+            "2026-08-05 In euros",
+            "    assets                         100.00 EUR",
+            "    equity                        -100.00 EUR",
+        ].joined(separator: "\r\n")
+        let journal = try JournalParser().parse(text)
+        let amounts = journal.transactions.flatMap { $0.postings.map(\.amount) }
+        #expect(amounts.map(\.quantity) == [-66, 66, 100, -100])
+        #expect(amounts.map(\.commodity) == ["$", "$", "EUR", "EUR"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `a price is validated like any other amount`() throws {
+        let text = """
+        2024-01-01 buy
+            assets:brokerage    10 AAPL @ $1x
+            assets:checking          $-1500.00
+        """
+        #expect(throws: LedgerError.invalidAmount("$1x")) { try JournalParser().parse(text) }
+    }
+
+    @Test
+    func `a balance assertion reads its marks the way an amount does`() throws {
+        let text = """
+        2024-01-02 statement
+            assets:bank    €0 = €1.000,00
+        """
+        let entry = try #require(JournalParser().parse(text).transactions.first)
+        #expect(entry.postings.first?.balanceAssertion?.quantity == 1000)
+    }
+}
+
 // MARK: - JournalParser: multi-commodity elision
 
 /// An elided amount takes the remainder of every commodity its balancing
@@ -1005,6 +1265,118 @@ private let handWrittenJournal = "; a journal written by hand, not by SwiftLedge
         let transaction = try #require(journal.transactions.first)
         #expect(transaction.postings.flatMap(\.trailingComments).isEmpty)
         #expect(journal.items.last == .comment("    ; not part of the transaction above"))
+    }
+}
+
+// MARK: - JournalParser: a comment after an amount
+
+/// The two-space rule ends an account name, not an amount, so once the name
+/// has ended a `;` opens the posting's comment however few spaces sit before
+/// it. The entry below came in on issue #18 from a real journal that hledger
+/// reads without complaint; here the amount came through as 66 and the comment
+/// was dropped in silence.
+@Suite("comments after an amount") struct PostingCommentTests {
+    private static let oneSpace = """
+    2026-08-04 An expense
+        assets                            $-66.00
+        expenses                           $66.00 ; an expense
+    """
+
+    @Test
+    func `a comment one space after an amount is a comment`() throws {
+        let entry = try #require(JournalParser().parse(Self.oneSpace).transactions.first)
+        #expect(entry.postings.map(\.amount.quantity) == [-66, 66])
+        #expect(entry.postings.map(\.comment) == [nil, "an expense"])
+    }
+
+    @Test
+    func `the entry with the comment goes back byte for byte`() throws {
+        let journal = try JournalParser().parse(Self.oneSpace)
+        #expect(JournalSerializer().serialize(journal) == Self.oneSpace)
+    }
+
+    /// No space at all is the same line: what ends the amount is the `;`, not
+    /// the gap in front of it.
+    @Test
+    func `a comment written straight after an amount is a comment`() throws {
+        let text = """
+        2026-08-04 An expense
+            assets                            $-66.00
+            expenses                           $66.00; an expense
+        """
+        let journal = try JournalParser().parse(text)
+        let entry = try #require(journal.transactions.first)
+        #expect(entry.postings.map(\.amount.quantity) == [-66, 66])
+        #expect(entry.postings.map(\.comment) == [nil, "an expense"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    /// An untouched file always survived a save, since it is replayed from its
+    /// own lines. The comment was lost the moment anything rebuilt the entry,
+    /// which is what an edit, a rename or a reconcile does.
+    @Test
+    func `a rebuilt entry writes the comment back`() throws {
+        var journal = try JournalParser().parse(Self.oneSpace)
+        try renaming(#require(journal.transactions.first), to: "An expense (revised)", in: &journal)
+        #expect(JournalSerializer().serialize(journal).contains("$66.00  ; an expense"))
+    }
+
+    @Test
+    func `the two-space form reads the same way`() throws {
+        let text = """
+        2026-08-04 An expense
+            assets                            $-66.00
+            expenses                           $66.00  ; an expense
+        """
+        let journal = try JournalParser().parse(text)
+        let entry = try #require(journal.transactions.first)
+        #expect(entry.postings.map(\.comment) == [nil, "an expense"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    /// Everything from the first `;` is the comment, so a `;` written inside
+    /// one stays inside it rather than starting a second.
+    @Test
+    func `only the first semicolon opens the comment`() throws {
+        let text = """
+        2026-08-04 An expense
+            assets                            $-66.00
+            expenses                           $66.00 ; an expense ; paid in cash
+        """
+        let entry = try #require(JournalParser().parse(text).transactions.first)
+        #expect(entry.postings.last?.comment == "an expense ; paid in cash")
+    }
+
+    /// A posting that writes no amount has no amount field for the rule to
+    /// apply to, so its `;` still needs the two spaces that end an account
+    /// name. With one space the `;` is part of the name, which is what this
+    /// has always done.
+    @Test
+    func `a posting with no amount keeps the two-space rule`() throws {
+        let text = """
+        2026-08-04 A note
+            expenses ; not a comment
+        """
+        let entry = try #require(JournalParser().parse(text).transactions.first)
+        #expect(entry.postings.map(\.accountName) == ["expenses ; not a comment"])
+        #expect(entry.postings.first?.comment == nil)
+
+        let spaced = try JournalParser().parse("""
+        2026-08-04 A note
+            expenses  ; a comment
+        """)
+        #expect(spaced.transactions.first?.postings.first?.accountName == "expenses")
+        #expect(spaced.transactions.first?.postings.first?.comment == "a comment")
+    }
+
+    /// The margin is measured on the field the comment has already been taken
+    /// out of. This entry ends both its amounts at column 45; counting the
+    /// comment as part of the field would put one of them at 58 and hand the
+    /// file a margin no amount in it stands at.
+    @Test
+    func `a comment does not move the margin the file teaches`() throws {
+        let journal = try JournalParser().parse(Self.oneSpace)
+        #expect(journal.amountAlignment == .end(column: 45))
     }
 }
 

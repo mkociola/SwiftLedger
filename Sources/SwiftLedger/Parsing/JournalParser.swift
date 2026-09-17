@@ -11,14 +11,41 @@ import Foundation
 /// ```
 ///
 /// - Date formats: `YYYY-MM-DD` or `YYYY/MM/DD`
-/// - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `100.00 EUR`, `£500`
+/// - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `100.00 EUR`, `£500`.
+///   The number is ASCII digits, at most one decimal mark and any number of
+///   digit-group marks, and nothing else: `$1e5`, `$0x10`, `$1_000`, `$1x2y`
+///   and `1 000 EUR` are `LedgerError.invalidAmount` rather than the 100000,
+///   0, 1, 1 and 1 that keeping the longest numeric prefix would make of them.
+///   Digits followed by letters still name a commodity, as `10AAPL` does in
+///   both tools, but an unquoted commodity symbol carries no digit of its own
+///   there or here, so a bare `1e5` is invalid too rather than one unit of a
+///   commodity called `e5`. A quoted symbol may carry anything and is kept as
+///   written, quotes included: `10 "AAPL 2"`.
+/// - Decimal marks: both marks are written `.` or `,` depending on where the
+///   file comes from, so which is which is read out of the number, as hledger
+///   reads it. Two different marks make the last one the decimal mark, so
+///   `1,000.00` and `1.000,00` are both a thousand; one mark written more than
+///   once groups, so `1.000.000` is a million; one mark with any count of
+///   digits after it other than three divides, so `€12,50` is twelve fifty;
+///   and one mark with nothing but zeros in front of it divides whatever
+///   follows, since there is nothing there to group, so `€0,750` is three
+///   quarters. One mark with exactly three digits after it is the one shape
+///   the number cannot settle, and it keeps the reading this library and
+///   ledger-cli have always had: `1,000` is a thousand and `1.000` is one,
+///   where hledger would read `1,000` as one. A `commodity` or `D` directive
+///   is read for the display style it states, never for this.
 /// - A posting amount may be followed by a price (`@` per unit, `@@` total)
 ///   and/or a balance assertion (`=`), in that order, each written in either
 ///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
 ///   balancing; assertions are preserved but never checked.
 /// - Status: `*` = cleared, `!` = pending
 /// - Comments: `;`, `#`, `*`, `%` or `|` at line start; inline `  ;` after
-///   2+ spaces
+///   2+ spaces. On a posting line the two-space rule ends the account name
+///   rather than the amount, so once a name has ended, a `;` opens the
+///   posting's comment however few spaces come before it: `$66.00 ; an
+///   expense` is an amount and a comment, as it is in ledger and hledger. A
+///   posting that writes no amount has no field for that to apply to, so its
+///   `;` still needs the two spaces.
 /// - A `comment` or `test` line at column 0 opens a block comment, anything
 ///   after the keyword being ignored, and the block runs to the next
 ///   `end comment` or `end test` line at column 0, or to the end of the file.
@@ -298,10 +325,6 @@ public struct JournalParser {
     ) throws -> RawPosting {
         var rest = line.trimmingCharacters(in: .whitespaces)
 
-        // Extract inline comment (2+ spaces then ;)
-        let (mainPart, comment) = splitInlineComment(rest)
-        rest = mainPart.trimmingCharacters(in: .init(charactersIn: " \t"))
-
         // Optional status (* or !)
         var postingStatus: ClearingStatus?
         if rest.hasPrefix("* ") || rest.hasPrefix("! ") {
@@ -311,8 +334,12 @@ public struct JournalParser {
 
         // Account name ends at 2+ spaces, or at end of line. The token is kept
         // as the line writes it for the style observation below; the posting
-        // stores the bare name.
-        let (accountToken, amountStr) = splitAccountAndAmount(rest)
+        // stores the bare name. The comment is split off what follows the
+        // name rather than off the whole line, because there the `;` needs no
+        // two spaces in front of it, and the field the margin is measured
+        // against is the one with the comment already gone.
+        let (accountToken, field) = splitAccountAndAmount(rest)
+        let (amountStr, comment) = splitPostingComment(field)
         let (accountName, kind) = Posting.Kind.split(accountToken)
         style.observeIndent(String(line.prefix { $0 == " " || $0 == "\t" }))
         if let amountStr, let start = Self.amountColumn(in: line, after: accountToken) {
@@ -329,19 +356,19 @@ public struct JournalParser {
         if let rawAmount = amountStr {
             let field = splitAmountField(rawAmount)
             if !field.amount.isEmpty {
-                let parsed = try parseAmount(field.amount, lineNumber: lineNumber)
-                style.observe(field.amount, as: parsed)
-                amount = parsed
+                let parsed = try parseShapedAmount(field.amount, lineNumber: lineNumber)
+                style.observe(field.amount, shape: parsed.shape, as: parsed.amount)
+                amount = parsed.amount
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
-                let priced = try parseAmount(rawPrice, lineNumber: lineNumber)
-                style.observe(rawPrice, as: priced)
-                price = field.priceIsTotal ? .total(priced) : .perUnit(priced)
+                let priced = try parseShapedAmount(rawPrice, lineNumber: lineNumber)
+                style.observe(rawPrice, shape: priced.shape, as: priced.amount)
+                price = field.priceIsTotal ? .total(priced.amount) : .perUnit(priced.amount)
             }
             if let rawAssertion = field.assertion, !rawAssertion.isEmpty {
-                let asserted = try parseAmount(rawAssertion, lineNumber: lineNumber)
-                style.observe(rawAssertion, as: asserted)
-                balanceAssertion = asserted
+                let asserted = try parseShapedAmount(rawAssertion, lineNumber: lineNumber)
+                style.observe(rawAssertion, shape: asserted.shape, as: asserted.amount)
+                balanceAssertion = asserted.amount
             }
         }
 

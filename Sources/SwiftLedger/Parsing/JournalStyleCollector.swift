@@ -31,12 +31,15 @@ struct JournalStyleCollector {
 
     /// Records how one amount was written.
     ///
-    /// `raw` is the amount exactly as the file has it, commodity symbol and all
-    /// — `$1,234.50`, `-1500.00 EUR`, `10 AAPL`. `amount` is what the parser
-    /// made of it, so that the two always agree on which commodity was written
-    /// and which way round it was.
-    mutating func observe(_ raw: String, as amount: Amount) {
-        guard let shape = NumberShape(raw) else { return }
+    /// `shape` comes from the scan that read the amount, rather than from a
+    /// second look at the text: only the parser knows whether the `.` in
+    /// `1.000,00` grouped the thousands or divided the fraction, and a
+    /// collector that guessed would record a style the file never used.
+    /// `raw` is the amount exactly as the file has it, commodity symbol and
+    /// all, which is all that is left to read the sign's placement out of.
+    /// `amount` is what the parser made of it, so that the two always agree on
+    /// which commodity was written and which way round it was.
+    mutating func observe(_ raw: String, shape: NumberShape, as amount: Amount) {
         let commodity = amount.commodity
         fractionDigitCounts[commodity, default: [:]][shape.fractionDigits, default: 0] += 1
         if shape.canShowGrouping {
@@ -63,8 +66,7 @@ struct JournalStyleCollector {
     ///
     /// A declaration says nothing about where a minus sign goes, so that stays
     /// with whatever the file's own amounts show.
-    mutating func declare(_ raw: String, commodity: String) {
-        guard let shape = NumberShape(raw) else { return }
+    mutating func declare(_ shape: NumberShape, commodity: String) {
         declared[commodity] = (shape.fractionDigits, shape.usesSeparator)
     }
 
@@ -184,48 +186,5 @@ struct JournalStyleCollector {
     /// likelier to mean the former.
     private static func groups(separated: Int, unseparated: Int) -> Bool {
         separated > 0 && separated >= unseparated
-    }
-}
-
-// MARK: - Number shape
-
-/// The written shape of one amount: what the digits looked like before
-/// `Decimal` normalised them away.
-private struct NumberShape {
-    var fractionDigits: Int
-    var usesSeparator: Bool
-    /// Whether the integer part is long enough for a thousands separator to
-    /// have been visible at all.
-    var canShowGrouping: Bool
-
-    /// Reads the shape out of an amount as the file writes it.
-    ///
-    /// Takes the first run of `0-9`, `,` and `.` in the text, which is the
-    /// number in every style the parser accepts: the commodity is either in
-    /// front of it (`$1,234.50`, `-$50`) or behind it (`1,234.50 EUR`), and a
-    /// sign on either side is not part of the run.
-    init?(_ raw: String) {
-        var digits = ""
-        var started = false
-        for character in raw {
-            if character.isNumber || character == "," || character == "." {
-                digits.append(character)
-                started = true
-            } else if started {
-                break
-            }
-        }
-        guard started, digits.contains(where: \.isNumber) else { return nil }
-
-        usesSeparator = digits.contains(",")
-        let integerText: String
-        if let point = digits.lastIndex(of: ".") {
-            integerText = String(digits[..<point])
-            fractionDigits = digits[digits.index(after: point)...].count(where: \.isNumber)
-        } else {
-            integerText = digits
-            fractionDigits = 0
-        }
-        canShowGrouping = integerText.count(where: \.isNumber) > 3
     }
 }
