@@ -2,26 +2,6 @@
 
 import Foundation
 
-/// The written shape of one amount: what its digits looked like before
-/// `Decimal` normalised them away.
-///
-/// Filled in by the scan that reads the value, never by a second pass over the
-/// text, so that the shape and the quantity can never disagree about which
-/// mark divided the fraction. A file written `1.000,00` shows two fraction
-/// digits and groups its thousands; reading that text again against the
-/// assumption that `.` always divides, as this used to, records five fraction
-/// digits and no grouping, and every amount written back into the file
-/// inherits the mistake.
-struct NumberShape {
-    /// How many digits followed the decimal mark.
-    var fractionDigits: Int
-    /// Whether the integer part was written in digit groups.
-    var usesSeparator: Bool
-    /// Whether the integer part is long enough for a group mark to have been
-    /// visible at all.
-    var canShowGrouping: Bool
-}
-
 extension JournalParser {
     /// An amount and the shape the file wrote its number in. Neither is
     /// recoverable from the other: a `Decimal` normalises its own scale and
@@ -220,26 +200,39 @@ extension JournalParser {
               characters.contains(where: \.isASCIIDigit) else { return nil }
 
         let marks = characters.indices.filter { !characters[$0].isASCIIDigit }
-        let decimal = decimalMark(in: characters, marks: marks)
-        let groups = marks.filter { $0 != decimal }
+        let reading = markReading(in: characters, marks: marks)
+        let groups = marks.filter { $0 != reading.decimal }
         guard groupsAreWellPlaced(groups, in: characters) else { return nil }
-        return number(from: characters, decimal: decimal, isGrouped: !groups.isEmpty)
+        return number(from: characters, decimal: reading.decimal, groups: groups, isSettled: reading.isSettled)
     }
 
-    /// Which mark divides the fraction, as an index into `characters`, or
-    /// `nil` when every mark groups and the number has no fraction at all.
-    private static func decimalMark(in characters: [Character], marks: [Int]) -> Int? {
-        guard let last = marks.last else { return nil }
-        if Set(marks.map { characters[$0] }).count > 1 { return last }
-        if marks.count > 1 { return nil }
+    /// How the marks of one number were read.
+    private struct MarkReading {
+        /// Which mark divides the fraction, as an index into the number, or
+        /// `nil` when every mark groups and the number has no fraction at all.
+        var decimal: Int?
+        /// Whether the number itself settled that, rather than the tie-break
+        /// settling it for the number. A reading is made either way, since a
+        /// value has to come out; only what the number is allowed to say about
+        /// the file's convention turns on this.
+        var isSettled: Bool
+    }
+
+    /// Tells the marks of a number apart.
+    private static func markReading(in characters: [Character], marks: [Int]) -> MarkReading {
+        guard let last = marks.last else { return MarkReading(decimal: nil, isSettled: true) }
+        if Set(marks.map { characters[$0] }).count > 1 { return MarkReading(decimal: last, isSettled: true) }
+        if marks.count > 1 { return MarkReading(decimal: nil, isSettled: true) }
         // Nothing groups a zero, so a lone mark with only zeros in front of it
         // divides however many digits follow it: `0,500` is half a unit. An
         // empty integer part is not that case, and `,000` stays a group mark
         // with nothing on its left, which is no number at all.
         let integerPart = characters[..<last]
-        if !integerPart.isEmpty, integerPart.allSatisfy({ $0 == "0" }) { return last }
-        guard characters.count - last - 1 == 3 else { return last }
-        return characters[last] == "." ? last : nil
+        if !integerPart.isEmpty, integerPart.allSatisfy({ $0 == "0" }) {
+            return MarkReading(decimal: last, isSettled: true)
+        }
+        guard characters.count - last - 1 == 3 else { return MarkReading(decimal: last, isSettled: true) }
+        return MarkReading(decimal: characters[last] == "." ? last : nil, isSettled: false)
     }
 
     /// Whether every group mark is the same character, written between two
@@ -261,10 +254,16 @@ extension JournalParser {
     /// The value and the shape, once the marks have been told apart. The
     /// fraction needs no filtering: the decimal mark is the last mark there
     /// is, so nothing but digits follows it.
+    ///
+    /// The marks go into the shape as the characters the number actually
+    /// wrote, and an unsettled reading reports neither. See `NumberShape` for
+    /// why a number that cannot say which convention it follows is kept from
+    /// saying it anyway.
     private static func number(
         from characters: [Character],
         decimal: Int?,
-        isGrouped: Bool,
+        groups: [Int],
+        isSettled: Bool,
     ) -> ScannedNumber? {
         let integerDigits = characters[..<(decimal ?? characters.count)].filter(\.isASCIIDigit)
         let fractionDigits = decimal.map { Array(characters[($0 + 1)...]) } ?? []
@@ -276,8 +275,10 @@ extension JournalParser {
             magnitude: magnitude,
             shape: NumberShape(
                 fractionDigits: fractionDigits.count,
-                usesSeparator: isGrouped,
+                usesSeparator: !groups.isEmpty,
                 canShowGrouping: integerDigits.count > 3,
+                decimalMark: isSettled ? decimal.map { characters[$0] } : nil,
+                groupMark: isSettled ? groups.first.map { characters[$0] } : nil,
             ),
         )
     }

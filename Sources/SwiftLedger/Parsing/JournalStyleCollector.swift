@@ -20,8 +20,19 @@ struct JournalStyleCollector {
     /// negative amounts written `-$50`, and negative amounts written `$-50`.
     private var signFirst: [String: Int] = [:]
     private var signAfterCommodity: [String: Int] = [:]
+    /// Per commodity: how many of its amounts wrote each decimal mark. An
+    /// amount whose own marks could not be told apart casts no vote.
+    private var decimalMarks: [String: [Character: Int]] = [:]
+    /// What a `D` or `commodity` directive states for a commodity outright.
+    private struct DeclaredStyle {
+        var fractionDigits: Int
+        var groupsThousands: Bool
+        /// `nil` when the sample could not say which of its marks was which.
+        var decimalMark: Character?
+    }
+
     /// Styles a `D` or `commodity` directive states outright.
-    private var declared: [String: (fractionDigits: Int, groupsThousands: Bool)] = [:]
+    private var declared: [String: DeclaredStyle] = [:]
     /// The column each posting's amount field began at, and each one ended at,
     /// with how often — the two conventions, counted against each other.
     private var amountStarts: [Int: Int] = [:]
@@ -49,6 +60,11 @@ struct JournalStyleCollector {
                 unseparated[commodity, default: 0] += 1
             }
         }
+        // One amount, one vote on the marks, however many of them it wrote:
+        // `1.000,00` shows both and still counts once.
+        if let mark = Self.decimalMark(of: shape) {
+            decimalMarks[commodity, default: [:]][mark, default: 0] += 1
+        }
         // Only a negative amount with its commodity in front can show which
         // side the sign goes on. `-1500.00 EUR` has nowhere else to put it.
         if amount.commodityIsPrefix, amount.quantity < 0 {
@@ -65,9 +81,15 @@ struct JournalStyleCollector {
     /// ledger writes one — as a sample amount: `D $1,000.00`.
     ///
     /// A declaration says nothing about where a minus sign goes, so that stays
-    /// with whatever the file's own amounts show.
+    /// with whatever the file's own amounts show. A sample that cannot say
+    /// which of its marks was which, as `D 1.000 EUR` cannot, says nothing
+    /// about the marks either and leaves them to the amounts in the same way.
     mutating func declare(_ shape: NumberShape, commodity: String) {
-        declared[commodity] = (shape.fractionDigits, shape.usesSeparator)
+        declared[commodity] = DeclaredStyle(
+            fractionDigits: shape.fractionDigits,
+            groupsThousands: shape.usesSeparator,
+            decimalMark: Self.decimalMark(of: shape),
+        )
     }
 
     /// Records where a posting line's amount field began and ended.
@@ -139,6 +161,7 @@ struct JournalStyleCollector {
                 // Ties, and files with no negative prefixed amount at all, keep
                 // the placement SwiftLedger has always written.
                 signPrecedesCommodity: (signFirst[commodity] ?? 0) >= (signAfterCommodity[commodity] ?? 0),
+                decimalMark: Self.mostCommonMark(decimalMarks[commodity] ?? [:]),
             )
         }
         // A declaration is the user stating their house style rather than the
@@ -154,6 +177,9 @@ struct JournalStyleCollector {
                 maxFractionDigits: max(observed.maxFractionDigits, stated.fractionDigits),
                 groupsThousands: stated.groupsThousands,
                 signPrecedesCommodity: observed.signPrecedesCommodity,
+                // A declaration whose sample could not name a mark overrules
+                // nothing here, and the amounts keep the vote.
+                decimalMark: stated.decimalMark ?? observed.decimalMark,
             )
         }
         return result
@@ -186,5 +212,31 @@ struct JournalStyleCollector {
     /// likelier to mean the former.
     private static func groups(separated: Int, unseparated: Int) -> Bool {
         separated > 0 && separated >= unseparated
+    }
+
+    /// The decimal mark one written number is evidence for: the mark that
+    /// divided its own fraction, or failing that the counterpart of the mark
+    /// it grouped with, since a number grouping with `.` divides with `,`.
+    ///
+    /// `nil` is an abstention rather than a vote for the default: a number
+    /// whose one mark had exactly three digits after it was read by the
+    /// tie-break rather than by anything it said, and the file's real evidence
+    /// should not be outvoted by numbers that had nothing to say.
+    private static func decimalMark(of shape: NumberShape) -> Character? {
+        shape.decimalMark ?? shape.groupMark.map(counterpart)
+    }
+
+    /// The other of the two characters a number's marks are written with.
+    /// `CommodityFormat.groupMark` states the same rule from the other end.
+    private static func counterpart(of mark: Character) -> Character {
+        mark == "," ? "." : ","
+    }
+
+    /// The mark the most amounts wrote. There are two to choose between, so
+    /// the count is between two numbers: `,` has to win outright, and a tie or
+    /// a commodity whose every amount abstained leaves `.`, which is the
+    /// default and what SwiftLedger has always written.
+    private static func mostCommonMark(_ votes: [Character: Int]) -> Character {
+        (votes[","] ?? 0) > (votes["."] ?? 0) ? "," : "."
     }
 }
