@@ -27,7 +27,11 @@ import Foundation
 ///   (`Journal.commodityFormats`). A `Decimal` has forgotten every one of them
 ///   by the time it gets here, so without that an edit to a payee would also
 ///   restyle that entry's `$-1,234.50` to `-$1234.5`, and a European file's
-///   `€1.500,00` to `€1,500.00`.
+///   `€1.500,00` to `€1,500.00`. A comma amount is never written in a shape
+///   this parser would read the other way round, so twelve and an eighth is
+///   written `€12,1250` rather than the `€12,125` that reads back grouped,
+///   and a thousand with no fraction `1000` rather than the `1.000` that
+///   reads back as one.
 /// - A posting's price and balance assertion are re-emitted after its amount,
 ///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
 /// - A virtual posting's account name is written back inside its own

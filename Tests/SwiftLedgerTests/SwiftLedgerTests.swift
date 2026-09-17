@@ -2902,9 +2902,13 @@ private func renaming(
         #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
 
         // Three places because the declaration says three, a comma because the
-        // postings say comma: the two questions are answered separately.
+        // postings say comma, and a fourth place because the reader cannot
+        // settle `12,500` and would hand back twelve thousand five hundred.
         try renaming(#require(journal.transactions.first), to: "lunch (revised)", in: &journal)
-        #expect(JournalSerializer().serialize(journal).contains("12,500 EUR"))
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("12,5000 EUR"))
+        #expect(try #require(JournalParser().parse(written).transactions.last)
+            .postings.map(\.amount.quantity) == [Decimal(string: "12.5"), Decimal(string: "-12.5")])
     }
 
     @Test
@@ -2916,6 +2920,121 @@ private func renaming(
 
         let ungrouped = CommodityFormat(fractionDigits: 2, decimalMark: ",")
         #expect(try ungrouped.render(#require(Decimal(string: "1234.5"))) == "1234,50")
+    }
+}
+
+// MARK: - What is written has to read back
+
+/// Rendering and parsing are two halves of one round trip, and the parser
+/// settles one shape by a tie-break rather than by anything the number says.
+/// A writer that ignored that put a number on disk worth a thousand times what
+/// it held: `12,125` came back grouped, and `1.000` came back divided.
+@Suite("rendered marks read back") struct RenderedMarkTests {
+    /// Every shape this type can write, read back as the value it held.
+    @Test(arguments: [".", ","] as [Character], [false, true])
+    func `every rendered amount parses back to the value it held`(
+        mark: Character,
+        groups: Bool,
+    ) throws {
+        let quantities: [Decimal] = try [
+            0,
+            1,
+            #require(Decimal(string: "12.5")),
+            #require(Decimal(string: "12.125")),
+            #require(Decimal(string: "0.125")),
+            1000,
+            #require(Decimal(string: "1234.567")),
+            1_000_000,
+        ]
+        for digits in 0 ... 4 {
+            let format = CommodityFormat(fractionDigits: digits, groupsThousands: groups, decimalMark: mark)
+            for quantity in quantities {
+                let text = format.render(quantity)
+                let suffixed = try JournalParser().parseAmount("\(text) EUR", lineNumber: 1)
+                #expect(suffixed.quantity == quantity, "\(text) EUR")
+                let prefixed = try JournalParser().parseAmount("€\(text)", lineNumber: 1)
+                #expect(prefixed.quantity == quantity, "€\(text)")
+            }
+        }
+    }
+
+    /// An eighth of a euro in a file that writes two places: the third place
+    /// is the amount's own, and the fourth is what keeps the comma from
+    /// reading as a group mark on the way back in.
+    @Test
+    func `an amount with three places joins a comma file with four`() throws {
+        var journal = try JournalParser().parse("""
+        2024-01-02 groceries
+            expenses:food       €12,50
+            assets:bank        €-12,50
+        """)
+        let eighth = try #require(Decimal(string: "12.125"))
+        try journal.append(.transaction(Transaction(
+            date: makeDate(2024, 1, 3),
+            description: "coffee",
+            postings: [
+                Posting(
+                    accountName: "expenses:food",
+                    amount: Amount(quantity: eighth, commodity: "€", commodityIsPrefix: true),
+                ),
+                Posting(
+                    accountName: "assets:bank",
+                    amount: Amount(quantity: -eighth, commodity: "€", commodityIsPrefix: true),
+                ),
+            ],
+        )))
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("€12,1250"))
+        let reparsed = try #require(JournalParser().parse(written).transactions.last)
+        #expect(reparsed.postings.map(\.amount.quantity) == [eighth, -eighth])
+    }
+
+    /// A file that writes three places pads a shorter amount to three, which
+    /// is exactly the shape the reader cannot settle, so it gets a fourth.
+    @Test
+    func `an amount padded to three places in a comma file gets a fourth`() throws {
+        var journal = try JournalParser().parse("""
+        2024-01-02 opening
+            assets:bank      €1.234,567
+            equity:opening  €-1.234,567
+        """)
+        #expect(journal.commodityFormats["€"]?.fractionDigits == 3)
+        let half = try #require(Decimal(string: "12.5"))
+        try journal.append(.transaction(Transaction(
+            date: makeDate(2024, 1, 3),
+            description: "coffee",
+            postings: [
+                Posting(
+                    accountName: "expenses:food",
+                    amount: Amount(quantity: half, commodity: "€", commodityIsPrefix: true),
+                ),
+                Posting(
+                    accountName: "assets:bank",
+                    amount: Amount(quantity: -half, commodity: "€", commodityIsPrefix: true),
+                ),
+            ],
+        )))
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("€12,5000"))
+        let reparsed = try #require(JournalParser().parse(written).transactions.last)
+        #expect(reparsed.postings.map(\.amount.quantity) == [half, -half])
+    }
+
+    /// A thousand in a file that groups with `.` and writes no fraction: the
+    /// grouping is what would make `1.000`, so that one number goes ungrouped,
+    /// as every number under a thousand in the same file already is.
+    @Test
+    func `a thousand with no fraction is written ungrouped in a comma file`() throws {
+        let format = CommodityFormat(fractionDigits: 0, groupsThousands: true, decimalMark: ",")
+        #expect(format.render(1000) == "1000")
+        #expect(format.render(999) == "999")
+        // Two groups say what one cannot, and an amount with a fraction writes
+        // both marks, so neither of those gives anything up.
+        #expect(format.render(1_000_000) == "1.000.000")
+        #expect(try CommodityFormat(fractionDigits: 2, groupsThousands: true, decimalMark: ",")
+            .render(#require(Decimal(string: "1000.5"))) == "1.000,50")
     }
 }
 
