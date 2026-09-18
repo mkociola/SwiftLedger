@@ -75,9 +75,11 @@ Scripts/hledger-fixtures.sh
 
 The script writes `NAME.print.json` and `NAME.balance.json` for a journal
 hledger reads, or `NAME.error.txt` for one it refuses, and records the hledger
-version in `hledger-version.txt`. CI regenerates them and fails if the
-committed files differ, so a fixture cannot be edited by hand and a new
-hledger release that reads a journal differently shows up as a diff.
+version in `hledger-version.txt`. CI regenerates them and fails if a fixture
+differs, so a fixture cannot be edited by hand and a new hledger release that
+reads a journal differently shows up as a diff. The version file itself is not
+compared: the runner's hledger may be a patch release away from yours, and
+only a different reading is a failure.
 
 A journal SwiftLedger is known to read differently is named in
 `knownDivergences` at the top of the test. Its case then passes only while the

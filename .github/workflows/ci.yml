@@ -40,5 +40,13 @@ jobs:
       - name: 🔁 Regenerate fixtures
         run: Scripts/hledger-fixtures.sh
 
+      # The fixtures are the contract, not the patch release that wrote them:
+      # Homebrew on the runner may lag or lead the hledger that produced the
+      # committed files, and a different version that reads every journal the
+      # same way is not a failure. The version is printed so that a real diff
+      # below can be traced to it.
       - name: 🔍 Compare with the committed fixtures
-        run: git diff --exit-code -- Tests/SwiftLedgerTests/Conformance
+        run: |
+          echo "committed with: $(git show HEAD:Tests/SwiftLedgerTests/Conformance/hledger-version.txt)"
+          echo "regenerated with: $(cat Tests/SwiftLedgerTests/Conformance/hledger-version.txt)"
+          git diff --exit-code -- Tests/SwiftLedgerTests/Conformance ':!Tests/SwiftLedgerTests/Conformance/hledger-version.txt'
