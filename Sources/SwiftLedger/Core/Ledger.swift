@@ -249,7 +249,7 @@ public struct Ledger: Sendable {
                 )
             }
             .filter { !dropZeros || !$0.isZero }
-            .sorted { $0.commodity < $1.commodity }
+            .sorted { CommodityOrder.precedes($0.commodity, $1.commodity) }
     }
 
     /// Returns all account balances as a dictionary keyed by account name.
@@ -292,7 +292,7 @@ public struct Ledger: Sendable {
                 if let price = posting.price { names.insert(price.amount.commodity) }
             }
         }
-        return names.sorted()
+        return names.sorted(by: CommodityOrder.precedes)
     }
 
     // MARK: - Transaction queries

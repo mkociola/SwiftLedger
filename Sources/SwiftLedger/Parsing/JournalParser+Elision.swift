@@ -84,7 +84,7 @@ extension JournalParser {
                     quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix,
                 )
             }
-            .sorted { $0.commodity < $1.commodity }
+            .sorted { CommodityOrder.precedes($0.commodity, $1.commodity) }
         guard remainders.isEmpty else { return remainders }
         return [Amount(
             quantity: .zero, commodity: first.commodity, commodityIsPrefix: first.commodityIsPrefix,

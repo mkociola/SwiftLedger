@@ -239,7 +239,7 @@ enum TransactionBalancing {
                     quantity: sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix,
                 )
             }
-            .sorted { $0.commodity < $1.commodity }
+            .sorted { CommodityOrder.precedes($0.commodity, $1.commodity) }
     }
 
     /// The largest residual in `commodity` that still counts as zero.

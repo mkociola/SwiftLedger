@@ -1,0 +1,37 @@
+[
+  {
+    "account": "assets:cash",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 10000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "assets:shares",
+    "amounts": [
+      {
+        "commodity": "AAPL 2026",
+        "mantissa": 10,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "equity:opening",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -10000,
+        "places": 2
+      },
+      {
+        "commodity": "AAPL 2026",
+        "mantissa": -10,
+        "places": 0
+      }
+    ]
+  }
+]

@@ -1526,6 +1526,27 @@ private extension LedgerError {
         ])
     }
 
+    /// A name with a space in it is quoted where the file writes it, and the
+    /// quotes are not part of the name. hledger orders `"AAPL 2026"` by its
+    /// `A`, which falls after `$`; ordering the symbol as SwiftLedger stores
+    /// it would order it by its opening quote, which falls before `$`, and
+    /// reverse the pair.
+    @Test
+    func `a quoted commodity takes its place in commodity order by its bare name`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:shares     10 "AAPL 2026"
+            assets:cash       $100.00
+            equity:opening
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.suffix(2).map(\.amount) == [
+            Amount(quantity: -100, commodity: "$", commodityIsPrefix: true),
+            Amount(quantity: -10, commodity: "\"AAPL 2026\""),
+        ])
+        #expect(try Ledger(journal: JournalParser().parse(text)).commodities == ["$", "\"AAPL 2026\""])
+    }
+
     /// A commodity the written legs already balance leaves nothing to absorb,
     /// so the elided line gets no leg in it. An entry does not need a `$0`
     /// posting to say what its dollar legs already said.

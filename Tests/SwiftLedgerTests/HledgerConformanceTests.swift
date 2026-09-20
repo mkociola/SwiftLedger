@@ -31,6 +31,7 @@ import Testing
         "equity-conversion-with-cost",
         "include",
         "posting-date-tag",
+        "quoted-commodity-order",
         "secondary-date-without-year",
         "year-directive",
     ]
