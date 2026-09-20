@@ -74,8 +74,9 @@ import Testing
 
     /// The opening entry for the accounts abroad is the hledger idiom the
     /// parser used to reject: two commodities and one elided line to absorb
-    /// both. It reads as one posting per commodity, and a commodity the
-    /// written postings already net to zero gets no posting at all.
+    /// both. It reads as one posting per commodity, in commodity order rather
+    /// than in the order the entry writes them, and a commodity the written
+    /// postings already net to zero gets no posting at all.
     @Test
     func `the example shows an elided posting absorbing several commodities`() throws {
         let journal = try JournalParser().parse(Self.exampleText)
@@ -91,8 +92,8 @@ import Testing
         #expect(opening.postings.map(\.amount) == [
             Amount(quantity: 1500, commodity: "€", commodityIsPrefix: true),
             Amount(quantity: 400, commodity: "£", commodityIsPrefix: true),
-            Amount(quantity: -1500, commodity: "€", commodityIsPrefix: true),
             Amount(quantity: -400, commodity: "£", commodityIsPrefix: true),
+            Amount(quantity: -1500, commodity: "€", commodityIsPrefix: true),
         ])
 
         let abroad = try #require(byPayee["Lunch and a train abroad"])
@@ -106,6 +107,69 @@ import Testing
             Amount(quantity: -400, commodity: "£", commodityIsPrefix: true),
             Amount(quantity: -1500, commodity: "€", commodityIsPrefix: true),
         ])
+    }
+
+    /// Two commodities and no price on either line is an exchange, and the
+    /// entry balances on the rate the amounts imply. The file keeps no record
+    /// of that rate, which is why it is asked for rather than read.
+    @Test
+    func `the example shows an exchange with no price written`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let entry = try #require(
+            journal.transactions.first { $0.description == "Bought euros at the bureau" },
+        )
+        #expect(entry.postings.allSatisfy { $0.price == nil })
+        #expect(entry.balance.isBalanced)
+        let conversion = try #require(entry.balance.real.conversion)
+        #expect(conversion.postingIndices == [0])
+        #expect(conversion.price == .total(
+            Amount(quantity: 110, commodity: "$", commodityIsPrefix: true),
+        ))
+    }
+
+    /// A price is what lets two postings that share no commodity balance: the
+    /// restaurant account holds thirty euros, the card owes the $32.70 they
+    /// cost, and the entry nets to zero on the cost alone.
+    @Test
+    func `the example shows a posting priced in another commodity`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let entry = try #require(
+            journal.transactions.first { $0.description == "Dinner in Vienna, paid with the card" },
+        )
+        let rate = try #require(Decimal(string: "1.09"))
+        let cost = try #require(Decimal(string: "32.70"))
+        #expect(entry.postings[0].amount == Amount(quantity: 30, commodity: "€", commodityIsPrefix: true))
+        #expect(entry.postings[0].price == .perUnit(
+            Amount(quantity: rate, commodity: "$", commodityIsPrefix: true),
+        ))
+        #expect(entry.postings[0].balancingAmount
+            == Amount(quantity: cost, commodity: "$", commodityIsPrefix: true))
+        #expect(entry.postings[1].amount == Amount(quantity: -cost, commodity: "$", commodityIsPrefix: true))
+    }
+
+    /// Rebuilt, the priced line comes back with its amount where the file
+    /// lines amounts up and the cost trailing past that column, which is
+    /// where the file itself has it.
+    @Test
+    func `the example writes a rebuilt priced posting with its cost trailing`() throws {
+        var journal = try JournalParser().parse(Self.exampleText)
+        let dinner = try #require(
+            journal.transactions.first { $0.description == "Dinner in Vienna, paid with the card" },
+        )
+        let renamed = try Transaction(
+            id: dinner.id,
+            date: dinner.date,
+            description: "Dinner in Vienna, paid with the card (revised)",
+            postings: dinner.postings,
+        )
+        let replaced = journal.replace(.transaction(dinner), with: .transaction(renamed))
+        #expect(replaced)
+
+        let lines = JournalSerializer().serialize(journal).components(separatedBy: "\n")
+        let header = try #require(
+            lines.firstIndex(of: "2024-03-15 Dinner in Vienna, paid with the card (revised)"),
+        )
+        #expect(lines[header + 1] == "    Expenses:Food:Restaurants  €30,00 @ $1.09")
     }
 
     /// The comma in `€12,50` divides the fraction, so the coffee cost twelve

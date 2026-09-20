@@ -249,7 +249,7 @@ public struct Ledger: Sendable {
                 )
             }
             .filter { !dropZeros || !$0.isZero }
-            .sorted { $0.commodity < $1.commodity }
+            .sorted { CommodityOrder.precedes($0.commodity, $1.commodity) }
     }
 
     /// Returns all account balances as a dictionary keyed by account name.
@@ -263,6 +263,36 @@ public struct Ledger: Sendable {
             }
         }
         return result
+    }
+
+    /// What `postings` leave over, weighed in this journal's own styles.
+    ///
+    /// The same rule `Transaction.init` enforces, asked without building
+    /// anything and without throwing, and asked with the styles this file
+    /// writes rather than with the library's defaults: an amount the caller
+    /// has not written yet is held to the digits this journal will give it.
+    /// An editor with a row still empty reads `residual`, negated, as what
+    /// that row has to absorb; one with every row filled reads `isBalanced`
+    /// and `conversion`.
+    public func balance(of postings: [Posting]) -> TransactionBalance {
+        Transaction.balance(of: postings, commodityFormats: journal.writingStyles(for: postings))
+    }
+
+    /// Every commodity this journal mentions, in commodity order.
+    ///
+    /// Posting amounts, the amounts their prices are written in, and the
+    /// commodities the file declares a style for, which is what a picker
+    /// offering "the currencies this journal uses" needs. Sorted by symbol,
+    /// the order every multi-commodity answer here comes back in.
+    public var commodities: [String] {
+        var names = Set(journal.commodityFormats.keys)
+        for transaction in journal.transactions {
+            for posting in transaction.postings {
+                names.insert(posting.amount.commodity)
+                if let price = posting.price { names.insert(price.amount.commodity) }
+            }
+        }
+        return names.sorted(by: CommodityOrder.precedes)
     }
 
     // MARK: - Transaction queries

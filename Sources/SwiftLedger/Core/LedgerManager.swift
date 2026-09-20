@@ -14,7 +14,13 @@ public final class LedgerManager {
     ///
     /// Atomic: if the store's `save` throws, the in-memory ledger is
     /// left unchanged, so callers can safely retry.
+    ///
+    /// - Throws: `LedgerError.unbalancedTransaction` or
+    ///   `LedgerError.unbalancedBracketedPostings` when this journal would
+    ///   write the transaction in a shape it could not read back, and
+    ///   anything the store's `save` throws.
     public func add(_ item: JournalItem) throws {
+        try requireItSurvivesWriting(item)
         var updated = ledger
         updated.add(item)
         try store?.save(updated)
@@ -48,8 +54,11 @@ public final class LedgerManager {
     ///
     /// - Returns: `true` if a matching item was found and replaced;
     ///   `false` if no match exists, in which case nothing was written.
+    /// - Throws: The same balance errors as `add(_:)`, about `replacement`,
+    ///   and anything the store's `save` throws.
     @discardableResult
     public func replace(_ item: JournalItem, with replacement: JournalItem) throws -> Bool {
+        try requireItSurvivesWriting(replacement)
         var updated = ledger
         guard updated.replace(item, with: replacement) else { return false }
         try store?.save(updated)
@@ -76,6 +85,43 @@ public final class LedgerManager {
         return removed
     }
 
+    // MARK: - Writing
+
+    /// Refuses a transaction this journal would write in a shape it could not
+    /// read back.
+    ///
+    /// `Transaction.init` has already weighed the entry, but it had no journal
+    /// to weigh it in: it held every unwritten amount to the fewest digits its
+    /// own number needs, which is the loosest reading any journal could give
+    /// it. This journal will write more of them, and a residual that counts as
+    /// rounding at no decimal places does not at two, so the very file
+    /// SwiftLedger is about to save could fail to load. Asking again here,
+    /// with the styles the serializer will actually use, is what keeps that
+    /// from happening, and it is the only check of the two that can: the
+    /// looser one is deliberately unable to refuse what this would accept.
+    ///
+    /// A transaction that still carries its own source lines is replayed from
+    /// them byte for byte, so the digits it will be written with are the ones
+    /// it was read with and its postings are weighed as they stand. One
+    /// without them is about to be formatted afresh, so any memory of how a
+    /// file once wrote its amounts is beside the point and is dropped before
+    /// the question is asked.
+    private func requireItSurvivesWriting(_ item: JournalItem) throws {
+        guard case let .transaction(transaction) = item else { return }
+        let postings = transaction.sourceText == nil
+            ? transaction.postings.map { $0.taggedWithScales(amount: nil, price: nil) }
+            : transaction.postings
+        let balance = Transaction.balance(
+            of: postings, commodityFormats: currentJournal.writingStyles(for: postings),
+        )
+        guard balance.real.isBalanced else {
+            throw LedgerError.unbalancedTransaction(residuals: balance.real.residual)
+        }
+        guard balance.balancedVirtual.isBalanced else {
+            throw LedgerError.unbalancedBracketedPostings(residuals: balance.balancedVirtual.residual)
+        }
+    }
+
     // MARK: - Queries
 
     /// The journal as it currently stands: its items in document order, the
@@ -96,6 +142,19 @@ public final class LedgerManager {
 
     public func accounts() -> [Account] {
         ledger.accounts
+    }
+
+    /// What `postings` leave over, weighed in this journal's own styles.
+    ///
+    /// The non-throwing form of the rule `add(_:)` enforces, for a caller
+    /// with an entry half typed: see `Ledger.balance(of:)`.
+    public func balance(of postings: [Posting]) -> TransactionBalance {
+        ledger.balance(of: postings)
+    }
+
+    /// Every commodity this journal mentions, in commodity order.
+    public var commodities: [String] {
+        ledger.commodities
     }
 
     public func balance(for accountName: String, asOf: JournalDate? = nil) -> [Amount] {

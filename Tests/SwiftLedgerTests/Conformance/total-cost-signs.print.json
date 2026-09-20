@@ -1,0 +1,178 @@
+[
+  {
+    "date": "2026-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "positive quantity, positive total",
+    "postings": [
+      {
+        "account": "assets:eur",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": 110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:usd",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2026-01-02",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "negative quantity, positive total",
+    "postings": [
+      {
+        "account": "assets:eur2",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -100,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": -110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:usd2",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": 110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2026-01-03",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "positive quantity, negative total",
+    "postings": [
+      {
+        "account": "assets:eur3",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": -110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:usd3",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": 110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2026-01-04",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "negative quantity, negative total",
+    "postings": [
+      {
+        "account": "assets:eur4",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -100,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": 110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:usd4",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

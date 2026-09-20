@@ -42,7 +42,9 @@ import Foundation
 /// - Amount fields are lined up the way the rest of the journal lines its own
 ///   up (`Journal.amountAlignment`) — beginning at one column, or ending at
 ///   one — falling back to beginning at column 52, the ledger-cli default, for
-///   a journal that shows none.
+///   a journal that shows none. It is the amount that is lined up: a price or
+///   a balance assertion trails past the margin, as it does in hledger, so
+///   the figures a reader compares stay in one column.
 public struct JournalSerializer {
     public init() {}
 
@@ -182,15 +184,20 @@ public struct JournalSerializer {
 
         line += posting.delimitedAccountName
 
-        let amountStr = formatPostingAmount(posting, formats: formats)
+        let amountStr = formatAmount(posting.amount, formats: formats)
         // Pad to the journal's own margin — two spaces at minimum, since one
-        // is not enough to separate an account name from an amount.
+        // is not enough to separate an account name from an amount. What is
+        // lined up is the amount alone: a file that ends its amounts at one
+        // column lines up the figures a reader compares, and a cost or an
+        // assertion trails past that column rather than shoving the figure
+        // left by its own width. hledger lays the line out the same way.
         let padding: Int = switch alignment {
         case let .start(column): column - line.count
         case let .end(column): column - line.count - amountStr.count
         }
         line += String(repeating: " ", count: max(2, padding))
         line += amountStr
+        line += formatPriceAndAssertion(posting, formats: formats)
 
         if let comment = posting.comment {
             line += "  ; \(comment)"
@@ -199,11 +206,15 @@ public struct JournalSerializer {
         return line
     }
 
-    /// The whole amount field of a posting: the amount, then whatever price
-    /// and balance assertion it carries, in the order ledger writes them —
-    /// `AMOUNT @ PRICE = ASSERTION`, canonically spaced.
-    private func formatPostingAmount(_ posting: Posting, formats: [String: CommodityFormat]) -> String {
-        var field = formatAmount(posting.amount, formats: formats)
+    /// What a posting writes after its amount: whatever price and balance
+    /// assertion it carries, in the order ledger writes them —
+    /// `@ PRICE = ASSERTION`, canonically spaced, and empty for the ordinary
+    /// posting that carries neither.
+    private func formatPriceAndAssertion(
+        _ posting: Posting,
+        formats: [String: CommodityFormat],
+    ) -> String {
+        var field = ""
         switch posting.price {
         case nil: break
         case let .perUnit(price): field += " @ \(formatAmount(price, formats: formats))"

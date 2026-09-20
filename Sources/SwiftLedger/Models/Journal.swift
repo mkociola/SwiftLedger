@@ -96,6 +96,31 @@ public struct Journal: Sendable, Codable {
         self.postingIndent = postingIndent
     }
 
+    /// The styles a save would write `postings` in: this journal's own for a
+    /// commodity it already holds an example of, and
+    /// `CommodityFormat.default(for:)` for one it has never seen, which is the
+    /// fallback `JournalSerializer` makes for that same posting.
+    ///
+    /// Whoever is about to write a line has to weigh it in the digits the line
+    /// will carry, and `commodityFormats` alone stops short of that: a journal
+    /// with no `$` amount in it yet says nothing about `$`, while the
+    /// serializer will pad the first one to two places and the next parse will
+    /// hold it to them. Filling the gap here rather than inside the balancing
+    /// rule is what leaves that rule's own fallback free to be the loosest
+    /// reading, which is what `Transaction.init`, with no journal at all,
+    /// needs it to be.
+    func writingStyles(for postings: [Posting]) -> [String: CommodityFormat] {
+        var styles = commodityFormats
+        for posting in postings {
+            var written = [posting.amount.commodity]
+            if let price = posting.price { written.append(price.amount.commodity) }
+            for commodity in written where styles[commodity] == nil {
+                styles[commodity] = .default(for: commodity)
+            }
+        }
+        return styles
+    }
+
     /// The encoded shape of a journal. `commodityFormats`, `amountAlignment`
     /// and `postingIndent` are deliberately absent: they describe one file's
     /// layout rather than the events it records.

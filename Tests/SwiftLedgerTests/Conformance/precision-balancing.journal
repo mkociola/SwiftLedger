@@ -1,4 +1,9 @@
-; The declared display precision decides whether a rounded cash leg balances.
+; A residual too small to write at the precision the entry uses for that
+; commodity counts as zero: 1.00 EUR at 1.0851 is $1.0851, and against a cash
+; leg written to the cent that leaves $0.0049, inside the half a cent two
+; decimal places allow. The commodity directive below has no say in it under
+; hledger's default balancing: it is the $-1.09 leg's own two places that set
+; the boundary, and deleting the directive changes nothing.
 commodity $1000.00
 
 2024-01-01 Card payment abroad

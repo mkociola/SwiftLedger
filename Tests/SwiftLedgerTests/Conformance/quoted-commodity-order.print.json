@@ -1,0 +1,62 @@
+[
+  {
+    "date": "2026-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Opening balances",
+    "postings": [
+      {
+        "account": "assets:shares",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "AAPL 2026",
+            "mantissa": 10,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:cash",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 10000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "equity:opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -10000,
+            "places": 2,
+            "cost": null
+          },
+          {
+            "commodity": "AAPL 2026",
+            "mantissa": -10,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

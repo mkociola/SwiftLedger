@@ -1,0 +1,11 @@
+hledger: Error: cost-inference-price-does-not-cancel.journal:6-10:
+6 | 2026-01-01 Exchange, and shares priced two ways
+  |     assets:eur                   100 EUR
+  |     assets:usd                  -110 USD
+  |     assets:shares        10 AAPL @ $5.00
+  |     assets:shares2    -12.5 AAPL @ $4.00
+
+This multi-commodity transaction is unbalanced.
+The real postings' sum should be 0 but is: 100 EUR, -110 USD
+Consider adjusting this entry's amounts, adding missing postings,
+or recording conversion price(s) with @, @@ or equity postings.

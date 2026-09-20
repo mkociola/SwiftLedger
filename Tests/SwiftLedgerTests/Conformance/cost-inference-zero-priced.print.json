@@ -1,0 +1,66 @@
+[
+  {
+    "date": "2026-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Exchange, with a priced leg of nothing",
+    "postings": [
+      {
+        "account": "assets:eur",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": 110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:usd",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:shares",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "AAPL",
+            "mantissa": 0,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "$",
+              "mantissa": 500,
+              "places": 2
+            }
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

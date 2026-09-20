@@ -1,0 +1,42 @@
+[
+  {
+    "account": "assets:checking",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": -110,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "budget:avail",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": -20,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "budget:food",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": 25,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "expenses:food",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 100,
+        "places": 0
+      }
+    ]
+  }
+]

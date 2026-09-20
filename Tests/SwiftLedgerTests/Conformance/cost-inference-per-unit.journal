@@ -1,0 +1,6 @@
+; Two postings are written in the priced commodity, so the inferred cost is a
+; per-unit rate rather than a total.
+2026-01-01 Dinner split two ways
+    expenses:food        60 EUR
+    expenses:fun         40 EUR
+    assets:usd         -110 USD

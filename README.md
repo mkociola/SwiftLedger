@@ -63,9 +63,9 @@ entry the problem was found in, and the error itself underneath:
 do {
     _ = try JournalParser().parse(text)
 } catch let error as LedgerError {
-    error.localizedDescription  // Line 37, "2026-02-01 Off by one": Transaction is unbalanced in $: off by 1
+    error.localizedDescription  // Line 37, "2026-02-01 Off by one": Transaction is unbalanced: off by $1
     error.line                  // 37
-    error.withoutLocation       // .unbalancedTransaction(commodity: "$", imbalance: 1)
+    error.withoutLocation       // .unbalancedTransaction(residuals: [$1])
 }
 ```
 
@@ -143,7 +143,10 @@ Supported:
   ones each infer at most one amount (computed to balance that group). An
   elided amount balances every commodity in its group, so the usual
   opening-balances entry works; a line that absorbs two commodities is stored
-  as two postings of that account, one per commodity
+  as two postings of that account, one per commodity, in commodity order
+- Costs: `@` a unit price, `@@` a total, and an entry written in two
+  commodities with no price at all, which is read as an exchange at the rate
+  its own amounts imply
 - Virtual postings: `(account)` takes no part in balancing, `[account]` balances
   among the bracketed postings alone; the name is stored bare (`Posting.kind`
   says which it is) and written back delimited. `Posting ==` includes the kind,
@@ -276,6 +279,41 @@ these. A `\r` stranded anywhere else on a line is not a line ending: the file
 refuses to load with the same error naming the field it landed in, rather than
 being mended into text nobody wrote.
 
+**Balancing:** every commodity has to net to zero in each balancing group, the
+real postings among themselves and the bracketed ones among themselves. Three
+things soften that, all of them hledger's rules:
+
+- a posting with a price counts as what it cost (`Posting.balancingAmount`), so
+  a trade written in two commodities nets to zero;
+- a residual too small to be written at the precision the entry uses for that
+  commodity counts as zero, which is what lets a cash leg rounded to the cent
+  balance a foreign amount converted at five decimal places;
+- a group left over in exactly two commodities of opposite sign, with no price
+  still standing once the group's sums are taken, is an exchange and balances
+  by the cost one side implies for the other. A price cancels out of those
+  sums when the legs carrying it do, so a share transfer recorded beside a
+  currency exchange leaves the exchange readable while two legs priced
+  differently do not.
+
+`Transaction.balance(of:commodityFormats:)` is that rule, asked without
+building anything and without throwing, which is what an entry sheet wants
+while somebody is still typing:
+
+```swift
+let balance = manager.balance(of: postings)   // or Transaction.balance(of:)
+
+balance.real.residual      // [100 EUR, -110 USD], commodity order, zeros dropped
+balance.real.conversion    // what one side cost the other, and at what rate
+balance.isBalanced         // both groups, outright or by conversion
+
+manager.commodities        // every commodity this journal uses, for a picker
+```
+
+An inferred cost is a reading of the postings and is never written into the
+file or stored on a `Posting`: plain `hledger print` does not write one either.
+Nothing here converts between commodities or sums across them, and no report
+does: every total is a list of amounts, one per commodity.
+
 **Signs:** amounts are signed `Decimal` values. Positive = value flowing *into* an account; negative = value flowing *out*.
 
 **Comments:** `Posting.comment` and `Transaction.comment` hold the *inline*
@@ -367,7 +405,7 @@ All reports are pure value types computed from a `Ledger` snapshot.
 
 ```swift
 let bs = BalanceSheet(ledger: ledger)
-print(bs.isBalanced)  // true for any well-formed double-entry journal
+print(bs.isBalanced)  // every commodity nets to zero at face value
 
 for entry in bs.assets {
     let qty = entry.quantity(for: "$") ?? 0
@@ -377,6 +415,12 @@ for entry in bs.assets {
 ```
 
 `BalanceSheet` accepts an optional `asOf: JournalDate` to show the position at a past date.
+
+`isBalanced` is that one sentence and no more: it folds face values, the way
+hledger's own `bal` total does, and converts nothing. A journal holding a cost
+or a currency exchange reports `false` there while every entry in it balances,
+so ask a transaction's own `balance` when the question is whether an entry adds
+up.
 
 ### IncomeStatement
 

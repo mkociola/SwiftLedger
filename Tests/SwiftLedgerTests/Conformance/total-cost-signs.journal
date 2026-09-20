@@ -1,0 +1,17 @@
+; A total cost is the per-unit price total / |quantity|, so it keeps its own
+; sign and takes the quantity's on top of it. All four combinations balance.
+2026-01-01 positive quantity, positive total
+    assets:eur      100 EUR @@ 110 USD
+    assets:usd     -110 USD
+
+2026-01-02 negative quantity, positive total
+    assets:eur2    -100 EUR @@ 110 USD
+    assets:usd2     110 USD
+
+2026-01-03 positive quantity, negative total
+    assets:eur3     100 EUR @@ -110 USD
+    assets:usd3     110 USD
+
+2026-01-04 negative quantity, negative total
+    assets:eur4    -100 EUR @@ -110 USD
+    assets:usd4    -110 USD

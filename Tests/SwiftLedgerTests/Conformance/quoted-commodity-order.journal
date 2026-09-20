@@ -1,0 +1,10 @@
+; A commodity whose name holds a space is quoted where the file writes it, and
+; the quotes are not part of the name: hledger reads this one as `AAPL 2026`
+; and orders it by its `A`, which comes after `$`. That is the order the
+; elided line expands in, and it is the order SwiftLedger expands it in too.
+; The file is still a divergence because SwiftLedger keeps the quotes in the
+; symbol it stores, so what differs here is the name, not the reading.
+2026-01-01 Opening balances
+    assets:shares     10 "AAPL 2026"
+    assets:cash          $100.00
+    equity:opening

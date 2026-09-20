@@ -128,9 +128,10 @@ account Expenses:Utilities
 ; ── Several commodities ─────────────────────────────────────────────────────
 ; Each commodity balances on its own, and one elided posting absorbs the
 ; remainder of every commodity in the entry, which is how ledger and hledger
-; read it. The equity line below is read as two postings, -€1.500,00 and
-; -£400.00, though the file keeps the one line as written. The euro account is
-; written the way a European statement writes it, with a comma dividing the
+; read it. The equity line below is read as two postings, -£400.00 and
+; -€1.500,00 in that order, by commodity rather than by the order the entry
+; writes them, though the file keeps the one line as written. The euro account
+; is written the way a European statement writes it, with a comma dividing the
 ; fraction and a point grouping the thousands.
 
 2024-03-05 * Opening balances for the accounts abroad
@@ -145,6 +146,29 @@ account Expenses:Utilities
     Expenses:Food:Restaurants  £25.00
     Assets:EuroAccount     -€30,00
     Assets:PoundAccount
+
+; ── An exchange with no price written ───────────────────────────────────────
+; An entry written in two commodities with no price on either line is read as
+; an exchange: the euros cost the dollars, at the rate the two amounts imply.
+; ledger and hledger both balance it that way. Nothing is written into the
+; file for it, and no report converts anything: the rate is a reading of the
+; entry, there for anyone who asks the transaction what it balances by.
+
+2024-03-18 Bought euros at the bureau
+    Assets:EuroAccount     €100,00
+    Assets:Checking       -$110.00
+
+; ── A price on a posting ────────────────────────────────────────────────────
+; A posting can say what its amount cost in another commodity: @ writes the
+; price of one unit, @@ the cost of the whole posting. The entry balances on
+; that cost rather than on the face value, which is how the two lines below
+; net to zero although no two of their amounts share a commodity. A total
+; cost keeps its own sign and takes the posting's on top of it, so the same
+; line written -€30,00 @@ $32.70 would cost -$32.70.
+
+2024-03-15 Dinner in Vienna, paid with the card
+    Expenses:Food:Restaurants  €30,00 @ $1.09
+    Liabilities:CreditCard     -$32.70
 
 ; ── Decimal marks and a comment after an amount ─────────────────────────────
 ; Which mark divides the fraction is read out of the number: a mark with

@@ -1,0 +1,6 @@
+; A priced leg of nothing cancels on its own, so it is out of the group's sums
+; before the exchange is looked for and the entry balances all the same.
+2026-01-01 Exchange, with a priced leg of nothing
+    assets:eur         100 EUR
+    assets:usd        -110 USD
+    assets:shares        0 AAPL @ $5.00

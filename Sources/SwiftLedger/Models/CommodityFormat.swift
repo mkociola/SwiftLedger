@@ -112,6 +112,16 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
         self.decimalMark = decimalMark
     }
 
+    /// The style that adds nothing to a number: no padding, no grouping, the
+    /// digits the value itself carries and no more.
+    ///
+    /// `fractionDigits` is a floor and `render` never rounds, so every other
+    /// style writes at least these digits. That makes this the fewest digits
+    /// any journal could write an amount with, which is what the balancing
+    /// tolerance falls back to when it has no journal to ask: an answer given
+    /// without one is then never stricter than the answer a journal gives.
+    static let unpadded = CommodityFormat()
+
     /// The style to write a commodity in when the journal shows no example of
     /// it: an empty file, or a commodity the caller is introducing.
     ///
@@ -157,6 +167,20 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
         guard !fractionDigits.isEmpty else { return integerDigits }
         if readsAsGrouped(integer: integerDigits, fraction: fractionDigits) { fractionDigits += "0" }
         return "\(integerDigits)\(decimalMark)\(fractionDigits)"
+    }
+
+    /// How many digits `render` writes after the decimal mark for `magnitude`.
+    ///
+    /// The balancing tolerance is measured in written digits, and an amount
+    /// nobody has written yet has none to measure: what the next parse will
+    /// find on the line is whatever this style renders. So the answer comes
+    /// from the rendering itself rather than from `fractionDigits`, which is a
+    /// floor, and from a second rule about when a comma amount needs one more
+    /// digit to read back as itself. Both live in `render`, and this asks it.
+    public func writtenFractionDigits(of magnitude: Decimal) -> Int {
+        let written = render(abs(magnitude))
+        guard let mark = written.lastIndex(of: decimalMark) else { return 0 }
+        return written.distance(from: written.index(after: mark), to: written.endIndex)
     }
 
     /// Whether the number about to be written would be read back as a grouped

@@ -38,7 +38,7 @@ public struct AccountStatement: Sendable {
 
                 let runningBalance = balances.map { commodity, qty in
                     Amount(quantity: qty, commodity: commodity, commodityIsPrefix: prefixFlags[commodity] ?? false)
-                }.sorted { $0.commodity < $1.commodity }
+                }.sorted { CommodityOrder.precedes($0.commodity, $1.commodity) }
 
                 resultLines.append(Line(transaction: transaction, posting: posting, runningBalance: runningBalance))
             }

@@ -32,12 +32,19 @@ public enum LedgerError: Error, Sendable, Equatable {
 
     // MARK: - Transaction
 
-    case unbalancedTransaction(commodity: String, imbalance: Decimal)
+    /// The real postings of a transaction do not sum to zero.
+    ///
+    /// The payload is what they are off by: one amount per commodity that
+    /// does not net out, in commodity order, exactly as
+    /// `TransactionBalance.Group.residual` reports it. The whole vector,
+    /// because a two-commodity entry is off in two commodities at once and
+    /// naming one of them says half of what went wrong.
+    case unbalancedTransaction(residuals: [Amount])
     /// The bracketed (balanced virtual) postings of a transaction do not sum
     /// to zero among themselves. Real postings are checked separately and
     /// report `unbalancedTransaction`; parenthesised postings are never
     /// checked at all.
-    case unbalancedBracketedPostings(commodity: String, imbalance: Decimal)
+    case unbalancedBracketedPostings(residuals: [Amount])
     /// A real posting is named a matched pair of parentheses or brackets
     /// (`(old)`, `[Reserved]`). A real posting's name is written bare, so the
     /// line would be the line a virtual posting writes and the next parse
@@ -94,10 +101,10 @@ extension LedgerError: LocalizedError {
             "A transaction may have at most one posting with an elided amount"
         case .cannotResolveElision:
             "Cannot resolve elided amount: no explicit amount to balance it against"
-        case let .unbalancedTransaction(commodity, imbalance):
-            "Transaction is unbalanced in \(commodity): off by \(imbalance)"
-        case let .unbalancedBracketedPostings(commodity, imbalance):
-            "Balanced virtual postings are off by \(imbalance) in \(commodity)"
+        case let .unbalancedTransaction(residuals):
+            "Transaction is unbalanced: off by \(Self.list(residuals))"
+        case let .unbalancedBracketedPostings(residuals):
+            "Balanced virtual postings are off by \(Self.list(residuals))"
         case let .unwritableAccountName(name):
             "Account name '\(name)' cannot be written: a real posting's name may not be "
                 + "a matched pair of parentheses or brackets"
@@ -136,6 +143,12 @@ public extension LedgerError {
         case let .inJournal(_, _, underlying): underlying
         default: self
         }
+    }
+
+    /// A residual vector as a sentence names it: every commodity it is off
+    /// in, in the order the rest of the library lists commodities.
+    private static func list(_ amounts: [Amount]) -> String {
+        amounts.map(\.description).joined(separator: ", ")
     }
 
     /// How a located error names the place it was found, ahead of what it

@@ -1,0 +1,82 @@
+[
+  {
+    "account": "assets:eur",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 100,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:eur2",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": -100,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:eur3",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 100,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:eur4",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": -100,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:usd",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": -110,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:usd2",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": 110,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:usd3",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": 110,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:usd4",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": -110,
+        "places": 0
+      }
+    ]
+  }
+]

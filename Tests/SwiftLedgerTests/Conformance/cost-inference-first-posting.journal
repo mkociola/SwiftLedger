@@ -1,0 +1,9 @@
+; What gets priced is the first posting written in either of the two
+; commodities left over. A commodity the entry already nets to zero is out of
+; the count, so this is an exchange of pounds for francs and the euro legs
+; have nothing to do with it.
+2026-01-01 Two movements, one settled
+    assets:eur     100 EUR
+    equity:x      -100 EUR
+    assets:gbp      10 GBP
+    assets:chf     -12 CHF

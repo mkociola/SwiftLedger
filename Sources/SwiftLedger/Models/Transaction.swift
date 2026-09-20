@@ -6,7 +6,13 @@ import Foundation
 /// The real postings must sum to zero for each commodity present, and so must
 /// the bracketed (balanced virtual) ones among themselves; a parenthesised
 /// posting is exempt from both, which is the whole point of the parentheses.
-/// Those invariants are enforced at construction time. They are the only rule
+/// What "sum to zero" means is `Transaction.balance(of:commodityFormats:)`,
+/// which reads it as hledger does: a posting with a price counts as what it
+/// cost, a residual too small to be written at the precision the entry uses
+/// counts as zero, and a group left over in two commodities of opposite sign,
+/// with no price of its own still standing once its sums are taken, is an
+/// exchange and balances at the rate its own amounts imply. Those invariants are enforced at construction
+/// time. They are the only rule
 /// on how many postings there may be: none at all sums to zero, so a dated
 /// line with nothing but a description is a transaction, and so is a single
 /// posting of zero. Both are what ledger and hledger accept, and a bare dated
@@ -26,8 +32,10 @@ import Foundation
 /// A posting that carries a price balances at that price rather than at face
 /// value (`Posting.balancingAmount`), which is what lets a two-commodity trade
 /// net to zero: `10 AAPL @ $150.00` against `$-1,500.00` balances, because the
-/// share leg counts as the $1,500 it cost. Balance assertions take no part in
-/// this — they are preserved, never checked.
+/// share leg counts as the $1,500 it cost. The same entry with no price
+/// written balances too, by the cost the two amounts imply, and nothing is
+/// written into the file for it. Balance assertions take no part in this —
+/// they are preserved, never checked.
 ///
 /// Use `JournalParser` to build transactions from plain-text `.ledger` files,
 /// which also resolves elided amounts before constructing `Transaction`
@@ -99,7 +107,8 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     ///   inline comment, an account name, or one of the full-line comments in
     ///   `leadingComments` or `Posting.trailingComments`,
     ///   `LedgerError.unbalancedTransaction` if the real postings do
-    ///   not sum to zero for any commodity,
+    ///   not sum to zero for any commodity, within the tolerance
+    ///   `Transaction.balance(of:commodityFormats:)` describes,
     ///   `LedgerError.unbalancedBracketedPostings` if the balanced virtual ones
     ///   do not sum to zero among themselves, or
     ///   `LedgerError.unwritableAccountName` if a real posting is named a
@@ -284,29 +293,18 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
 
     /// Checks the two balancing groups, real postings first, so that the
     /// message an ordinary mistake produces is the ordinary one.
+    ///
+    /// `Transaction.balance(of:)` is the rule; this only decides which error
+    /// to throw for what it reports. With no journal to consult, the styles
+    /// are `CommodityFormat.default(for:)`, and `LedgerManager` asks again
+    /// with the real ones before anything is written.
     private static func validateBalance(_ postings: [Posting]) throws {
-        try validate(postings.filter { $0.kind == .real }) {
-            LedgerError.unbalancedTransaction(commodity: $0, imbalance: $1)
+        let balance = Self.balance(of: postings)
+        guard balance.real.isBalanced else {
+            throw LedgerError.unbalancedTransaction(residuals: balance.real.residual)
         }
-        try validate(postings.filter { $0.kind == .balancedVirtual }) {
-            LedgerError.unbalancedBracketedPostings(commodity: $0, imbalance: $1)
-        }
-    }
-
-    /// Throws `error` for the first commodity in `group` that does not net to
-    /// zero. `.virtual` postings never reach here: they take part in no
-    /// balance, which is the whole point of the parentheses.
-    private static func validate(
-        _ group: [Posting],
-        error: (String, Decimal) -> LedgerError,
-    ) throws {
-        var sums: [String: Decimal] = [:]
-        for posting in group {
-            let balancing = posting.balancingAmount
-            sums[balancing.commodity, default: .zero] += balancing.quantity
-        }
-        for (commodity, sum) in sums where sum != .zero {
-            throw error(commodity, sum)
+        guard balance.balancedVirtual.isBalanced else {
+            throw LedgerError.unbalancedBracketedPostings(residuals: balance.balancedVirtual.residual)
         }
     }
 }

@@ -32,16 +32,21 @@ public enum PostingPrice: Sendable, Codable, Hashable {
 
     /// What `quantity` units cost at this price, in the price's commodity.
     ///
-    /// A per-unit price multiplies. A total price is the whole cost already, so
-    /// it only takes its sign from `quantity`: selling ten shares
-    /// (`-10 AAPL @@ $1,500.00`) costs `-$1,500.00`, not `$1,500.00`, even
-    /// though the line writes the total unsigned.
+    /// A per-unit price multiplies. A total price is the whole cost already,
+    /// and hledger reads it as the per-unit price `total / |quantity|`, so the
+    /// cost is the total with the quantity's sign applied to it and the
+    /// total's own sign kept: selling ten shares (`-10 AAPL @@ $1,500.00`)
+    /// costs `-$1,500.00` even though the line writes the total unsigned, and
+    /// a total written negative (`100 EUR @@ $-110.00`) costs `-$110.00`
+    /// rather than the `$110.00` that taking the magnitude would make of it.
+    /// A negative total is unusual but legal in both tools, and reading its
+    /// sign away left an entry hledger balances unloadable here.
     public func cost(of quantity: Decimal) -> Amount {
         let priced = amount
         let value: Decimal =
             switch self {
             case .perUnit: quantity * priced.quantity
-            case .total: quantity < 0 ? -abs(priced.quantity) : abs(priced.quantity)
+            case .total: quantity < 0 ? -priced.quantity : priced.quantity
             }
         return Amount(
             quantity: value,
@@ -125,6 +130,30 @@ public struct Posting: Sendable, Codable, Hashable {
     /// take no part in balancing.
     public let trailingComments: [String]
 
+    /// How many digits the file wrote after the decimal mark for `amount`, or
+    /// `nil` for a posting built in code.
+    ///
+    /// `Decimal` normalises its own scale on construction, so `1.00` and `1`
+    /// are one value and nothing in the number itself remembers which of them
+    /// the file wrote. This is the only record of it, and it is what sets the
+    /// tolerance a transaction balances within: hledger reads a residual as
+    /// zero when it is too small to show at the precision the entry writes
+    /// that commodity in, so how the amount was typed decides whether the file
+    /// loads. See `Transaction.balance(of:commodityFormats:)`.
+    ///
+    /// Nothing but the parser sets it. An amount the parser inferred rather
+    /// than read, the fill of an elided posting, leaves it `nil`, since the
+    /// file wrote no digits for it.
+    public private(set) var amountScale: Int?
+
+    /// The same for the amount written after this posting's `@` or `@@`.
+    ///
+    /// A price's own digits never tighten the tolerance of a commodity the
+    /// entry writes a plain amount in (hledger measures the amounts, not the
+    /// rates). They are all there is to measure for a commodity that appears
+    /// in the entry only as a price, which is where this is read.
+    public private(set) var priceScale: Int?
+
     /// What this posting contributes when its transaction is balanced.
     ///
     /// Without a price that is just `amount` — the common case, and the only
@@ -168,6 +197,31 @@ public struct Posting: Sendable, Codable, Hashable {
         self.trailingComments = trailingComments
     }
 
+    // MARK: - Internal
+
+    /// A copy of this posting tagged with the number of fraction digits its
+    /// file wrote for the amount and for the price.
+    ///
+    /// Internal, and the only way the two scales are ever set: only the parser
+    /// sees the text a number was written as, and a posting anything else
+    /// built is going to be written by the serializer rather than read from a
+    /// file. `Transaction.sourceText` is held for the same reason and in the
+    /// same way.
+    func taggedWithScales(amount amountScale: Int?, price priceScale: Int?) -> Posting {
+        var copy = self
+        copy.amountScale = amountScale
+        copy.priceScale = priceScale
+        return copy
+    }
+
+    /// The encoded shape of a posting. The written scales are deliberately
+    /// absent: they describe how one file typed a number, not the movement the
+    /// posting records, and a posting that has been through JSON is one built
+    /// in code.
+    private enum CodingKeys: String, CodingKey {
+        case accountName, kind, amount, price, balanceAssertion, status, comment, trailingComments
+    }
+
     /// Decodes a posting, treating a missing `kind`, `trailingComments`,
     /// `price` or `balanceAssertion` key as absent so that JSON written before
     /// those keys existed still decodes — a posting with no `kind` is real,
@@ -183,6 +237,39 @@ public struct Posting: Sendable, Codable, Hashable {
         status = try container.decodeIfPresent(ClearingStatus.self, forKey: .status)
         comment = try container.decodeIfPresent(String.self, forKey: .comment)
         trailingComments = try container.decodeIfPresent([String].self, forKey: .trailingComments) ?? []
+    }
+
+    // MARK: - Equality
+
+    /// Two postings are equal when they record the same movement, however
+    /// either one's number was typed.
+    ///
+    /// `amountScale` and `priceScale` are excluded for the reason
+    /// `Transaction.sourceText` is: they are typography, and callers compare
+    /// postings by content across a reparse. An edit sheet re-anchoring itself
+    /// on the entry it is editing, and a conflict merge weighing two versions
+    /// of a file, would both start missing matches the moment `$1.00` stopped
+    /// equalling the `$1` a caller rebuilt.
+    public static func == (lhs: Posting, rhs: Posting) -> Bool {
+        lhs.accountName == rhs.accountName
+            && lhs.kind == rhs.kind
+            && lhs.amount == rhs.amount
+            && lhs.price == rhs.price
+            && lhs.balanceAssertion == rhs.balanceAssertion
+            && lhs.status == rhs.status
+            && lhs.comment == rhs.comment
+            && lhs.trailingComments == rhs.trailingComments
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountName)
+        hasher.combine(kind)
+        hasher.combine(amount)
+        hasher.combine(price)
+        hasher.combine(balanceAssertion)
+        hasher.combine(status)
+        hasher.combine(comment)
+        hasher.combine(trailingComments)
     }
 }
 

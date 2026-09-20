@@ -1,0 +1,42 @@
+[
+  {
+    "account": "assets:chf",
+    "amounts": [
+      {
+        "commodity": "CHF",
+        "mantissa": -12,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:eur",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 100,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:gbp",
+    "amounts": [
+      {
+        "commodity": "GBP",
+        "mantissa": 10,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "equity:x",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": -100,
+        "places": 0
+      }
+    ]
+  }
+]
