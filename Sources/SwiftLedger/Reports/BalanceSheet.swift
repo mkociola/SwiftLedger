@@ -1,8 +1,9 @@
 /// A balance sheet (statement of financial position) as of a given date.
 ///
 /// Shows Assets, Liabilities, and Equity balances.
-/// `isBalanced` sums the journal's own posting amounts and reports whether
-/// every commodity nets to zero; see the property for what it leaves out.
+/// `isBalanced` sums the journal's own posting amounts at face value and
+/// reports whether every commodity nets to zero; see the property for the
+/// ordinary journals that answers `false`.
 public struct BalanceSheet: Sendable {
     public let asOf: JournalDate
     public let assets: [AccountBalance]
@@ -10,14 +11,28 @@ public struct BalanceSheet: Sendable {
     public let equity: [AccountBalance]
 
     /// `true` when every commodity in the journal nets to zero across all
-    /// postings, parenthesised (unbalanced virtual) ones excluded.
+    /// postings at face value, parenthesised (unbalanced virtual) ones
+    /// excluded.
     ///
-    /// Two things it does not claim. It folds `amount` rather than
-    /// `balancingAmount`, so a journal holding an `@` price reads as unbalanced
-    /// even though each of its entries balances at cost. And it skips
-    /// parenthesised postings, which move money outside the double-entry books
-    /// by design; bracketed ones net to zero per transaction and so cost
-    /// nothing to include.
+    /// Face value is the claim, and it is deliberate: this is hledger's own
+    /// `bal` total, which converts nothing. It folds `amount` rather than
+    /// `balancingAmount`, so a journal holding an `@` price reads as
+    /// unbalanced even though each of its entries balances at cost, and so
+    /// does one holding an entry written in two commodities with no price at
+    /// all, which balances by the cost the entry implies. Both are ordinary
+    /// multi-currency bookkeeping, `Examples/sample.ledger` holds one of each,
+    /// and neither is a fault in the journal: a book that records a currency
+    /// exchange is not in balance commodity by commodity unless it also
+    /// records the equity postings that hledger's `--infer-equity` would add.
+    ///
+    /// So this is not "the books add up". It is one `Bool` over the
+    /// per-commodity nets, useful for the single-commodity journal it was
+    /// written for; ask a transaction's own `balance` for whether an entry
+    /// balances.
+    ///
+    /// It also skips parenthesised postings, which move money outside the
+    /// double-entry books by design; bracketed ones net to zero per
+    /// transaction and so cost nothing to include.
     public let isBalanced: Bool
 
     public init(ledger: Ledger, asOf: JournalDate? = nil) {

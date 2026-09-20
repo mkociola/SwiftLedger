@@ -4237,7 +4237,7 @@ private func renaming(
 
 @Suite("BalanceSheet") struct BalanceSheetTests {
     @Test
-    func `any well-formed double-entry journal satisfies isBalanced`() throws {
+    func `a journal whose every commodity nets to zero satisfies isBalanced`() throws {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
         try ledger.add(
@@ -4249,6 +4249,24 @@ private func renaming(
             ),
         )
         #expect(BalanceSheet(ledger: ledger).isBalanced)
+    }
+
+    /// Face value is the whole claim, so a journal that records an exchange
+    /// reports `false` here while every entry in it balances: the euros and
+    /// the dollars net to zero only at the cost one implies for the other, and
+    /// nothing in this report converts. `Examples/sample.ledger` holds such an
+    /// entry, which is how the property's doc comment came to name only half
+    /// of what answers `false`.
+    @Test
+    func `an entry balanced by an inferred conversion still reads as unbalanced`() throws {
+        let ledger = try Ledger(journal: JournalParser().parse("""
+        2026-01-01 Bought euros at the bureau
+            Assets:Euros      100 EUR
+            Assets:Checking  -110 USD
+        """))
+        #expect(try #require(ledger.journal.transactions.first).balance.isBalanced)
+        let sheet = try BalanceSheet(ledger: ledger, asOf: makeDate(2026, 6, 1))
+        #expect(!sheet.isBalanced)
     }
 
     /// An envelope journal is a well-formed journal: the money a parenthesised

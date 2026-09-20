@@ -405,7 +405,7 @@ All reports are pure value types computed from a `Ledger` snapshot.
 
 ```swift
 let bs = BalanceSheet(ledger: ledger)
-print(bs.isBalanced)  // true for any well-formed double-entry journal
+print(bs.isBalanced)  // every commodity nets to zero at face value
 
 for entry in bs.assets {
     let qty = entry.quantity(for: "$") ?? 0
@@ -415,6 +415,12 @@ for entry in bs.assets {
 ```
 
 `BalanceSheet` accepts an optional `asOf: JournalDate` to show the position at a past date.
+
+`isBalanced` is that one sentence and no more: it folds face values, the way
+hledger's own `bal` total does, and converts nothing. A journal holding a cost
+or a currency exchange reports `false` there while every entry in it balances,
+so ask a transaction's own `balance` when the question is whether an entry adds
+up.
 
 ### IncomeStatement
 
