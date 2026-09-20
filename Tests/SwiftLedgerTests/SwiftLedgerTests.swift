@@ -6103,9 +6103,10 @@ private let mixedMarginRows = [
         #expect(throws: LedgerError.self) { try JournalParser().parse(text) }
     }
 
-    /// One written price switches the reading off for the whole group, even
-    /// for a pair in other commodities that has nothing to do with it. This
-    /// is hledger's sharpest edge here: half-priced never works.
+    /// A price that is still standing when the group's sums are taken
+    /// switches the reading off for the whole group, even for a pair in other
+    /// commodities that has nothing to do with it. This is hledger's sharpest
+    /// edge here: half-priced never works.
     @Test
     func `a price anywhere in the group switches inference off`() throws {
         #expect(throws: LedgerError.self) {
@@ -6115,6 +6116,58 @@ private let mixedMarginRows = [
                 assets:usd     -55 USD
                 assets:gbp      10 GBP
                 assets:chf     -12 CHF
+            """)
+        }
+    }
+
+    /// hledger weighs that on what the group adds up to rather than on its
+    /// lines: the postings are summed by commodity and by the price each one
+    /// wrote, and a sum of zero drops out before a price is looked for. A
+    /// share transfer recorded beside a currency exchange is the plausible
+    /// shape, and hledger 1.52.4 loads it.
+    @Test
+    func `a price on legs that cancel leaves the exchange readable`() throws {
+        let balance = try Self.balance(of: """
+        2026-01-01 Exchange, and a transfer of shares
+            assets:eur         100 EUR
+            assets:usd        -110 USD
+            assets:shares       10 AAPL @ $5.00
+            assets:shares2     -10 AAPL @ $5.00
+        """)
+        let conversion = try #require(balance.real.conversion)
+        #expect(conversion.postingIndices == [0])
+        #expect(conversion.price == .total(Amount(quantity: 110, commodity: "USD")))
+    }
+
+    /// A priced leg of nothing cancels on its own, so it never stands in the
+    /// way either.
+    @Test
+    func `a priced leg of zero leaves the exchange readable`() throws {
+        let balance = try Self.balance(of: """
+        2026-01-01 Exchange, with a priced leg of nothing
+            assets:eur         100 EUR
+            assets:usd        -110 USD
+            assets:shares        0 AAPL @ $5.00
+        """)
+        let conversion = try #require(balance.real.conversion)
+        #expect(conversion.postingIndices == [0])
+        #expect(conversion.price == .total(Amount(quantity: 110, commodity: "USD")))
+    }
+
+    /// The same two legs priced two ways do not cancel, so the price is still
+    /// standing and the entry is refused, although their costs cancel and what
+    /// is left over is two sides of opposite sign. hledger refuses it too, and
+    /// this is the case that says the rule is about the sums rather than about
+    /// the costs.
+    @Test
+    func `legs priced two ways do not cancel and the exchange is refused`() throws {
+        #expect(throws: LedgerError.self) {
+            try JournalParser().parse("""
+            2026-01-01 Exchange, and shares priced two ways
+                assets:eur         100 EUR
+                assets:usd        -110 USD
+                assets:shares       10 AAPL @ $5.00
+                assets:shares2    -12.5 AAPL @ $4.00
             """)
         }
     }

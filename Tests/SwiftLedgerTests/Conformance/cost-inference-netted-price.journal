@@ -1,0 +1,9 @@
+; A written price switches inference off only while it is still standing once
+; the group's sums are taken. The two share legs here cancel and take their
+; shared price with them, so what is left over is an exchange and hledger
+; balances it by the cost that implies.
+2026-01-01 Exchange, and a transfer of shares
+    assets:eur         100 EUR
+    assets:usd        -110 USD
+    assets:shares       10 AAPL @ $5.00
+    assets:shares2     -10 AAPL @ $5.00

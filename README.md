@@ -289,8 +289,11 @@ things soften that, all of them hledger's rules:
   commodity counts as zero, which is what lets a cash leg rounded to the cent
   balance a foreign amount converted at five decimal places;
 - a group left over in exactly two commodities of opposite sign, with no price
-  written anywhere in it, is an exchange and balances by the cost one side
-  implies for the other.
+  still standing once the group's sums are taken, is an exchange and balances
+  by the cost one side implies for the other. A price cancels out of those
+  sums when the legs carrying it do, so a share transfer recorded beside a
+  currency exchange leaves the exchange readable while two legs priced
+  differently do not.
 
 `Transaction.balance(of:commodityFormats:)` is that rule, asked without
 building anything and without throwing, which is what an entry sheet wants

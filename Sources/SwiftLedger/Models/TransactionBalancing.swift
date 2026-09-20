@@ -178,18 +178,18 @@ enum TransactionBalancing {
     /// leg is the dollar one price the dollars.
     ///
     /// Everything else refuses, as hledger does: three commodities left over,
-    /// two of the same sign, or a single price anywhere in the group, which
-    /// switches the reading off for the whole group even when what is left
-    /// over has nothing to do with the posting that carries it. An elided
-    /// posting switches it off too, by absorbing the residual before this is
-    /// ever asked, which is why the parser resolves elision first.
+    /// two of the same sign, or a price still standing once the group's sums
+    /// are taken, which switches the reading off for the whole group even when
+    /// what it is written on has nothing to do with what is left over. An
+    /// elided posting switches it off too, by absorbing the residual before
+    /// this is ever asked, which is why the parser resolves elision first.
     static func conversion(
         for residual: [Amount],
         over members: [Int],
         in postings: [Posting],
     ) -> TransactionBalance.Conversion? {
         guard residual.count == 2,
-              members.allSatisfy({ postings[$0].price == nil }),
+              everyWrittenPriceNetsOut(over: members, in: postings),
               (residual[0].quantity > 0) != (residual[1].quantity > 0),
               let leading = members.first(where: { member in
                   residual.contains { $0.commodity == postings[member].amount.commodity }
@@ -213,6 +213,38 @@ enum TransactionBalancing {
             from: from,
             to: to,
         )
+    }
+
+    /// Whether every price the group wrote has cancelled out of its sums.
+    ///
+    /// hledger reads this off what the group adds up to rather than off its
+    /// lines: the postings are summed by commodity and by the price each one
+    /// wrote, a sum of zero drops out of the reckoning, and the exchange is
+    /// refused only when a price is still standing among what is left. So a
+    /// share transfer recorded beside a currency exchange leaves the exchange
+    /// its inferred cost, because its two legs cancel and take their shared
+    /// price with them, while two legs priced differently do not cancel and do
+    /// refuse it. Both readings are hledger 1.52.4's, measured.
+    ///
+    /// A zero here is an exact zero, not a residual small enough to ignore:
+    /// the tolerance is about what an entry could have written away, and a
+    /// price either cancels or it does not.
+    private static func everyWrittenPriceNetsOut(over members: [Int], in postings: [Posting]) -> Bool {
+        var sums: [PricedCommodity: Decimal] = [:]
+        for member in members {
+            let posting = postings[member]
+            guard let price = posting.price else { continue }
+            let key = PricedCommodity(commodity: posting.amount.commodity, price: price)
+            sums[key, default: .zero] += posting.amount.quantity
+        }
+        return sums.values.allSatisfy { $0 == .zero }
+    }
+
+    /// One commodity as one price spells it, which is the key hledger sums a
+    /// group's postings under.
+    private struct PricedCommodity: Hashable {
+        let commodity: String
+        let price: PostingPrice
     }
 
     /// The per-commodity sum of what the group's postings contribute, with the

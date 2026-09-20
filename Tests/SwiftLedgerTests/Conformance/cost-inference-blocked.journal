@@ -1,6 +1,7 @@
-; One written price anywhere in the group switches inference off for the whole
-; group, so this entry is refused although the same pair with no price at all
-; would balance.
+; A written price switches inference off for the whole group while it is still
+; standing once the group's sums are taken. The two euro legs here sit apart,
+; one priced and one not, so neither cancels and hledger refuses the file,
+; although the same pair with no price at all would balance.
 2026-01-01 Half of it priced
     assets:eur      50 EUR @ 1.10 USD
     assets:eur2     50 EUR
