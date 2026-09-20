@@ -15,10 +15,12 @@ extension JournalParser {
     /// single amount: the standard opening-balances entry writes a dollar leg
     /// and a pound leg and lets one `equity:opening balances` line absorb both.
     /// Since `Posting` carries one amount, such a line expands here into one
-    /// posting per commodity with something left to absorb, in the order the
-    /// commodities first appear, sitting where the elided line was. That is
-    /// what ledger and hledger infer, and it is how hledger prints the entry
-    /// back.
+    /// posting per commodity with something left to absorb, sitting where the
+    /// elided line was, in commodity order rather than in the order the entry
+    /// happens to write them. That is what ledger and hledger infer, and
+    /// commodity order is how hledger prints the entry back: it is also the
+    /// order every multi-commodity answer in this library comes in, so an
+    /// entry and a balance list their commodities the same way round.
     ///
     /// A parenthesised posting takes part in no balance, so there is nothing to
     /// infer its amount from and any number of them may elide one: each reads
@@ -52,11 +54,11 @@ extension JournalParser {
 
     /// What the one posting of a group that elided its amount takes: minus the
     /// sum of what the rest of its own group wrote, one amount per commodity
-    /// that does not already net to zero, in order of first appearance. A
-    /// priced posting contributes what it cost, not what it moved, so that a
-    /// share purchase can balance an elided cash leg. A group in which nobody
-    /// wrote an amount leaves zero to absorb, in the first commodity the entry
-    /// writes (see `zeroAmount(matching:)`, which is where file order decides).
+    /// that does not already net to zero, in commodity order. A priced posting
+    /// contributes what it cost, not what it moved, so that a share purchase
+    /// can balance an elided cash leg. A group in which nobody wrote an amount
+    /// leaves zero to absorb, in the first commodity the entry writes (see
+    /// `zeroAmount(matching:)`, which is where file order decides).
     ///
     /// A group whose written amounts already balance leaves one zero rather
     /// than nothing, in the first commodity written, so that the line the user
@@ -69,22 +71,20 @@ extension JournalParser {
         }
         guard let first = written.first else { return try [zeroAmount(matching: transaction)] }
 
-        var order: [String] = []
         var sums: [String: (quantity: Decimal, isPrefix: Bool)] = [:]
         for amount in written {
-            if sums[amount.commodity] == nil {
-                order.append(amount.commodity)
-                sums[amount.commodity] = (.zero, amount.commodityIsPrefix)
-            }
-            sums[amount.commodity]?.quantity += amount.quantity
+            let running = sums[amount.commodity, default: (.zero, amount.commodityIsPrefix)]
+            sums[amount.commodity] = (running.quantity + amount.quantity, running.isPrefix)
         }
 
-        let remainders = order.compactMap { commodity -> Amount? in
-            guard let sum = sums[commodity], sum.quantity != .zero else { return nil }
-            return Amount(
-                quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix,
-            )
-        }
+        let remainders = sums
+            .compactMap { commodity, sum -> Amount? in
+                guard sum.quantity != .zero else { return nil }
+                return Amount(
+                    quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix,
+                )
+            }
+            .sorted { $0.commodity < $1.commodity }
         guard remainders.isEmpty else { return remainders }
         return [Amount(
             quantity: .zero, commodity: first.commodity, commodityIsPrefix: first.commodityIsPrefix,

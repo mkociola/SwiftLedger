@@ -128,9 +128,10 @@ account Expenses:Utilities
 ; ── Several commodities ─────────────────────────────────────────────────────
 ; Each commodity balances on its own, and one elided posting absorbs the
 ; remainder of every commodity in the entry, which is how ledger and hledger
-; read it. The equity line below is read as two postings, -€1.500,00 and
-; -£400.00, though the file keeps the one line as written. The euro account is
-; written the way a European statement writes it, with a comma dividing the
+; read it. The equity line below is read as two postings, -£400.00 and
+; -€1.500,00 in that order, by commodity rather than by the order the entry
+; writes them, though the file keeps the one line as written. The euro account
+; is written the way a European statement writes it, with a comma dividing the
 ; fraction and a point grouping the thousands.
 
 2024-03-05 * Opening balances for the accounts abroad

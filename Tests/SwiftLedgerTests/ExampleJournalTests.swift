@@ -74,8 +74,9 @@ import Testing
 
     /// The opening entry for the accounts abroad is the hledger idiom the
     /// parser used to reject: two commodities and one elided line to absorb
-    /// both. It reads as one posting per commodity, and a commodity the
-    /// written postings already net to zero gets no posting at all.
+    /// both. It reads as one posting per commodity, in commodity order rather
+    /// than in the order the entry writes them, and a commodity the written
+    /// postings already net to zero gets no posting at all.
     @Test
     func `the example shows an elided posting absorbing several commodities`() throws {
         let journal = try JournalParser().parse(Self.exampleText)
@@ -91,8 +92,8 @@ import Testing
         #expect(opening.postings.map(\.amount) == [
             Amount(quantity: 1500, commodity: "€", commodityIsPrefix: true),
             Amount(quantity: 400, commodity: "£", commodityIsPrefix: true),
-            Amount(quantity: -1500, commodity: "€", commodityIsPrefix: true),
             Amount(quantity: -400, commodity: "£", commodityIsPrefix: true),
+            Amount(quantity: -1500, commodity: "€", commodityIsPrefix: true),
         ])
 
         let abroad = try #require(byPayee["Lunch and a train abroad"])

@@ -1487,8 +1487,8 @@ private extension LedgerError {
 @Suite("multi-commodity elision") struct MultiCommodityElisionTests {
     /// The opening-balances entry every hledger tutorial starts with: two
     /// commodities, one line to absorb both. Since a `Posting` holds a single
-    /// amount, that line resolves into one posting per commodity, in the order
-    /// the entry writes them.
+    /// amount, that line resolves into one posting per commodity, in commodity
+    /// order.
     @Test
     func `an elided posting absorbs the remainder of every commodity in the entry`() throws {
         let text = """
@@ -1503,6 +1503,27 @@ private extension LedgerError {
         #expect(transaction.postings[3].accountName == "equity:opening balances")
         #expect(transaction.postings[2].amount == Amount(quantity: -1000, commodity: "$", commodityIsPrefix: true))
         #expect(transaction.postings[3].amount == Amount(quantity: -500, commodity: "£", commodityIsPrefix: true))
+    }
+
+    /// The order is the commodities' own, not the entry's: that is what
+    /// hledger prints, and it is the order every multi-commodity answer in
+    /// this library comes in, so a balance and the entry behind it read the
+    /// same way round.
+    @Test
+    func `the absorbed commodities come back in commodity order`() throws {
+        let text = """
+        2024-01-01 opening balances
+            assets:gbp       10 GBP
+            assets:eur      100 EUR
+            assets:usd     -110 USD
+            equity:opening
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings.suffix(3).map(\.amount) == [
+            Amount(quantity: -100, commodity: "EUR"),
+            Amount(quantity: -10, commodity: "GBP"),
+            Amount(quantity: 110, commodity: "USD"),
+        ])
     }
 
     /// A commodity the written legs already balance leaves nothing to absorb,
