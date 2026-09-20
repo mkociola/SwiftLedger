@@ -115,6 +115,12 @@ extension JournalParser {
         )
     }
 
+    /// One posting from one written line, carrying the digits the line wrote.
+    ///
+    /// `amount` is handed in rather than read off `raw` because an elided line
+    /// has none of its own, and what it absorbs was inferred rather than
+    /// written: such a posting keeps `raw`'s price scale and no amount scale,
+    /// since there are no digits in the file to measure.
     static func posting(from raw: RawPosting, amount: Amount) -> Posting {
         Posting(
             accountName: raw.accountName,
@@ -126,6 +132,7 @@ extension JournalParser {
             comment: raw.comment,
             trailingComments: raw.trailingComments,
         )
+        .taggedWithScales(amount: raw.amount == nil ? nil : raw.amountScale, price: raw.priceScale)
     }
 
     /// One posting per amount, sharing the account, kind and status the elided
@@ -155,6 +162,7 @@ extension JournalParser {
                 comment: index == 0 ? raw.comment : nil,
                 trailingComments: index == amounts.count - 1 ? raw.trailingComments : [],
             )
+            .taggedWithScales(amount: nil, price: index == 0 ? raw.priceScale : nil)
         }
     }
 }

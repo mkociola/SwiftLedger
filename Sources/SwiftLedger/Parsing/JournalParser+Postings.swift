@@ -13,6 +13,11 @@ extension JournalParser {
         var comment: String?
         /// Full-line comments written below this posting, verbatim.
         var trailingComments: [String] = []
+        /// How many digits the line wrote after the decimal mark, for the
+        /// amount and for the price. `Posting.amountScale` says what they are
+        /// for; `nil` is a field the line did not write.
+        var amountScale: Int?
+        var priceScale: Int?
     }
 
     func parsePosting(
@@ -50,17 +55,21 @@ extension JournalParser {
         var amount: Amount?
         var price: PostingPrice?
         var balanceAssertion: Amount?
+        var amountScale: Int?
+        var priceScale: Int?
         if let rawAmount = amountStr {
             let field = splitAmountField(rawAmount)
             if !field.amount.isEmpty {
                 let parsed = try parseShapedAmount(field.amount, lineNumber: lineNumber)
                 style.observe(field.amount, shape: parsed.shape, as: parsed.amount)
                 amount = parsed.amount
+                amountScale = parsed.shape.fractionDigits
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
                 let priced = try parseShapedAmount(rawPrice, lineNumber: lineNumber)
                 style.observe(rawPrice, shape: priced.shape, as: priced.amount)
                 price = field.priceIsTotal ? .total(priced.amount) : .perUnit(priced.amount)
+                priceScale = priced.shape.fractionDigits
             }
             if let rawAssertion = field.assertion, !rawAssertion.isEmpty {
                 let asserted = try parseShapedAmount(rawAssertion, lineNumber: lineNumber)
@@ -77,6 +86,8 @@ extension JournalParser {
             balanceAssertion: balanceAssertion,
             status: postingStatus,
             comment: comment?.trimmingCharacters(in: .whitespaces),
+            amountScale: amountScale,
+            priceScale: priceScale,
         )
     }
 }

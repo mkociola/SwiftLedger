@@ -5503,6 +5503,91 @@ private let mixedMarginRows = [
     }
 }
 
+@Suite("written scale") struct WrittenScaleTests {
+    private static let journal = """
+    2026-01-01 Card payment abroad
+        Expenses:Travel    1.00 EUR @ $1.0900
+        Liabilities:Card   $-1.09
+
+    2026-01-02 Opening balances
+        Assets:Checking    $1000
+        Assets:Savings     £500.000
+        Equity:Opening
+    """
+
+    private func postings(of index: Int) throws -> [Posting] {
+        let journal = try JournalParser().parse(Self.journal)
+        return journal.transactions[index].postings
+    }
+
+    /// `Decimal` normalises its own scale, so the digits the file wrote are
+    /// gone by the time a caller holds the amount. This is where they are
+    /// kept, and what the balancing tolerance is read from.
+    @Test
+    func `the parser records the digits each amount was written with`() throws {
+        #expect(try postings(of: 0).map(\.amountScale) == [2, 2])
+        #expect(try postings(of: 1).map(\.amountScale) == [0, 3, nil, nil])
+    }
+
+    /// A rate is written to more places than the currency it prices, so it is
+    /// recorded apart from the amount: it never tightens a commodity the entry
+    /// writes a plain amount in.
+    @Test
+    func `a price's digits are recorded apart from the amount's`() throws {
+        #expect(try postings(of: 0).map(\.priceScale) == [4, nil])
+    }
+
+    /// An elided line wrote no digits, so its fill has no scale to report,
+    /// however many commodities it absorbed.
+    @Test
+    func `an inferred amount has no written scale`() throws {
+        let filled = try postings(of: 1).suffix(2)
+        #expect(filled.allSatisfy { $0.amountScale == nil })
+        #expect(filled.map(\.amount.commodity) == ["$", "£"])
+    }
+
+    /// A posting built in code has never been written anywhere, so it reports
+    /// nothing rather than guessing at two decimal places.
+    @Test
+    func `a posting built in code has no written scale`() {
+        let posting = Posting(
+            accountName: "Assets:Checking",
+            amount: Amount(quantity: 5, commodity: "$", commodityIsPrefix: true),
+        )
+        #expect(posting.amountScale == nil)
+        #expect(posting.priceScale == nil)
+    }
+
+    /// The scales are typography, not content. A caller comparing a parsed
+    /// posting with the one it rebuilt, which is what an edit re-anchoring
+    /// itself and a conflict merge both do, must not start missing matches
+    /// because the file typed `$1.00` where the rebuild holds `$1`.
+    @Test
+    func `the written scale takes no part in equality or hashing`() throws {
+        let parsed = try #require(postings(of: 0).last)
+        let rebuilt = Posting(
+            accountName: parsed.accountName,
+            amount: parsed.amount,
+        )
+        #expect(parsed.amountScale == 2)
+        #expect(rebuilt.amountScale == nil)
+        #expect(parsed == rebuilt)
+        #expect(Set([parsed, rebuilt]).count == 1)
+    }
+
+    @Test
+    func `the written scale is not encoded`() throws {
+        let parsed = try #require(postings(of: 0).first)
+        let data = try JSONEncoder().encode(parsed)
+        let decoded = try JSONDecoder().decode(Posting.self, from: data)
+        #expect(decoded.amountScale == nil)
+        #expect(decoded.priceScale == nil)
+        #expect(decoded == parsed)
+        let text = try #require(String(data: data, encoding: .utf8))
+        #expect(!text.contains("Scale"))
+    }
+}
+
 // MARK: - Test doubles
 
 private final class MockLedgerStore: LedgerStore {
