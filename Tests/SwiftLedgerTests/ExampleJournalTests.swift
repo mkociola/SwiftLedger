@@ -147,6 +147,31 @@ import Testing
         #expect(entry.postings[1].amount == Amount(quantity: -cost, commodity: "$", commodityIsPrefix: true))
     }
 
+    /// Rebuilt, the priced line comes back with its amount where the file
+    /// lines amounts up and the cost trailing past that column, which is
+    /// where the file itself has it.
+    @Test
+    func `the example writes a rebuilt priced posting with its cost trailing`() throws {
+        var journal = try JournalParser().parse(Self.exampleText)
+        let dinner = try #require(
+            journal.transactions.first { $0.description == "Dinner in Vienna, paid with the card" },
+        )
+        let renamed = try Transaction(
+            id: dinner.id,
+            date: dinner.date,
+            description: "Dinner in Vienna, paid with the card (revised)",
+            postings: dinner.postings,
+        )
+        let replaced = journal.replace(.transaction(dinner), with: .transaction(renamed))
+        #expect(replaced)
+
+        let lines = JournalSerializer().serialize(journal).components(separatedBy: "\n")
+        let header = try #require(
+            lines.firstIndex(of: "2024-03-15 Dinner in Vienna, paid with the card (revised)"),
+        )
+        #expect(lines[header + 1] == "    Expenses:Food:Restaurants  €30,00 @ $1.09")
+    }
+
     /// The comma in `€12,50` divides the fraction, so the coffee cost twelve
     /// euros fifty rather than the twelve hundred and fifty the parser used to
     /// read once it had stripped the comma out. One space before the `;` on

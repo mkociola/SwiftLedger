@@ -2576,6 +2576,46 @@ private extension LedgerError {
 // MARK: - JournalSerializer
 
 @Suite("JournalSerializer") struct SerializerTests {
+    /// A file that ends its amounts at one column lines up the figures a
+    /// reader compares. A cost belongs to the figure, not to the column, so
+    /// it trails past the margin, which is how hledger lays the line out.
+    /// Counting it toward the padding shoved the amount left by the width of
+    /// the price and left the price's last character sitting on the margin.
+    @Test
+    func `a rebuilt priced posting lines up its amount and lets the cost trail`() throws {
+        var journal = try JournalParser().parse("""
+        2026-01-01 Groceries
+            Expenses:Food              $60.00
+            Assets:Checking           $-60.00
+        """)
+        #expect(journal.amountAlignment == .end(column: 37))
+
+        try journal.append(.transaction(Transaction(
+            date: makeDate(2026, 1, 2), description: "Buy shares",
+            postings: [
+                Posting(
+                    accountName: "Assets:Brokerage",
+                    amount: Amount(quantity: 10, commodity: "AAPL"),
+                    price: .perUnit(Amount(quantity: 150, commodity: "$", commodityIsPrefix: true)),
+                ),
+                Posting(
+                    accountName: "Assets:Checking",
+                    amount: Amount(quantity: -1500, commodity: "$", commodityIsPrefix: true),
+                ),
+            ],
+        )))
+
+        let lines = JournalSerializer().serialize(journal).components(separatedBy: "\n")
+        let header = try #require(lines.firstIndex(of: "2026-01-02 Buy shares"))
+        let shares = lines[header + 1]
+        let cash = lines[header + 2]
+        #expect(shares.hasSuffix("10 AAPL @ $150.00"))
+        #expect(cash.hasSuffix("$-1500.00"))
+        let amountEnd = try #require(shares.range(of: " @ ")).lowerBound
+        #expect(shares.distance(from: shares.startIndex, to: amountEnd) == 37)
+        #expect(cash.count == 37)
+    }
+
     @Test
     func `serialized output re-parses to a transaction with identical field values`() throws {
         let text = """
