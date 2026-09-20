@@ -67,7 +67,7 @@ extension JournalParser {
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
                 let priced = try parseShapedAmount(rawPrice, lineNumber: lineNumber)
-                style.observe(rawPrice, shape: priced.shape, as: priced.amount)
+                style.observe(rawPrice, shape: priced.shape, as: priced.amount, isRate: true)
                 price = field.priceIsTotal ? .total(priced.amount) : .perUnit(priced.amount)
                 priceScale = priced.shape.fractionDigits
             }

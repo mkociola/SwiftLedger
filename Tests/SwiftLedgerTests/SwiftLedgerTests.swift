@@ -3552,6 +3552,51 @@ private func renaming(
 /// rounded every figure to the most common would turn a real `0.00123456 BTC`
 /// holding into `BTC0.00`.
 @Suite("commodity precision") struct CommodityPrecisionTests {
+    /// An exchange rate is routinely written to more places than the
+    /// currency it prices, and it used to teach that currency its house
+    /// style: one `@ $1.0851` made every rebuilt dollar amount `$-1.0900`, a
+    /// shape nobody in the file had written. It still says how precisely the
+    /// file speaks about dollars, which is a different question.
+    @Test
+    func `a rate does not teach its commodity how many digits to write`() throws {
+        let text = """
+        2026-01-01 Card payment abroad
+            Expenses:Travel    1.00 EUR @ $1.0851
+            Liabilities:Card   $-1.09
+
+        2026-01-02 Groceries
+            Expenses:Food      $1,234.50
+            Liabilities:Card   $-1,234.50
+        """
+        var journal = try JournalParser().parse(text)
+        let dollars = try #require(journal.commodityFormats["$"])
+        #expect(dollars.fractionDigits == 2)
+        #expect(dollars.maxFractionDigits == 4)
+
+        let abroad = try #require(journal.transactions.first)
+        try renaming(abroad, to: "Card payment abroad, edited", in: &journal)
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("$-1.09"))
+        #expect(!written.contains("$-1.0900"))
+        #expect(written.contains("@ $1.0851"))
+    }
+
+    /// A commodity the file writes nothing but rates in has shown no example
+    /// of how it writes an amount, so a rebuilt one takes the library's
+    /// default. Which marks the file uses is still read off the rate.
+    @Test
+    func `a commodity seen only in a rate keeps the default style`() throws {
+        let journal = try JournalParser().parse("""
+        2026-01-01 Card payment abroad
+            Expenses:Travel      1,00 EUR @ $1,0851
+            Assets:Checking     -1,00 EUR @ $1,0851
+        """)
+        let dollars = try #require(journal.commodityFormats["$"])
+        #expect(dollars.fractionDigits == 2)
+        #expect(dollars.maxFractionDigits == 4)
+        #expect(dollars.decimalMark == ",")
+    }
+
     @Test
     func `the digits a padded amount was written with survive the Decimal`() throws {
         let text = """

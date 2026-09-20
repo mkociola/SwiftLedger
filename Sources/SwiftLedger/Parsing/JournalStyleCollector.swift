@@ -12,6 +12,9 @@ import Foundation
 struct JournalStyleCollector {
     /// The number of fraction digits seen for a commodity, and how often.
     private var fractionDigitCounts: [String: [Int: Int]] = [:]
+    /// The most fraction digits a rate was written with, per commodity, kept
+    /// apart from the amounts' own counts. See `observe`.
+    private var rateFractionDigits: [String: Int] = [:]
     /// Per commodity: amounts large enough to show grouping that used a
     /// separator, and amounts large enough that did not.
     private var separated: [String: Int] = [:]
@@ -50,9 +53,24 @@ struct JournalStyleCollector {
     /// all, which is all that is left to read the sign's placement out of.
     /// `amount` is what the parser made of it, so that the two always agree on
     /// which commodity was written and which way round it was.
-    mutating func observe(_ raw: String, shape: NumberShape, as amount: Amount) {
+    ///
+    /// `isRate` marks the amount written after a posting's `@` or `@@`. An
+    /// exchange rate is routinely written to more places than the currency it
+    /// prices, so it casts no vote on how to write one of these: one
+    /// `@ $1.0851` in a file of `$1,234.50` would otherwise make every
+    /// rebuilt dollar amount `$-1.0900`. It still says how precisely the file
+    /// speaks about the commodity, and which marks it writes it with, which
+    /// are questions a rate answers as well as any other amount. A balance
+    /// assertion is a plain amount in the commodity and keeps its full vote.
+    mutating func observe(_ raw: String, shape: NumberShape, as amount: Amount, isRate: Bool = false) {
         let commodity = amount.commodity
-        fractionDigitCounts[commodity, default: [:]][shape.fractionDigits, default: 0] += 1
+        if isRate {
+            rateFractionDigits[commodity] = max(
+                rateFractionDigits[commodity] ?? 0, shape.fractionDigits,
+            )
+        } else {
+            fractionDigitCounts[commodity, default: [:]][shape.fractionDigits, default: 0] += 1
+        }
         if shape.canShowGrouping {
             if shape.usesSeparator {
                 separated[commodity, default: 0] += 1
@@ -148,12 +166,20 @@ struct JournalStyleCollector {
     }
 
     /// The house style for every commodity the journal mentions.
+    ///
+    /// A commodity the file writes nothing but rates in has shown no example
+    /// of how it writes an amount, so how to write one is the library's
+    /// default; how precisely the file speaks about it, and which marks it
+    /// uses, are what the rates showed.
     var formats: [String: CommodityFormat] {
         var result: [String: CommodityFormat] = [:]
-        for (commodity, counts) in fractionDigitCounts {
+        for commodity in Set(fractionDigitCounts.keys).union(rateFractionDigits.keys) {
+            let counts = fractionDigitCounts[commodity] ?? [:]
             result[commodity] = CommodityFormat(
-                fractionDigits: Self.mostCommon(counts),
-                maxFractionDigits: counts.keys.max() ?? 0,
+                fractionDigits: counts.isEmpty
+                    ? CommodityFormat.default(for: commodity).fractionDigits
+                    : Self.mostCommon(counts),
+                maxFractionDigits: max(counts.keys.max() ?? 0, rateFractionDigits[commodity] ?? 0),
                 groupsThousands: Self.groups(
                     separated: separated[commodity] ?? 0,
                     unseparated: unseparated[commodity] ?? 0,
