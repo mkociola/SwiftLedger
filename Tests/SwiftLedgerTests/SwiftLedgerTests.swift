@@ -814,13 +814,14 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
     }
 
     @Test
-    func `two elided postings in one transaction throws multipleElidedPostings`() {
+    func `two elided postings in one transaction throws multipleElidedPostings`() throws {
         let text = """
         2024-01-01 Bad
             Assets:Cash
             Income:Sales
         """
-        #expect(throws: LedgerError.multipleElidedPostings) { try JournalParser().parse(text) }
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error.withoutLocation == .multipleElidedPostings)
     }
 
     @Test
@@ -1212,9 +1213,8 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
             "    Expenses:Food:Groceries  $1.00",
             "    Assets:Checking  $-1.00",
         ].joined(separator: "\r\n")
-        #expect(throws: LedgerError.lineBreakInField("description")) {
-            try JournalParser().parse(text)
-        }
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error.withoutLocation == .lineBreakInField("description"))
     }
 
     @Test
@@ -1224,7 +1224,8 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
             assets:brokerage    10 AAPL @ $1x
             assets:checking          $-1500.00
         """
-        #expect(throws: LedgerError.invalidAmount("$1x")) { try JournalParser().parse(text) }
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error.withoutLocation == .invalidAmount("$1x"))
     }
 
     @Test
@@ -1235,6 +1236,246 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
         """
         let entry = try #require(JournalParser().parse(text).transactions.first)
         #expect(entry.postings.first?.balanceAssertion?.quantity == 1000)
+    }
+}
+
+// MARK: - JournalParser: where in the journal an error was found
+
+/// Nine entries that load, and then one that does not, whose header lands on
+/// line 37.
+///
+/// The journals of issue #50, where every message named what was wrong and
+/// none of them named where it was, leaving a reader with a file that will not
+/// open and nothing to search for.
+private func journalEndingWith(_ entry: String) -> String {
+    let good = (1 ... 9).flatMap { index in
+        [
+            "2026-01-0\(index) Entry \(index)",
+            "    Expenses:Food       $10.00",
+            "    Assets:Checking    $-10.00",
+            "",
+        ]
+    }
+    return (good + [entry]).joined(separator: "\n")
+}
+
+/// One row of that issue's table: an entry that will not load, the line the
+/// error now names, and the error it still is underneath.
+private struct BadEntry {
+    var text: String
+    var line: Int
+    var cause: LedgerError
+
+    /// The header the error names the entry by.
+    var header: String {
+        text.components(separatedBy: "\n")[0]
+    }
+}
+
+private let badEntries: [BadEntry] = [
+    BadEntry(
+        text: """
+        2026-02-01 Off by one
+            Expenses:Food       $10.00
+            Assets:Checking      $-9.00
+        """,
+        line: 37,
+        cause: .unbalancedTransaction(commodity: "$", imbalance: 1),
+    ),
+    BadEntry(
+        text: """
+        2026-02-01 A space in the number
+            Expenses:Food       $1 000
+            Assets:Checking  $-1000.00
+        """,
+        line: 38,
+        cause: .invalidAmount("$1 000"),
+    ),
+    BadEntry(
+        text: """
+        2026-02-01 An exponent in the number
+            Expenses:Food         $1e5
+            Assets:Checking   $-100000
+        """,
+        line: 38,
+        cause: .invalidAmount("$1e5"),
+    ),
+    BadEntry(
+        text: """
+        2026-02-01 The envelope is off by one
+            Expenses:Food       $10.00
+            Assets:Checking    $-10.00
+            [Envelope:Food]      $-9.00
+            [Envelope:Free]     $10.00
+        """,
+        line: 37,
+        cause: .unbalancedBracketedPostings(commodity: "$", imbalance: 1),
+    ),
+    BadEntry(
+        text: """
+        2026-02-01 Two blank amounts
+            Expenses:Food       $10.00
+            Assets:Checking
+            Assets:Savings
+        """,
+        line: 37,
+        cause: .multipleElidedPostings,
+    ),
+    BadEntry(
+        text: "2026-02-01 Corner\rShop\n    Expenses:Food       $10.00\n    Assets:Checking    $-10.00",
+        line: 37,
+        cause: .lineBreakInField("description"),
+    ),
+]
+
+private extension LedgerError {
+    /// The entry a located error names, or `nil` when the error does not say
+    /// where in a journal it was found.
+    var locatedEntry: String? {
+        guard case let .inJournal(_, entry, _) = self else { return nil }
+        return entry
+    }
+}
+
+/// An error thrown while a journal loads says where it was found, so that the
+/// person reading it can open the file at that line (issue #50).
+@Suite("located load errors") struct LocatedLoadErrorTests {
+    /// Every row of the issue's table: the same error as before, wrapped in
+    /// the place it was found. The two invalid amounts are written on a
+    /// posting line rather than on the header and report that line; the entry
+    /// to open is the same one either way.
+    @Test(arguments: badEntries)
+    private func `an entry that will not load says where it is`(bad: BadEntry) throws {
+        let error = try #require(throws: LedgerError.self) {
+            try JournalParser().parse(journalEndingWith(bad.text))
+        }
+        #expect(error.line == bad.line)
+        #expect(error.locatedEntry == bad.header)
+        #expect(error.withoutLocation == bad.cause)
+        #expect(
+            error.localizedDescription
+                == "Line \(bad.line), \"\(bad.header)\": \(bad.cause.localizedDescription)",
+        )
+    }
+
+    /// An amount, a price and an assertion are written on a posting's line, so
+    /// that is the line reported. An entry can run to a dozen postings, and
+    /// the header alone would send the reader to the right entry and the wrong
+    /// line — it is named too, not instead.
+    @Test(arguments: [
+        ("    Assets:Savings       $1 000", "$1 000"),
+        ("    Assets:Brokerage     10 AAPL @ $1x", "$1x"),
+        ("    Assets:Savings       $10.00 = $1 000", "$1 000"),
+    ])
+    func `a bad amount, price or assertion reports the posting's own line`(
+        posting: String, raw: String,
+    ) throws {
+        let entry = [
+            "2026-02-01 Third line",
+            "    Expenses:Food       $10.00",
+            posting,
+        ].joined(separator: "\n")
+        let error = try #require(throws: LedgerError.self) {
+            try JournalParser().parse(journalEndingWith(entry))
+        }
+        #expect(error.line == 39)
+        #expect(error.locatedEntry == "2026-02-01 Third line")
+        #expect(error.withoutLocation == .invalidAmount(raw))
+    }
+
+    /// A date that is no date is the header's own problem, and is reported
+    /// against the header's line.
+    @Test
+    func `an impossible date reports the header line`() throws {
+        let entry = "2026-13-45 Foo\n    Assets:Cash          $0.00"
+        let error = try #require(throws: LedgerError.self) {
+            try JournalParser().parse(journalEndingWith(entry))
+        }
+        #expect(error.line == 37)
+        #expect(error.locatedEntry == "2026-13-45 Foo")
+        #expect(error.withoutLocation == .invalidDate("2026-13-45"))
+    }
+
+    /// A Windows journal counts its lines exactly as the same text with Unix
+    /// endings does, and the entry it names does not come back with the other
+    /// half of its line ending attached.
+    @Test
+    func `a journal with Windows endings reports the same place`() throws {
+        let unix = journalEndingWith("""
+        2026-02-01 Off by one
+            Expenses:Food       $10.00
+            Assets:Checking      $-9.00
+        """)
+        let windows = unix.replacingOccurrences(of: "\n", with: "\r\n")
+        let fromUnix = try #require(throws: LedgerError.self) { try JournalParser().parse(unix) }
+        let fromWindows = try #require(throws: LedgerError.self) { try JournalParser().parse(windows) }
+        #expect(fromWindows == fromUnix)
+        #expect(fromWindows.line == 37)
+        #expect(fromWindows.locatedEntry == "2026-02-01 Off by one")
+        #expect(fromWindows.locatedEntry?.contains("\r") == false)
+    }
+
+    /// A transaction built in code has no line to report and throws what it
+    /// always threw, which is the error `withoutLocation` hands back for the
+    /// one read out of a file.
+    @Test
+    func `a transaction built in code throws the bare error`() throws {
+        let error = try #require(throws: LedgerError.self) {
+            try Transaction(
+                date: makeDate(2026, 2, 1), description: "Off by one",
+                postings: [
+                    Posting(accountName: "Expenses:Food", amount: usd(10)),
+                    Posting(accountName: "Assets:Checking", amount: usd(-9)),
+                ],
+            )
+        }
+        #expect(error == .unbalancedTransaction(commodity: "USD", imbalance: 1))
+        #expect(error.line == nil)
+        #expect(error.locatedEntry == nil)
+        #expect(error.withoutLocation == error)
+    }
+
+    /// `parseError` said where it was found before any of this, and is handed
+    /// back as it is rather than wrapped in a second line number.
+    @Test
+    func `a parse error keeps the line it always carried`() throws {
+        let entry = "2026-02-01=2026 Aux\n    Assets:Cash          $0.00"
+        let error = try #require(throws: LedgerError.self) {
+            try JournalParser().parse(journalEndingWith(entry))
+        }
+        #expect(error == .parseError(line: 37, message: "Expected date, got '2026 Aux'"))
+        #expect(error.line == 37)
+        #expect(error.withoutLocation == error)
+        #expect(error.localizedDescription == "Parse error on line 37: Expected date, got '2026 Aux'")
+    }
+
+    /// The place survives the journey a real caller makes: out of the file,
+    /// through the store, and out of both the first load and a reload of a
+    /// journal that went wrong while it was open.
+    @Test
+    func `a located error reaches a manager through the store`() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-\(UUID().uuidString).ledger")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let bad = journalEndingWith("""
+        2026-02-01 Off by one
+            Expenses:Food       $10.00
+            Assets:Checking      $-9.00
+        """)
+
+        try bad.write(to: url, atomically: true, encoding: .utf8)
+        let onLoad = try #require(throws: LedgerError.self) {
+            try LedgerManager(store: PlainTextJournalStore(url: url))
+        }
+        #expect(onLoad.line == 37)
+        #expect(onLoad.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: 1))
+
+        try journalEndingWith("").write(to: url, atomically: true, encoding: .utf8)
+        let manager = try LedgerManager(store: PlainTextJournalStore(url: url))
+        try bad.write(to: url, atomically: true, encoding: .utf8)
+        let onReload = try #require(throws: LedgerError.self) { try manager.reload() }
+        #expect(onReload.line == 37)
+        #expect(onReload.locatedEntry == "2026-02-01 Off by one")
     }
 }
 
@@ -1699,9 +1940,8 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
             Assets:Brokerage  10 AAPL @ $150.00
             Assets:Checking   $-1000.00
         """
-        #expect(throws: LedgerError.unbalancedTransaction(commodity: "$", imbalance: 500)) {
-            try JournalParser().parse(text)
-        }
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: 500))
     }
 
     @Test
@@ -4686,9 +4926,10 @@ private let sparseEntryJournal = """
 
     @Test
     func `a lone non-zero posting is rejected as unbalanced, never as empty`() throws {
-        #expect(throws: LedgerError.unbalancedTransaction(commodity: "$", imbalance: 5)) {
+        let error = try #require(throws: LedgerError.self) {
             try JournalParser().parse("2024-01-01 oops\n    Assets:Checking   $5")
         }
+        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: 5))
     }
 
     @Test
@@ -4823,9 +5064,8 @@ private let mixedMarginRows = [
             \(account)   $5.00
             Assets:Cash        $-5.00
         """
-        #expect(throws: LedgerError.unbalancedTransaction(commodity: "$", imbalance: -5)) {
-            try JournalParser().parse(text)
-        }
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: -5))
     }
 
     @Test
@@ -4852,9 +5092,8 @@ private let mixedMarginRows = [
             Assets:Cash         $-50.00
             (Reserve:capital)     $5.00
         """
-        #expect(throws: LedgerError.unbalancedTransaction(commodity: "$", imbalance: 20)) {
-            try JournalParser().parse(text)
-        }
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: 20))
     }
 
     @Test
@@ -4867,7 +5106,8 @@ private let mixedMarginRows = [
             [Envelope:Free]      $20.00
         """
         let error = LedgerError.unbalancedBracketedPostings(commodity: "$", imbalance: 5)
-        #expect(throws: error) { try JournalParser().parse(text) }
+        let thrown = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(thrown.withoutLocation == error)
 
         // The case says which group is off, in which commodity, and by how
         // much — and is never mistaken for the real group's error.
@@ -4979,9 +5219,10 @@ private let mixedMarginRows = [
         let transaction = try #require(JournalParser().parse(entry("$-1,500.00")).transactions.first)
         #expect(transaction.postings[0].balancingAmount.quantity == 1500)
 
-        #expect(throws: LedgerError.unbalancedBracketedPostings(commodity: "$", imbalance: 100)) {
+        let error = try #require(throws: LedgerError.self) {
             try JournalParser().parse(entry("$-1,400.00"))
         }
+        #expect(error.withoutLocation == .unbalancedBracketedPostings(commodity: "$", imbalance: 100))
     }
 }
 
@@ -5047,9 +5288,10 @@ private let mixedMarginRows = [
     func `two elided postings in one balancing group throw multipleElidedPostings`(
         postings: String,
     ) throws {
-        #expect(throws: LedgerError.multipleElidedPostings) {
+        let error = try #require(throws: LedgerError.self) {
             try JournalParser().parse("2026-01-01 oops\n" + postings)
         }
+        #expect(error.withoutLocation == .multipleElidedPostings)
     }
 
     @Test

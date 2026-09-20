@@ -28,7 +28,10 @@ extension JournalParser {
     /// behind it (`100 USD`, `1.000,00 EUR`), and the number itself is read by
     /// `scanNumber`, which takes digits and marks and nothing else. Anything
     /// it refuses is `LedgerError.invalidAmount`, carrying the text as the
-    /// file wrote it.
+    /// file wrote it. Where in the file it was written is added by the caller,
+    /// which is why the line number handed in here goes unused: a posting's
+    /// amount is located against the posting's own line by `parseTransaction`,
+    /// while the sample amount of a `D` directive belongs to no entry at all.
     ///
     /// Validating the number rather than trusting `Decimal(string:)` is the
     /// point of this path. That initialiser keeps the longest prefix that
