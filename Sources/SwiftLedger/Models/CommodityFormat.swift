@@ -112,6 +112,16 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
         self.decimalMark = decimalMark
     }
 
+    /// The style that adds nothing to a number: no padding, no grouping, the
+    /// digits the value itself carries and no more.
+    ///
+    /// `fractionDigits` is a floor and `render` never rounds, so every other
+    /// style writes at least these digits. That makes this the fewest digits
+    /// any journal could write an amount with, which is what the balancing
+    /// tolerance falls back to when it has no journal to ask: an answer given
+    /// without one is then never stricter than the answer a journal gives.
+    static let unpadded = CommodityFormat()
+
     /// The style to write a commodity in when the journal shows no example of
     /// it: an empty file, or a commodity the caller is introducing.
     ///

@@ -275,7 +275,7 @@ public struct Ledger: Sendable {
     /// that row has to absorb; one with every row filled reads `isBalanced`
     /// and `conversion`.
     public func balance(of postings: [Posting]) -> TransactionBalance {
-        Transaction.balance(of: postings, commodityFormats: journal.commodityFormats)
+        Transaction.balance(of: postings, commodityFormats: journal.writingStyles(for: postings))
     }
 
     /// Every commodity this journal mentions, in commodity order.

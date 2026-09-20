@@ -1,0 +1,9 @@
+; The fill of an elided posting wrote no digits, so nothing measures any for
+; it. Every dollar amount here is written to no decimal places, which is the
+; place the bracketed pair's residual of $0.40 is read at, and hledger loads
+; the file on that reading.
+2026-01-01 Groceries, and the food envelope
+    expenses:food       $10
+    assets:checking
+    [budget:food]         1 CHF @ $0.4
+    [budget:avail]      $0

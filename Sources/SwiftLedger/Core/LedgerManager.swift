@@ -91,12 +91,14 @@ public final class LedgerManager {
     /// read back.
     ///
     /// `Transaction.init` has already weighed the entry, but it had no journal
-    /// to weigh it in: it held every amount to the digits
-    /// `CommodityFormat.default(for:)` would write. This journal may write
-    /// more of them, and a residual that counts as rounding at two decimal
-    /// places does not at four, so the very file SwiftLedger is about to save
-    /// could fail to load. Asking again here, with the styles the serializer
-    /// will actually use, is what keeps that from happening.
+    /// to weigh it in: it held every unwritten amount to the fewest digits its
+    /// own number needs, which is the loosest reading any journal could give
+    /// it. This journal will write more of them, and a residual that counts as
+    /// rounding at no decimal places does not at two, so the very file
+    /// SwiftLedger is about to save could fail to load. Asking again here,
+    /// with the styles the serializer will actually use, is what keeps that
+    /// from happening, and it is the only check of the two that can: the
+    /// looser one is deliberately unable to refuse what this would accept.
     ///
     /// A transaction that still carries its own source lines is replayed from
     /// them byte for byte, so the digits it will be written with are the ones
@@ -110,7 +112,7 @@ public final class LedgerManager {
             ? transaction.postings.map { $0.taggedWithScales(amount: nil, price: nil) }
             : transaction.postings
         let balance = Transaction.balance(
-            of: postings, commodityFormats: currentJournal.commodityFormats,
+            of: postings, commodityFormats: currentJournal.writingStyles(for: postings),
         )
         guard balance.real.isBalanced else {
             throw LedgerError.unbalancedTransaction(residuals: balance.real.residual)

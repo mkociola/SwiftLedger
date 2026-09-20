@@ -5933,10 +5933,91 @@ private let mixedMarginRows = [
     }
 
     /// With no journal to consult, `Transaction.init` holds an amount to the
-    /// digits the default style would write it with, which for `$` is two.
+    /// digits its own number carries, which for the `$-1.09` cash leg is two.
+    /// That is the fewest digits any journal could write it with, and being
+    /// the loosest reading is the point: the check that can refuse is the one
+    /// `LedgerManager` makes with the file's own styles.
     @Test
-    func `a transaction built in code is weighed in the default style`() throws {
+    func `a transaction built in code is weighed at the digits its numbers carry`() throws {
         #expect(throws: Never.self) { try Self.roundingEntry() }
+    }
+
+    /// A journal that writes its dollars to no decimal places is looser than
+    /// the two a symbol gets by default, and the entry below balances there:
+    /// the residual is four tenths of a dollar against a place worth half of
+    /// one. `Transaction.init` must not be the stricter of the two, because an
+    /// editor reads the journal's answer for its header and then builds the
+    /// transaction to save it, and a disagreement is a save that throws under
+    /// a header saying the entry is fine. hledger loads the same entry
+    /// written into that file.
+    @Test
+    func `an entry is never refused for digits the journal would not write`() throws {
+        let journal = try JournalParser().parse("""
+        2026-01-01 Opening
+            Assets:Checking     $10
+            Equity:Opening     $-10
+        """)
+        let postings = try [
+            Posting(
+                accountName: "Expenses:Travel",
+                amount: Amount(quantity: 2, commodity: "X"),
+                price: .perUnit(Amount(
+                    quantity: #require(Decimal(string: "0.3")), commodity: "$", commodityIsPrefix: true,
+                )),
+            ),
+            Posting(
+                accountName: "Assets:Checking",
+                amount: Amount(quantity: -1, commodity: "$", commodityIsPrefix: true),
+            ),
+        ]
+        #expect(Ledger(journal: journal).balance(of: postings).isBalanced)
+        #expect(throws: Never.self) {
+            try Transaction(date: makeDate(2026, 1, 2), description: "Taxi", postings: postings)
+        }
+    }
+
+    /// An empty journal names no style for `$` at all, and the serializer will
+    /// still pad the first one it writes to two places. So the question `add`
+    /// asks is what the file is about to say, not what it says now, and the
+    /// very entry the test above accepts is refused on its way into this one.
+    @Test
+    func `add weighs an amount in the style the file will give it, not the one it has`() throws {
+        let (manager, url) = try Self.manager(over: "")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let entry = try Transaction(
+            date: makeDate(2026, 1, 2), description: "Taxi",
+            postings: [
+                Posting(
+                    accountName: "Expenses:Travel",
+                    amount: Amount(quantity: 2, commodity: "X"),
+                    price: .perUnit(Amount(
+                        quantity: #require(Decimal(string: "0.3")), commodity: "$", commodityIsPrefix: true,
+                    )),
+                ),
+                Posting(
+                    accountName: "Assets:Checking",
+                    amount: Amount(quantity: -1, commodity: "$", commodityIsPrefix: true),
+                ),
+            ],
+        )
+        #expect(throws: LedgerError.self) { try manager.add(.transaction(entry)) }
+    }
+
+    /// The fill of an elided posting wrote no digits, so nothing measures any
+    /// for it. Every dollar amount here is written to no decimal places, which
+    /// is the place the bracketed pair's residual of $0.40 is read at, and
+    /// hledger loads the file. Scoring the fill at the two places a symbol is
+    /// written with by default held the pair to a hundredth and refused it.
+    @Test
+    func `an elided fill invents no digits for the entry to be held to`() throws {
+        let journal = try JournalParser().parse("""
+        2026-01-01 Groceries, and the food envelope
+            expenses:food       $10
+            assets:checking
+            [budget:food]         1 CHF @ $0.4
+            [budget:avail]      $0
+        """)
+        #expect(journal.transactions.count == 1)
     }
 
     /// The journal the entry is being saved into writes its dollars to four

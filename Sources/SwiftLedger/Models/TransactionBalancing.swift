@@ -110,11 +110,14 @@ public extension Transaction {
     /// file that comes out of a save can never disagree about what balances.
     ///
     /// `commodityFormats` is the journal's house style, from
-    /// `Journal.commodityFormats`. It decides how many digits a posting nobody
-    /// has written yet will be written with, which is what the next parse will
-    /// measure the tolerance against. A caller with no journal to hand can
-    /// leave it out and gets `CommodityFormat.default(for:)`, which is what
-    /// `Transaction.init` itself uses.
+    /// `Journal.writingStyles(for:)`. It decides how many digits a posting
+    /// nobody has written yet will be written with, which is what the next
+    /// parse will measure the tolerance against. A caller with no journal to
+    /// hand leaves it out and gets the fewest digits each number can be
+    /// written with, which is a floor every journal meets: the answer given
+    /// without a journal is therefore never stricter than the answer a journal
+    /// gives, so `Transaction.init` cannot refuse what a save would have
+    /// accepted.
     static func balance(
         of postings: [Posting],
         commodityFormats: [String: CommodityFormat] = [:],
@@ -288,6 +291,11 @@ enum TransactionBalancing {
     /// writes no plain amount in at all, one reached only through a price, has
     /// nothing else to be measured by and is measured by its rates.
     ///
+    /// The fill of an elided posting wrote no digits either, and nothing
+    /// invents any for it: with no journal to consult it is measured at
+    /// `CommodityFormat.unpadded`, so the entry's own written amounts decide
+    /// the place and the fill only ever agrees with them.
+    ///
     /// A declared `commodity` directive deliberately has no say: it states how
     /// to display an amount, and under hledger's default balancing it does not
     /// move this boundary.
@@ -321,17 +329,26 @@ enum TransactionBalancing {
         }.max()
     }
 
-    /// How many digits this amount is written with: the digits the file wrote
-    /// where the file wrote it, and otherwise the digits the serializer will
-    /// write for it in this journal.
+    /// How many digits an amount nobody has written yet would be written with.
     ///
-    /// The second half is what keeps a transaction built in code from being
-    /// saved into a file that will not load again. The next parse measures the
-    /// digits it finds on the line, so the tolerance an unwritten amount is
-    /// held to has to be the one its written form will earn, which is why this
-    /// and `JournalSerializer` both ask `CommodityFormat.render`.
+    /// Given the style a journal will write it in, that is what the style
+    /// renders, which is what keeps a transaction built in code from being
+    /// saved into a file that will not load again: the next parse measures the
+    /// digits it finds on the line, so the tolerance has to be the one the
+    /// written form will earn, and this and `JournalSerializer` both ask
+    /// `CommodityFormat.render` for it.
+    ///
+    /// Given no style at all, it is `CommodityFormat.unpadded`, the fewest
+    /// digits the number itself can be written with, and never
+    /// `CommodityFormat.default(for:)`. Guessing at two places for a symbol
+    /// here would hold a caller with no journal to a precision some journal is
+    /// looser than, and `Transaction.init`, which is such a caller, would then
+    /// refuse an entry that both `LedgerManager.balance(of:)` and hledger read
+    /// as balanced. Whoever is about to write a line asks
+    /// `Journal.writingStyles(for:)` for the styles first, so the guess is
+    /// made where the journal is, not here.
     static func writtenScale(of amount: Amount, formats: [String: CommodityFormat]) -> Int {
-        let format = formats[amount.commodity] ?? .default(for: amount.commodity)
+        let format = formats[amount.commodity] ?? .unpadded
         return format.writtenFractionDigits(of: amount.quantity)
     }
 }
