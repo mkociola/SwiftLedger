@@ -5819,6 +5819,215 @@ private let mixedMarginRows = [
     }
 }
 
+@Suite("balancing cost inference") struct BalancingCostInferenceTests {
+    private static func balance(of text: String) throws -> TransactionBalance {
+        let journal = try JournalParser().parse(text)
+        return try #require(journal.transactions.first).balance
+    }
+
+    /// The commonest multi-currency entry there is: two commodities, no price
+    /// written, and hledger reading the second leg as what the first one cost.
+    /// It used to make the whole journal fail to open.
+    @Test
+    func `two commodities of opposite sign balance by conversion`() throws {
+        let balance = try Self.balance(of: """
+        2026-01-01 Exchange
+            assets:eur     100 EUR
+            assets:usd    -110 USD
+        """)
+        let conversion = try #require(balance.real.conversion)
+        #expect(balance.isBalanced)
+        #expect(balance.real.residual == [Amount(quantity: 100, commodity: "EUR"),
+                                          Amount(quantity: -110, commodity: "USD")])
+        #expect(conversion.from == Amount(quantity: 100, commodity: "EUR"))
+        #expect(conversion.to == Amount(quantity: -110, commodity: "USD"))
+        #expect(conversion.postingIndices == [0])
+        #expect(conversion.price == .total(Amount(quantity: 110, commodity: "USD")))
+    }
+
+    /// The cost lands on the commodity of the group's first posting, so the
+    /// same exchange written the other way round prices the dollars.
+    @Test
+    func `the first posting's commodity is the one priced`() throws {
+        let balance = try Self.balance(of: """
+        2026-01-01 Exchange
+            assets:usd    -110 USD
+            assets:eur     100 EUR
+        """)
+        let conversion = try #require(balance.real.conversion)
+        #expect(conversion.from == Amount(quantity: -110, commodity: "USD"))
+        #expect(conversion.price == .total(Amount(quantity: 100, commodity: "EUR")))
+    }
+
+    /// Several postings sharing the priced commodity are all priced, at a
+    /// rate rather than at a total, and the rate is read off the net, so a
+    /// posting whose own sign runs against that net is priced too.
+    @Test
+    func `several postings in the priced commodity share a per-unit rate`() throws {
+        let balance = try Self.balance(of: """
+        2026-01-01 Exchange
+            assets:eur      100 EUR
+            assets:eur2     -30 EUR
+            assets:usd      -77 USD
+        """)
+        let conversion = try #require(balance.real.conversion)
+        let rate = try #require(Decimal(string: "1.1"))
+        #expect(conversion.postingIndices == [0, 1])
+        #expect(conversion.price == .perUnit(Amount(quantity: rate, commodity: "USD")))
+    }
+
+    /// The rate is kept as exactly as a `Decimal` holds it, rather than
+    /// rounded to the four places a report would print: hledger keeps ten
+    /// thirds here and prints 3.3333, and a rate rounded in the model would
+    /// leave the three postings not adding up.
+    @Test
+    func `an awkward rate is kept to full precision`() throws {
+        let balance = try Self.balance(of: """
+        2026-01-01 Exchange
+            assets:eur      1.00 EUR
+            assets:eur2     2.00 EUR
+            assets:usd    -10.00 USD
+        """)
+        let conversion = try #require(balance.real.conversion)
+        guard case let .perUnit(rate) = conversion.price else {
+            Issue.record("expected a per-unit rate, got \(conversion.price)")
+            return
+        }
+        let printed = try #require(Decimal(string: "3.3333"))
+        #expect(rate.quantity != printed)
+        #expect(abs(rate.quantity * 3 - 10) < Decimal(sign: .plus, exponent: -30, significand: 1))
+    }
+
+    /// A commodity the entry already nets to zero is out of the count before
+    /// the two sides are looked for, which is what lets an entry carrying
+    /// equity conversion postings balance without anything knowing what an
+    /// equity account is.
+    @Test
+    func `a commodity that nets to zero is not one of the two sides`() throws {
+        let balance = try Self.balance(of: """
+        2026-01-01 Two movements, one settled
+            assets:eur     100 EUR
+            equity:x      -100 EUR
+            assets:gbp      10 GBP
+            assets:chf     -12 CHF
+        """)
+        let conversion = try #require(balance.real.conversion)
+        #expect(conversion.postingIndices == [2])
+        #expect(conversion.price == .total(Amount(quantity: 12, commodity: "CHF")))
+    }
+
+    /// Three commodities, or two of the same sign, is not an exchange: the
+    /// entry is simply wrong, and hledger says so too.
+    @Test(arguments: ["""
+    2026-01-01 Three commodities
+        assets:eur     100 EUR
+        assets:usd    -110 USD
+        assets:gbp      10 GBP
+    """, """
+    2026-01-01 Both positive
+        assets:eur     100 EUR
+        assets:usd     110 USD
+    """])
+    func `only two sides of opposite sign are an exchange`(text: String) throws {
+        #expect(throws: LedgerError.self) { try JournalParser().parse(text) }
+    }
+
+    /// One written price switches the reading off for the whole group, even
+    /// for a pair in other commodities that has nothing to do with it. This
+    /// is hledger's sharpest edge here: half-priced never works.
+    @Test
+    func `a price anywhere in the group switches inference off`() throws {
+        #expect(throws: LedgerError.self) {
+            try JournalParser().parse("""
+            2026-01-01 Priced and unpriced
+                assets:eur      50 EUR @ 1.10 USD
+                assets:usd     -55 USD
+                assets:gbp      10 GBP
+                assets:chf     -12 CHF
+            """)
+        }
+    }
+
+    /// The bracketed postings are their own group, so they get their own
+    /// conversion, and neither group's prices reach the other.
+    @Test
+    func `bracketed postings are converted on their own`() throws {
+        let balance = try Self.balance(of: """
+        2026-01-01 Groceries, and move the food envelope
+            expenses:food     100 EUR @@ 110 USD
+            assets:checking  -110 USD
+            [budget:food]      25 USD
+            [budget:avail]    -20 EUR
+        """)
+        #expect(balance.real.conversion == nil)
+        #expect(balance.real.isBalanced)
+        let conversion = try #require(balance.balancedVirtual.conversion)
+        #expect(conversion.postingIndices == [2])
+        #expect(conversion.price == .total(Amount(quantity: 20, commodity: "EUR")))
+    }
+
+    /// An elided posting absorbs the remainder instead of triggering a
+    /// conversion, which is hledger's reading and what the parser has always
+    /// done: this pins the order of the two.
+    @Test
+    func `an elided posting absorbs the remainder rather than converting it`() throws {
+        let transaction = try #require(try JournalParser().parse("""
+        2026-01-01 Opening balances
+            assets:eur     100 EUR
+            assets:usd    -110 USD
+            equity:opening
+        """).transactions.first)
+        #expect(transaction.postings.count == 4)
+        #expect(transaction.balance.real.conversion == nil)
+        #expect(transaction.balance.isBalanced)
+    }
+
+    /// An inferred cost is a reading of the postings, never a change to them:
+    /// the file says what the user wrote, and plain `hledger print` writes no
+    /// inferred cost either.
+    @Test
+    func `an inferred cost is never written into the file`() throws {
+        let text = """
+        2026-01-01 Exchange
+            assets:eur     100 EUR
+            assets:usd    -110 USD
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.first?.postings.allSatisfy { $0.price == nil } == true)
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    /// The whole point of the API: an entry half typed can be asked what it
+    /// is off by without building a transaction and catching.
+    @Test
+    func `a half-typed entry reports what is missing without throwing`() {
+        let postings = [
+            Posting(accountName: "Expenses:Food", amount: usd(40)),
+            Posting(accountName: "Assets:Cash", amount: usd(-25)),
+        ]
+        let balance = Transaction.balance(of: postings)
+        #expect(!balance.isBalanced)
+        #expect(balance.real.residual == [usd(15)])
+        #expect(balance.real.conversion == nil)
+    }
+
+    /// The journal-aware form answers in the file's own styles and lists the
+    /// commodities a picker would offer.
+    @Test
+    func `a ledger weighs postings in its own styles and lists its commodities`() throws {
+        let ledger = try Ledger(journal: JournalParser().parse("""
+        2026-01-01 Exchange
+            assets:eur     100 EUR
+            assets:usd    -110 USD @@ 100 EUR
+        """))
+        #expect(ledger.commodities == ["EUR", "USD"])
+        #expect(ledger.balance(of: [
+            Posting(accountName: "Assets:Cash", amount: Amount(quantity: 1, commodity: "EUR")),
+            Posting(accountName: "Expenses:Food", amount: Amount(quantity: -1, commodity: "EUR")),
+        ]).isBalanced)
+    }
+}
+
 // MARK: - Test doubles
 
 private final class MockLedgerStore: LedgerStore {

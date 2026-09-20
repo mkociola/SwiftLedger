@@ -1,0 +1,9 @@
+; Equity conversion postings alongside an explicit cost. hledger knows that
+; the equity pair records the same exchange the cost does and leaves it out of
+; the sum; SwiftLedger reads no meaning into an account name, so it sees the
+; pair twice over and refuses the entry.
+2026-01-01 Exchange, recorded both ways
+    assets:eur                 100 EUR @@ 110 USD
+    equity:conversion         -100 EUR
+    equity:conversion          110 USD
+    assets:usd                -110 USD

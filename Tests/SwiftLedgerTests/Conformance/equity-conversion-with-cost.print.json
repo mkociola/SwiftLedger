@@ -1,0 +1,76 @@
+[
+  {
+    "date": "2026-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Exchange, recorded both ways",
+    "postings": [
+      {
+        "account": "assets:eur",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": 110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "equity:conversion",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -100,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "equity:conversion",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": 110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:usd",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

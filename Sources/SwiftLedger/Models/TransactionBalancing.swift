@@ -18,6 +18,12 @@ import Foundation
 /// which makes it the number to show someone who is still typing an entry:
 /// what the empty line has to absorb, negated.
 ///
+/// A group left over in exactly two commodities of opposite sign is the shape
+/// hledger reads as an exchange and balances by inferring what one commodity
+/// cost in the other. That reading is reported in `Group.conversion` and is
+/// never written into the postings: the file says what the user wrote, and
+/// plain `hledger print` does not write an inferred cost either.
+///
 /// Nothing here converts between commodities or sums across them. Every
 /// answer is a list of amounts, one per commodity, in commodity order.
 public struct TransactionBalance: Sendable, Hashable {
@@ -32,10 +38,50 @@ public struct TransactionBalance: Sendable, Hashable {
         /// with the rest.
         public let residual: [Amount]
 
-        /// Whether this group balances.
+        /// The exchange hledger would read into this group, or `nil` when
+        /// there is none to read.
+        ///
+        /// Non-nil exactly when `residual` is a two-commodity pair of
+        /// opposite sign and no posting of the group writes a price of its
+        /// own. Such a group balances: the residual is what one side cost, not
+        /// what the entry is missing.
+        public let conversion: Conversion?
+
+        /// Whether this group balances, outright or by conversion.
         public var isBalanced: Bool {
-            residual.isEmpty
+            residual.isEmpty || conversion != nil
         }
+    }
+
+    /// One commodity exchanged for another, at the rate the entry implies.
+    ///
+    /// This is a reading of the postings and nothing else: computed on demand,
+    /// never stored on a `Posting`, never serialised. An editor showing
+    /// someone what they are about to record wants all four fields, since a
+    /// mistyped amount balances in silence and only the rate gives it away.
+    public struct Conversion: Sendable, Hashable {
+        /// The postings the cost belongs to: every posting of the group
+        /// written in the commodity being priced, as indices into the array
+        /// handed to `Transaction.balance(of:)`.
+        ///
+        /// hledger prices the commodity of the first such posting in the
+        /// group, and prices every posting in it, including one whose own
+        /// sign runs against the net.
+        public let postingIndices: [Int]
+
+        /// What those postings cost: `.total` when one posting carries the
+        /// whole exchange, `.perUnit` when several share it, which is the
+        /// spelling hledger chooses. The rate is exact, so a rate that does
+        /// not terminate is as exact as `Decimal` can hold; only a display
+        /// rounds it.
+        public let price: PostingPrice
+
+        /// The net of the commodity being priced, signed.
+        public let from: Amount
+
+        /// The net of the commodity it is priced in, signed, and of the
+        /// opposite sign to `from`.
+        public let to: Amount // swiftlint:disable:this identifier_name
     }
 
     /// The postings written bare, which are the transaction proper.
@@ -112,10 +158,60 @@ enum TransactionBalancing {
         of postings: [Posting],
         formats: [String: CommodityFormat],
     ) -> TransactionBalance.Group {
-        TransactionBalance.Group(
-            residual: residual(
-                of: postings.filter { $0.kind == kind }, in: postings, formats: formats,
-            ),
+        let members = postings.indices.filter { postings[$0].kind == kind }
+        let left = residual(
+            of: members.map { postings[$0] }, in: postings, formats: formats,
+        )
+        return TransactionBalance.Group(
+            residual: left,
+            conversion: conversion(for: left, over: members, in: postings),
+        )
+    }
+
+    /// The exchange hledger would read into what a group is left with.
+    ///
+    /// Two commodities of opposite sign and no price written anywhere in the
+    /// group: then the entry is an exchange and the residual is the two sides
+    /// of it. The rate is exact, `|other net| / |priced net|`, and the cost is
+    /// attached to every posting written in the commodity of the group's first
+    /// posting in either of the two, which is what makes an entry whose first
+    /// leg is the dollar one price the dollars.
+    ///
+    /// Everything else refuses, as hledger does: three commodities left over,
+    /// two of the same sign, or a single price anywhere in the group, which
+    /// switches the reading off for the whole group even when what is left
+    /// over has nothing to do with the posting that carries it. An elided
+    /// posting switches it off too, by absorbing the residual before this is
+    /// ever asked, which is why the parser resolves elision first.
+    static func conversion(
+        for residual: [Amount],
+        over members: [Int],
+        in postings: [Posting],
+    ) -> TransactionBalance.Conversion? {
+        guard residual.count == 2,
+              members.allSatisfy({ postings[$0].price == nil }),
+              (residual[0].quantity > 0) != (residual[1].quantity > 0),
+              let leading = members.first(where: { member in
+                  residual.contains { $0.commodity == postings[member].amount.commodity }
+              })
+        else { return nil }
+
+        let priced = postings[leading].amount.commodity
+        let from = residual[0].commodity == priced ? residual[0] : residual[1]
+        // swiftlint:disable:next identifier_name
+        let to = residual[0].commodity == priced ? residual[1] : residual[0]
+        let indices = members.filter { postings[$0].amount.commodity == priced }
+        let rate = indices.count == 1
+            ? abs(to.quantity)
+            : abs(to.quantity) / abs(from.quantity)
+        let cost = Amount(
+            quantity: rate, commodity: to.commodity, commodityIsPrefix: to.commodityIsPrefix,
+        )
+        return TransactionBalance.Conversion(
+            postingIndices: indices,
+            price: indices.count == 1 ? .total(cost) : .perUnit(cost),
+            from: from,
+            to: to,
         )
     }
 

@@ -108,6 +108,24 @@ import Testing
         ])
     }
 
+    /// Two commodities and no price on either line is an exchange, and the
+    /// entry balances on the rate the amounts imply. The file keeps no record
+    /// of that rate, which is why it is asked for rather than read.
+    @Test
+    func `the example shows an exchange with no price written`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let entry = try #require(
+            journal.transactions.first { $0.description == "Bought euros at the bureau" },
+        )
+        #expect(entry.postings.allSatisfy { $0.price == nil })
+        #expect(entry.balance.isBalanced)
+        let conversion = try #require(entry.balance.real.conversion)
+        #expect(conversion.postingIndices == [0])
+        #expect(conversion.price == .total(
+            Amount(quantity: 110, commodity: "$", commodityIsPrefix: true),
+        ))
+    }
+
     /// A price is what lets two postings that share no commodity balance: the
     /// restaurant account holds thirty euros, the card owes the $32.70 they
     /// cost, and the entry nets to zero on the cost alone.

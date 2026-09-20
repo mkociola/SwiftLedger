@@ -146,6 +146,17 @@ account Expenses:Utilities
     Assets:EuroAccount     -€30,00
     Assets:PoundAccount
 
+; ── An exchange with no price written ───────────────────────────────────────
+; An entry written in two commodities with no price on either line is read as
+; an exchange: the euros cost the dollars, at the rate the two amounts imply.
+; ledger and hledger both balance it that way. Nothing is written into the
+; file for it, and no report converts anything: the rate is a reading of the
+; entry, there for anyone who asks the transaction what it balances by.
+
+2024-03-18 Bought euros at the bureau
+    Assets:EuroAccount     €100,00
+    Assets:Checking       -$110.00
+
 ; ── A price on a posting ────────────────────────────────────────────────────
 ; A posting can say what its amount cost in another commodity: @ writes the
 ; price of one unit, @@ the cost of the whole posting. The entry balances on

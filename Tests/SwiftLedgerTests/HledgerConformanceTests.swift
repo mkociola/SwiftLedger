@@ -24,11 +24,11 @@ import Testing
         "amount-forms",
         "apply-account",
         "balance-assertion-fails",
-        "cost-inference",
         "date-formats",
         "decimal-mark-directive",
         "default-commodity",
         "description-comment",
+        "equity-conversion-with-cost",
         "include",
         "posting-date-tag",
         "secondary-date-without-year",
@@ -150,10 +150,32 @@ import Testing
         if let mark = marker(transaction.status) { header += " \(mark)" }
         if let code = transaction.code, !code.isEmpty { header += " (\(code))" }
         header += " \(transaction.description)"
-        return [header] + transaction.postings.map(render)
+        let inferred = inferredPrices(of: transaction)
+        return [header] + transaction.postings.enumerated().map { index, posting in
+            render(posting, inferred: inferred[index])
+        }
     }
 
-    private static func render(_ posting: Posting) -> String {
+    /// The cost each posting carries without the journal having written one.
+    ///
+    /// hledger's `print -O json` reports the cost it inferred for an entry
+    /// that balances by conversion, even though plain `print` writes no such
+    /// line. SwiftLedger keeps an inferred cost off the posting and computes
+    /// it instead, so the comparison has to ask for it here or every
+    /// inference would be compared against nothing.
+    private static func inferredPrices(of transaction: Transaction) -> [Int: PostingPrice] {
+        let balance = transaction.balance
+        var prices: [Int: PostingPrice] = [:]
+        for group in [balance.real, balance.balancedVirtual] {
+            guard let conversion = group.conversion else { continue }
+            for index in conversion.postingIndices {
+                prices[index] = conversion.price
+            }
+        }
+        return prices
+    }
+
+    private static func render(_ posting: Posting, inferred: PostingPrice?) -> String {
         var line = "    "
         if let mark = marker(posting.status ?? .unmarked) { line += "\(mark) " }
         line += posting.delimitedAccountName
@@ -161,7 +183,7 @@ import Testing
         // A total cost is rendered unsigned on both sides: hledger stores it
         // with the sign of the quantity and prints it without, and which sign
         // a store carries is representation, not reading.
-        switch posting.price {
+        switch posting.price ?? inferred {
         case let .perUnit(price): line += " @ " + render(price)
         case let .total(price): line += " @@ " + render(abs(price.quantity), price.commodity)
         case nil: break

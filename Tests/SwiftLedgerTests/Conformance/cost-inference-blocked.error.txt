@@ -1,0 +1,10 @@
+hledger: Error: cost-inference-blocked.journal:4-7:
+4 | 2026-01-01 Half of it priced
+  |     assets:eur     50 EUR @ 1.10 USD
+  |     assets:eur2               50 EUR
+  |     assets:usd              -110 USD
+
+This multi-commodity transaction is unbalanced.
+The real postings' sum should be 0 but is: 50 EUR, -55.00 USD
+Consider adjusting this entry's amounts, adding missing postings,
+or recording conversion price(s) with @, @@ or equity postings.

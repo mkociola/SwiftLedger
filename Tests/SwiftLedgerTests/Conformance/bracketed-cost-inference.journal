@@ -1,0 +1,7 @@
+; Bracketed postings balance among themselves and get a conversion of their
+; own, and the price written on a real posting does not switch it off.
+2026-01-01 Groceries, and move the food envelope
+    expenses:food     100 EUR @@ 110 USD
+    assets:checking  -110 USD
+    [budget:food]      25 USD
+    [budget:avail]    -20 EUR

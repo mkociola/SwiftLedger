@@ -1,0 +1,37 @@
+[
+  {
+    "account": "assets:eur",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 100,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "assets:usd",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": -110,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "equity:conversion",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "USD",
+        "mantissa": 110,
+        "places": 0
+      }
+    ]
+  }
+]

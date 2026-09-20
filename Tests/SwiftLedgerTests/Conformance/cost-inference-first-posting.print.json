@@ -1,0 +1,76 @@
+[
+  {
+    "date": "2026-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Two movements, one settled",
+    "postings": [
+      {
+        "account": "assets:eur",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "equity:x",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -100,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:gbp",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "GBP",
+            "mantissa": 10,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "CHF",
+              "mantissa": 12,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:chf",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "CHF",
+            "mantissa": -12,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

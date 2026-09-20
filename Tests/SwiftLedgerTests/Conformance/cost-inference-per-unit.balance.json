@@ -1,0 +1,32 @@
+[
+  {
+    "account": "assets:usd",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": -110,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "expenses:food",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 60,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "expenses:fun",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 40,
+        "places": 0
+      }
+    ]
+  }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "date": "2026-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Dinner split two ways",
+    "postings": [
+      {
+        "account": "expenses:food",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 60,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 11,
+              "places": 1
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "expenses:fun",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 40,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 11,
+              "places": 1
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "assets:usd",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

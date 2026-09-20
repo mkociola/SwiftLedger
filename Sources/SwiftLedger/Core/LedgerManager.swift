@@ -142,6 +142,19 @@ public final class LedgerManager {
         ledger.accounts
     }
 
+    /// What `postings` leave over, weighed in this journal's own styles.
+    ///
+    /// The non-throwing form of the rule `add(_:)` enforces, for a caller
+    /// with an entry half typed: see `Ledger.balance(of:)`.
+    public func balance(of postings: [Posting]) -> TransactionBalance {
+        ledger.balance(of: postings)
+    }
+
+    /// Every commodity this journal mentions, in commodity order.
+    public var commodities: [String] {
+        ledger.commodities
+    }
+
     public func balance(for accountName: String, asOf: JournalDate? = nil) -> [Amount] {
         ledger.balance(for: accountName, asOf: asOf)
     }
