@@ -9,9 +9,9 @@ import Foundation
 /// What "sum to zero" means is `Transaction.balance(of:commodityFormats:)`,
 /// which reads it as hledger does: a posting with a price counts as what it
 /// cost, a residual too small to be written at the precision the entry uses
-/// counts as zero, and a group left over in two commodities of opposite sign
-/// with no price written anywhere in it is an exchange and balances at the
-/// rate its own amounts imply. Those invariants are enforced at construction
+/// counts as zero, and a group left over in two commodities of opposite sign,
+/// with no price of its own still standing once its sums are taken, is an
+/// exchange and balances at the rate its own amounts imply. Those invariants are enforced at construction
 /// time. They are the only rule
 /// on how many postings there may be: none at all sums to zero, so a dated
 /// line with nothing but a description is a transaction, and so is a single

@@ -6207,7 +6207,7 @@ private let mixedMarginRows = [
     /// commodities that has nothing to do with it. This is hledger's sharpest
     /// edge here: half-priced never works.
     @Test
-    func `a price anywhere in the group switches inference off`() throws {
+    func `a price still standing in the group switches inference off`() throws {
         #expect(throws: LedgerError.self) {
             try JournalParser().parse("""
             2026-01-01 Priced and unpriced

@@ -42,9 +42,9 @@ public struct TransactionBalance: Sendable, Hashable {
         /// there is none to read.
         ///
         /// Non-nil exactly when `residual` is a two-commodity pair of
-        /// opposite sign and no posting of the group writes a price of its
-        /// own. Such a group balances: the residual is what one side cost, not
-        /// what the entry is missing.
+        /// opposite sign and no price the group wrote is still standing once
+        /// its sums are taken. Such a group balances: the residual is what one
+        /// side cost, not what the entry is missing.
         public let conversion: Conversion?
 
         /// Whether this group balances, outright or by conversion.
@@ -173,9 +173,9 @@ enum TransactionBalancing {
 
     /// The exchange hledger would read into what a group is left with.
     ///
-    /// Two commodities of opposite sign and no price written anywhere in the
-    /// group: then the entry is an exchange and the residual is the two sides
-    /// of it. The rate is exact, `|other net| / |priced net|`, and the cost is
+    /// Two commodities of opposite sign, and no price left standing once the
+    /// group's sums are taken: then the entry is an exchange and the residual
+    /// is the two sides of it. The rate is exact, `|other net| / |priced net|`, and the cost is
     /// attached to every posting written in the commodity of the group's first
     /// posting in either of the two, which is what makes an entry whose first
     /// leg is the dollar one price the dollars.
