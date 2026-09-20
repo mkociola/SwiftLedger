@@ -3798,6 +3798,50 @@ private func renaming(
         // account name, and one long name is not the file's layout.
         #expect(try JournalParser().parse(text).amountAlignment == .start(column: 33))
     }
+
+    /// A journal of priced postings, whose amounts end at column 41 while the
+    /// fields they sit in run on past it by the width of each `@ price`.
+    private func pricedJournal() -> String {
+        func line(_ account: String, _ amount: String, _ trailing: String = "") -> String {
+            let indented = "    " + account
+            let padding = 41 - indented.count - amount.count
+            return indented + String(repeating: " ", count: padding) + amount + trailing
+        }
+        return [
+            "2026-01-05 * Buy shares",
+            line("Assets:Brokerage", "1 AAPL", " @ $150.00"),
+            line("Assets:Broker2", "2 AAPL", " @ $50.00"),
+            line("Assets:Checking", "$-250.00"),
+        ].joined(separator: "\n")
+    }
+
+    /// What the serializer lines up is the amount, so what the parser measures
+    /// has to be the amount too. Measuring the whole field read this file as
+    /// ending at 51, where two of its three amounts do not reach, and a
+    /// rebuilt entry then put its figures at a column the file never used.
+    @Test
+    func `a priced posting's margin is measured over its amount, not over its price`() throws {
+        #expect(try JournalParser().parse(pricedJournal()).amountAlignment == .end(column: 41))
+    }
+
+    @Test
+    func `rebuilding every entry of a priced journal leaves its columns alone`() throws {
+        var journal = try JournalParser().parse(pricedJournal())
+        let entry = try #require(journal.transactions.first)
+        // Rebuilt through `Transaction.init`, which drops the source lines, so
+        // every posting below is formatted afresh rather than replayed.
+        try journal.replace(
+            .transaction(entry),
+            with: .transaction(
+                Transaction(
+                    date: entry.date, status: entry.status, code: entry.code,
+                    description: entry.description, postings: entry.postings,
+                    comment: entry.comment,
+                ),
+            ),
+        )
+        #expect(JournalSerializer().serialize(journal) == pricedJournal())
+    }
 }
 
 // MARK: - Replacing an item in place

@@ -44,9 +44,6 @@ extension JournalParser {
         let (amountStr, comment) = splitPostingComment(field)
         let (accountName, kind) = Posting.Kind.split(accountToken)
         style.observeIndent(String(line.prefix { $0 == " " || $0 == "\t" }))
-        if let amountStr, let start = Self.amountColumn(in: line, after: accountToken) {
-            style.observeAmountField(start: start, end: start + amountStr.count)
-        }
 
         // The amount may be trailed by a price and/or a balance assertion.
         // An empty part is dropped rather than parsed: a dangling `@` is not
@@ -64,6 +61,15 @@ extension JournalParser {
                 style.observe(field.amount, shape: parsed.shape, as: parsed.amount)
                 amount = parsed.amount
                 amountScale = parsed.shape.fractionDigits
+                // The margin is measured over the amount alone, because the
+                // amount alone is what the serializer lines up: a `@ price` or
+                // a `= assertion` trails past the column. Measuring the whole
+                // field taught a file of priced postings a column its own
+                // figures never stood at, and a rebuilt posting then landed
+                // that much further right than every line around it.
+                if let start = Self.amountColumn(in: line, after: accountToken) {
+                    style.observeAmount(start: start, end: start + field.amount.count)
+                }
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
                 let priced = try parseShapedAmount(rawPrice, lineNumber: lineNumber)

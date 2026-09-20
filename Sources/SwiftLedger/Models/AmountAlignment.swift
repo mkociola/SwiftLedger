@@ -18,9 +18,14 @@ import Foundation
 /// own sign — a change nobody asked for, in the one entry the user edited.
 /// `JournalParser` therefore records which convention a file follows and
 /// `JournalSerializer` writes it back.
+///
+/// What lines up either way is the amount, and a `@ price` or `= assertion`
+/// trails past the column, which is how hledger lays a posting out. Both ends
+/// of this hold to that: the parser measures a line's amount and nothing
+/// after it, and the serializer pads to the same thing.
 public enum AmountAlignment: Sendable, Codable, Hashable {
-    /// Amount fields begin at this column.
+    /// Amounts begin at this column.
     case start(column: Int)
-    /// Amount fields end at this column, so their last characters line up.
+    /// Amounts end at this column, so their last digits line up.
     case end(column: Int)
 }

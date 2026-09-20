@@ -110,11 +110,15 @@ struct JournalStyleCollector {
         )
     }
 
-    /// Records where a posting line's amount field began and ended.
+    /// Records where a posting line's amount began and ended.
     ///
-    /// Only postings that write an amount say anything: an elided leg has no
-    /// field to line up, and counting it would drag the answer toward zero.
-    mutating func observeAmountField(start: Int, end: Int) {
+    /// The amount alone, without the `@ price` or `= assertion` that may
+    /// follow it, because the amount alone is what `JournalSerializer` lines
+    /// up: a file measured by the end of its whole field would teach the
+    /// serializer a column its figures never stood at. Only postings that
+    /// write an amount say anything: an elided leg has none to line up, and
+    /// counting it would drag the answer toward zero.
+    mutating func observeAmount(start: Int, end: Int) {
         amountStarts[start, default: 0] += 1
         amountEnds[end, default: 0] += 1
     }
