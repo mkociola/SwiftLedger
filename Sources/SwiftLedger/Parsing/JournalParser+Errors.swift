@@ -13,8 +13,8 @@ extension JournalParser {
     ///
     /// Two errors are handed back bare. `parseError` carries a line of its own
     /// and would otherwise print one twice. An error that arrives already
-    /// located was found further in, on a line of its own — a posting's amount
-    /// is written on the posting's line, not on the header's — and the
+    /// located was found further in, on a line of its own (a posting's amount
+    /// is written on the posting's line, not on the header's), and the
     /// narrower line is the one worth keeping.
     func located<T>(line: Int, entry: String, _ work: () throws -> T) throws -> T {
         do {
@@ -38,7 +38,9 @@ extension JournalParser {
     /// search field.
     static func entryHeader(_ line: String) -> String {
         var header = line
-        while let last = header.last, last.isWhitespace { header.removeLast() }
+        while let last = header.last, last.isWhitespace {
+            header.removeLast()
+        }
         return header
     }
 }

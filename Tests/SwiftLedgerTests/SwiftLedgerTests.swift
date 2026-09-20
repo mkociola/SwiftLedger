@@ -1361,7 +1361,7 @@ private extension LedgerError {
     /// An amount, a price and an assertion are written on a posting's line, so
     /// that is the line reported. An entry can run to a dozen postings, and
     /// the header alone would send the reader to the right entry and the wrong
-    /// line — it is named too, not instead.
+    /// line. It is named too, not instead.
     @Test(arguments: [
         ("    Assets:Savings       $1 000", "$1 000"),
         ("    Assets:Brokerage     10 AAPL @ $1x", "$1x"),
