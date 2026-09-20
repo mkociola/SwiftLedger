@@ -6,7 +6,13 @@ import Foundation
 /// The real postings must sum to zero for each commodity present, and so must
 /// the bracketed (balanced virtual) ones among themselves; a parenthesised
 /// posting is exempt from both, which is the whole point of the parentheses.
-/// Those invariants are enforced at construction time. They are the only rule
+/// What "sum to zero" means is `Transaction.balance(of:commodityFormats:)`,
+/// which reads it as hledger does: a posting with a price counts as what it
+/// cost, a residual too small to be written at the precision the entry uses
+/// counts as zero, and a group left over in two commodities of opposite sign
+/// with no price written anywhere in it is an exchange and balances at the
+/// rate its own amounts imply. Those invariants are enforced at construction
+/// time. They are the only rule
 /// on how many postings there may be: none at all sums to zero, so a dated
 /// line with nothing but a description is a transaction, and so is a single
 /// posting of zero. Both are what ledger and hledger accept, and a bare dated
@@ -26,8 +32,10 @@ import Foundation
 /// A posting that carries a price balances at that price rather than at face
 /// value (`Posting.balancingAmount`), which is what lets a two-commodity trade
 /// net to zero: `10 AAPL @ $150.00` against `$-1,500.00` balances, because the
-/// share leg counts as the $1,500 it cost. Balance assertions take no part in
-/// this — they are preserved, never checked.
+/// share leg counts as the $1,500 it cost. The same entry with no price
+/// written balances too, by the cost the two amounts imply, and nothing is
+/// written into the file for it. Balance assertions take no part in this —
+/// they are preserved, never checked.
 ///
 /// Use `JournalParser` to build transactions from plain-text `.ledger` files,
 /// which also resolves elided amounts before constructing `Transaction`
