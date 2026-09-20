@@ -146,6 +146,18 @@ account Expenses:Utilities
     Assets:EuroAccount     -€30,00
     Assets:PoundAccount
 
+; ── A price on a posting ────────────────────────────────────────────────────
+; A posting can say what its amount cost in another commodity: @ writes the
+; price of one unit, @@ the cost of the whole posting. The entry balances on
+; that cost rather than on the face value, which is how the two lines below
+; net to zero although no two of their amounts share a commodity. A total
+; cost keeps its own sign and takes the posting's on top of it, so the same
+; line written -€30,00 @@ $32.70 would cost -$32.70.
+
+2024-03-15 Dinner in Vienna, paid with the card
+    Expenses:Food:Restaurants  €30,00 @ $1.09
+    Liabilities:CreditCard     -$32.70
+
 ; ── Decimal marks and a comment after an amount ─────────────────────────────
 ; Which mark divides the fraction is read out of the number: a mark with
 ; anything other than three digits after it divides, so €12,50 is twelve euros

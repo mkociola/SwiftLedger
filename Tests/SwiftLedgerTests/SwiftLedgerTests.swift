@@ -1933,6 +1933,42 @@ private extension LedgerError {
         #expect(transaction.postings[0].balancingAmount.quantity == -1500)
     }
 
+    /// hledger converts `@@ T` to the per-unit price `T / |quantity|`, so the
+    /// cost is `T` with the quantity's sign on it and `T`'s own sign kept. All
+    /// four combinations are pinned here because the conformance harness
+    /// renders a total cost unsigned on both sides and would pass whatever
+    /// sign this produced.
+    @Test(arguments: [
+        TotalCostCase(quantity: 100, total: 110, cost: 110),
+        TotalCostCase(quantity: -100, total: 110, cost: -110),
+        TotalCostCase(quantity: 100, total: -110, cost: -110),
+        TotalCostCase(quantity: -100, total: -110, cost: 110),
+    ])
+    func `a total cost keeps the sign the journal wrote`(signs: TotalCostCase) {
+        let price = PostingPrice.total(Amount(quantity: signs.total, commodity: "USD"))
+        #expect(price.cost(of: signs.quantity) == Amount(quantity: signs.cost, commodity: "USD"))
+    }
+
+    /// One quantity, one written total, and the cost hledger makes of them.
+    struct TotalCostCase {
+        var quantity: Decimal
+        var total: Decimal
+        var cost: Decimal
+    }
+
+    /// The same rule read out of a file: a negative total is legal in hledger
+    /// and this entry is one hledger loads, so it has to load here.
+    @Test
+    func `an entry priced with a negative total balances`() throws {
+        let text = """
+        2026-01-01 a
+            assets:eur2    100 EUR @@ -110 USD
+            assets:usd2    110 USD
+        """
+        let transaction = try #require(try JournalParser().parse(text).transactions.first)
+        #expect(transaction.postings[0].balancingAmount == Amount(quantity: -110, commodity: "USD"))
+    }
+
     @Test
     func `an unbalanced priced transaction still throws`() throws {
         let text = """

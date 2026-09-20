@@ -108,6 +108,26 @@ import Testing
         ])
     }
 
+    /// A price is what lets two postings that share no commodity balance: the
+    /// restaurant account holds thirty euros, the card owes the $32.70 they
+    /// cost, and the entry nets to zero on the cost alone.
+    @Test
+    func `the example shows a posting priced in another commodity`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let entry = try #require(
+            journal.transactions.first { $0.description == "Dinner in Vienna, paid with the card" },
+        )
+        let rate = try #require(Decimal(string: "1.09"))
+        let cost = try #require(Decimal(string: "32.70"))
+        #expect(entry.postings[0].amount == Amount(quantity: 30, commodity: "€", commodityIsPrefix: true))
+        #expect(entry.postings[0].price == .perUnit(
+            Amount(quantity: rate, commodity: "$", commodityIsPrefix: true),
+        ))
+        #expect(entry.postings[0].balancingAmount
+            == Amount(quantity: cost, commodity: "$", commodityIsPrefix: true))
+        #expect(entry.postings[1].amount == Amount(quantity: -cost, commodity: "$", commodityIsPrefix: true))
+    }
+
     /// The comma in `€12,50` divides the fraction, so the coffee cost twelve
     /// euros fifty rather than the twelve hundred and fifty the parser used to
     /// read once it had stripped the comma out. One space before the `;` on

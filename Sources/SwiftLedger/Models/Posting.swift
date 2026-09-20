@@ -32,16 +32,21 @@ public enum PostingPrice: Sendable, Codable, Hashable {
 
     /// What `quantity` units cost at this price, in the price's commodity.
     ///
-    /// A per-unit price multiplies. A total price is the whole cost already, so
-    /// it only takes its sign from `quantity`: selling ten shares
-    /// (`-10 AAPL @@ $1,500.00`) costs `-$1,500.00`, not `$1,500.00`, even
-    /// though the line writes the total unsigned.
+    /// A per-unit price multiplies. A total price is the whole cost already,
+    /// and hledger reads it as the per-unit price `total / |quantity|`, so the
+    /// cost is the total with the quantity's sign applied to it and the
+    /// total's own sign kept: selling ten shares (`-10 AAPL @@ $1,500.00`)
+    /// costs `-$1,500.00` even though the line writes the total unsigned, and
+    /// a total written negative (`100 EUR @@ $-110.00`) costs `-$110.00`
+    /// rather than the `$110.00` that taking the magnitude would make of it.
+    /// A negative total is unusual but legal in both tools, and reading its
+    /// sign away left an entry hledger balances unloadable here.
     public func cost(of quantity: Decimal) -> Amount {
         let priced = amount
         let value: Decimal =
             switch self {
             case .perUnit: quantity * priced.quantity
-            case .total: quantity < 0 ? -abs(priced.quantity) : abs(priced.quantity)
+            case .total: quantity < 0 ? -priced.quantity : priced.quantity
             }
         return Amount(
             quantity: value,
