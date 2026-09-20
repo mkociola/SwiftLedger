@@ -55,6 +55,26 @@ let jan = ledger.transactions(
 )
 ```
 
+A journal that will not load says where it gave up. The error is
+`LedgerError.inJournal`, which carries the 1-based line, the header of the
+entry the problem was found in, and the error itself underneath:
+
+```swift
+do {
+    _ = try JournalParser().parse(text)
+} catch let error as LedgerError {
+    error.localizedDescription  // Line 37, "2026-02-01 Off by one": Transaction is unbalanced in $: off by 1
+    error.line                  // 37
+    error.withoutLocation       // .unbalancedTransaction(commodity: "$", imbalance: 1)
+}
+```
+
+Match on `withoutLocation` when the cause is what matters, and read `line` when
+the place is. A bad amount, price or balance assertion reports the posting's
+own line; anything about the entry as a whole reports the line the entry starts
+on. A `Transaction` built in code has no line to report and throws the bare
+error, which is the one `withoutLocation` hands back.
+
 ### Build a ledger programmatically
 
 ```swift

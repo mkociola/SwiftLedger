@@ -5,6 +5,23 @@ public enum LedgerError: Error, Sendable, Equatable {
     // MARK: - Parsing
 
     case parseError(line: Int, message: String)
+    /// An error found at a known place in a journal being read, wrapped around
+    /// the error that was thrown there.
+    ///
+    /// `line` is 1-based and is the line the problem was found on: the
+    /// posting's own line for an amount, a price or a balance assertion, and
+    /// the line the entry starts on for anything about the entry as a whole,
+    /// which is where a reader has to start reading anyway. `entry` is the
+    /// header line of the entry the problem is in, so a journal can be
+    /// searched by the date and payee somebody wrote rather than by a line
+    /// number the next edit moves; it is `nil` for a problem outside any
+    /// entry. `underlying` is the error exactly as it was thrown, so a caller
+    /// that matched on the cause before goes on matching on it, through
+    /// `withoutLocation`.
+    ///
+    /// Only the parser makes one of these. A `Transaction` built in code has
+    /// no line to report and throws the bare error it always threw.
+    indirect case inJournal(line: Int, entry: String?, underlying: LedgerError)
     case invalidDate(String)
     case invalidAmount(String)
     case multipleElidedPostings
@@ -67,6 +84,8 @@ extension LedgerError: LocalizedError {
         switch self {
         case let .parseError(line, msg):
             "Parse error on line \(line): \(msg)"
+        case let .inJournal(line, entry, underlying):
+            "\(Self.place(line: line, entry: entry)): \(underlying.localizedDescription)"
         case let .invalidDate(string):
             "Invalid date: '\(string)'"
         case let .invalidAmount(string):
@@ -89,5 +108,40 @@ extension LedgerError: LocalizedError {
         case let .storeError(msg):
             "Store error: \(msg)"
         }
+    }
+}
+
+public extension LedgerError {
+    /// The line of the journal the error was found on, where one is known.
+    ///
+    /// An error about a value rather than about a file has none: a transaction
+    /// built in code is unbalanced wherever the caller built it.
+    var line: Int? {
+        switch self {
+        case let .inJournal(line, _, _): line
+        case let .parseError(line, _): line
+        default: nil
+        }
+    }
+
+    /// The error with the place it was found taken off it.
+    ///
+    /// What went wrong and where it went wrong are separate questions, and a
+    /// caller deciding what to do about a journal asks the first one: this is
+    /// the same error whether it was thrown over a file or over a transaction
+    /// built in code. A located error wraps exactly one bare error, so one
+    /// step is always enough.
+    var withoutLocation: LedgerError {
+        switch self {
+        case let .inJournal(_, _, underlying): underlying
+        default: self
+        }
+    }
+
+    /// How a located error names the place it was found, ahead of what it
+    /// found there.
+    private static func place(line: Int, entry: String?) -> String {
+        guard let entry else { return "Line \(line)" }
+        return "Line \(line), \"\(entry)\""
     }
 }
