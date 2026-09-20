@@ -99,7 +99,8 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     ///   inline comment, an account name, or one of the full-line comments in
     ///   `leadingComments` or `Posting.trailingComments`,
     ///   `LedgerError.unbalancedTransaction` if the real postings do
-    ///   not sum to zero for any commodity,
+    ///   not sum to zero for any commodity, within the tolerance
+    ///   `Transaction.balance(of:commodityFormats:)` describes,
     ///   `LedgerError.unbalancedBracketedPostings` if the balanced virtual ones
     ///   do not sum to zero among themselves, or
     ///   `LedgerError.unwritableAccountName` if a real posting is named a
@@ -284,29 +285,18 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
 
     /// Checks the two balancing groups, real postings first, so that the
     /// message an ordinary mistake produces is the ordinary one.
+    ///
+    /// `Transaction.balance(of:)` is the rule; this only decides which error
+    /// to throw for what it reports. With no journal to consult, the styles
+    /// are `CommodityFormat.default(for:)`, and `LedgerManager` asks again
+    /// with the real ones before anything is written.
     private static func validateBalance(_ postings: [Posting]) throws {
-        try validate(postings.filter { $0.kind == .real }) {
-            LedgerError.unbalancedTransaction(commodity: $0, imbalance: $1)
+        let balance = Self.balance(of: postings)
+        guard balance.real.isBalanced else {
+            throw LedgerError.unbalancedTransaction(residuals: balance.real.residual)
         }
-        try validate(postings.filter { $0.kind == .balancedVirtual }) {
-            LedgerError.unbalancedBracketedPostings(commodity: $0, imbalance: $1)
-        }
-    }
-
-    /// Throws `error` for the first commodity in `group` that does not net to
-    /// zero. `.virtual` postings never reach here: they take part in no
-    /// balance, which is the whole point of the parentheses.
-    private static func validate(
-        _ group: [Posting],
-        error: (String, Decimal) -> LedgerError,
-    ) throws {
-        var sums: [String: Decimal] = [:]
-        for posting in group {
-            let balancing = posting.balancingAmount
-            sums[balancing.commodity, default: .zero] += balancing.quantity
-        }
-        for (commodity, sum) in sums where sum != .zero {
-            throw error(commodity, sum)
+        guard balance.balancedVirtual.isBalanced else {
+            throw LedgerError.unbalancedBracketedPostings(residuals: balance.balancedVirtual.residual)
         }
     }
 }

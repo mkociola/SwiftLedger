@@ -318,7 +318,7 @@ enum OneLineField: CaseIterable {
     func `unbalanced postings throw unbalancedTransaction with commodity and imbalance`() throws {
         let date = try makeDate(2024, 1, 1)
         // sum = -100 + 50 = -50 USD
-        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: -50)) {
+        #expect(throws: LedgerError.unbalancedTransaction(residuals: [usd(-50)])) {
             try Transaction(
                 date: date, description: "Bad",
                 postings: [
@@ -353,7 +353,7 @@ enum OneLineField: CaseIterable {
     @Test
     func `a lone non-zero posting is unbalanced, and says so`() throws {
         let date = try makeDate(2024, 1, 1)
-        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: 100)) {
+        #expect(throws: LedgerError.unbalancedTransaction(residuals: [usd(100)])) {
             try Transaction(
                 date: date, description: "Single",
                 postings: [
@@ -381,7 +381,7 @@ enum OneLineField: CaseIterable {
     @Test
     func `a transaction whose bracketed postings do not net to zero throws`() throws {
         let date = try makeDate(2024, 1, 1)
-        #expect(throws: LedgerError.unbalancedBracketedPostings(commodity: "USD", imbalance: 5)) {
+        #expect(throws: LedgerError.unbalancedBracketedPostings(residuals: [usd(5)])) {
             try Transaction(
                 date: date, description: "Bad envelope",
                 postings: [
@@ -1280,7 +1280,7 @@ private let badEntries: [BadEntry] = [
             Assets:Checking      $-9.00
         """,
         line: 37,
-        cause: .unbalancedTransaction(commodity: "$", imbalance: 1),
+        cause: .unbalancedTransaction(residuals: [dollars(1)]),
     ),
     BadEntry(
         text: """
@@ -1309,7 +1309,7 @@ private let badEntries: [BadEntry] = [
             [Envelope:Free]     $10.00
         """,
         line: 37,
-        cause: .unbalancedBracketedPostings(commodity: "$", imbalance: 1),
+        cause: .unbalancedBracketedPostings(residuals: [dollars(1)]),
     ),
     BadEntry(
         text: """
@@ -1429,7 +1429,7 @@ private extension LedgerError {
                 ],
             )
         }
-        #expect(error == .unbalancedTransaction(commodity: "USD", imbalance: 1))
+        #expect(error == .unbalancedTransaction(residuals: [usd(1)]))
         #expect(error.line == nil)
         #expect(error.locatedEntry == nil)
         #expect(error.withoutLocation == error)
@@ -1468,7 +1468,7 @@ private extension LedgerError {
             try LedgerManager(store: PlainTextJournalStore(url: url))
         }
         #expect(onLoad.line == 37)
-        #expect(onLoad.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: 1))
+        #expect(onLoad.withoutLocation == .unbalancedTransaction(residuals: [dollars(1)]))
 
         try journalEndingWith("").write(to: url, atomically: true, encoding: .utf8)
         let manager = try LedgerManager(store: PlainTextJournalStore(url: url))
@@ -1977,7 +1977,7 @@ private extension LedgerError {
             Assets:Checking   $-1000.00
         """
         let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
-        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: 500))
+        #expect(error.withoutLocation == .unbalancedTransaction(residuals: [dollars(500)]))
     }
 
     @Test
@@ -4497,6 +4497,10 @@ private func usd(_ quantity: Decimal) -> Amount {
     Amount(quantity: quantity, commodity: "USD")
 }
 
+private func dollars(_ quantity: Decimal) -> Amount {
+    Amount(quantity: quantity, commodity: "$", commodityIsPrefix: true)
+}
+
 private func eur(_ quantity: Decimal) -> Amount {
     Amount(quantity: quantity, commodity: "EUR")
 }
@@ -4965,7 +4969,7 @@ private let sparseEntryJournal = """
         let error = try #require(throws: LedgerError.self) {
             try JournalParser().parse("2024-01-01 oops\n    Assets:Checking   $5")
         }
-        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: 5))
+        #expect(error.withoutLocation == .unbalancedTransaction(residuals: [dollars(5)]))
     }
 
     @Test
@@ -5101,7 +5105,7 @@ private let mixedMarginRows = [
             Assets:Cash        $-5.00
         """
         let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
-        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: -5))
+        #expect(error.withoutLocation == .unbalancedTransaction(residuals: [dollars(-5)]))
     }
 
     @Test
@@ -5129,7 +5133,7 @@ private let mixedMarginRows = [
             (Reserve:capital)     $5.00
         """
         let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
-        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "$", imbalance: 20))
+        #expect(error.withoutLocation == .unbalancedTransaction(residuals: [dollars(20)]))
     }
 
     @Test
@@ -5141,17 +5145,17 @@ private let mixedMarginRows = [
             [Envelope:Food]     $-15.00
             [Envelope:Free]      $20.00
         """
-        let error = LedgerError.unbalancedBracketedPostings(commodity: "$", imbalance: 5)
+        let error = LedgerError.unbalancedBracketedPostings(residuals: [dollars(5)])
         let thrown = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
         #expect(thrown.withoutLocation == error)
 
-        // The case says which group is off, in which commodity, and by how
-        // much — and is never mistaken for the real group's error.
-        #expect(error == LedgerError.unbalancedBracketedPostings(commodity: "$", imbalance: 5))
-        #expect(error != LedgerError.unbalancedBracketedPostings(commodity: "EUR", imbalance: 5))
-        #expect(error != LedgerError.unbalancedBracketedPostings(commodity: "$", imbalance: 6))
-        #expect(error != LedgerError.unbalancedTransaction(commodity: "$", imbalance: 5))
-        #expect(error.errorDescription == "Balanced virtual postings are off by 5 in $")
+        // The case says which group is off and by how much in every commodity
+        // it is off in, and is never mistaken for the real group's error.
+        #expect(error == LedgerError.unbalancedBracketedPostings(residuals: [dollars(5)]))
+        #expect(error != LedgerError.unbalancedBracketedPostings(residuals: [usd(5)]))
+        #expect(error != LedgerError.unbalancedBracketedPostings(residuals: [dollars(6)]))
+        #expect(error != LedgerError.unbalancedTransaction(residuals: [dollars(5)]))
+        #expect(error.errorDescription == "Balanced virtual postings are off by $5")
     }
 
     @Test
@@ -5258,7 +5262,7 @@ private let mixedMarginRows = [
         let error = try #require(throws: LedgerError.self) {
             try JournalParser().parse(entry("$-1,400.00"))
         }
-        #expect(error.withoutLocation == .unbalancedBracketedPostings(commodity: "$", imbalance: 100))
+        #expect(error.withoutLocation == .unbalancedBracketedPostings(residuals: [dollars(100)]))
     }
 }
 
@@ -5621,6 +5625,197 @@ private let mixedMarginRows = [
         #expect(decoded == parsed)
         let text = try #require(String(data: data, encoding: .utf8))
         #expect(!text.contains("Scale"))
+    }
+}
+
+@Suite("balancing tolerance") struct BalancingToleranceTests {
+    /// `1.00 EUR @ $1.0851` costs $1.0851, so a cash leg written to the cent
+    /// leaves $0.0049 over. hledger loads that and SwiftLedger has to.
+    @Test
+    func `a residual too small to write balances`() throws {
+        let journal = try JournalParser().parse("""
+        2026-01-01 Card payment abroad
+            Expenses:Travel    1.00 EUR @ $1.0851
+            Liabilities:Card   $-1.09
+        """)
+        #expect(journal.transactions.count == 1)
+    }
+
+    /// Half of the last place written, the boundary included. Both entries
+    /// write their dollars to two places, so 0.0050 is in and 0.0051 is out.
+    @Test(arguments: [(rate: "1.100050", loads: true), (rate: "1.100051", loads: false)])
+    func `the boundary is half of the last place written`(scenario: (rate: String, loads: Bool)) {
+        let text = """
+        2026-01-01 Exchange
+            assets:eur          100 EUR @ \(scenario.rate) USD
+            assets:usd      -110.00 USD
+        """
+        let journal = try? JournalParser().parse(text)
+        #expect((journal != nil) == scenario.loads)
+    }
+
+    /// One posting written to four places tightens the whole entry, and it
+    /// does so from either balancing group: that is how hledger 1.52.4 reads
+    /// it, measured on the binary.
+    @Test(arguments: ["    assets:usd2     1.0000 USD\n    assets:usd3    -1.0000 USD",
+                      "    [budget:a]      1.0000 USD\n    [budget:b]     -1.0000 USD"])
+    func `a posting written to more places tightens the entry`(extra: String) throws {
+        let loose = """
+        2026-01-01 Exchange
+            assets:eur          100 EUR @ 1.100040 USD
+            assets:usd      -110.00 USD
+        """
+        #expect(try JournalParser().parse(loose).transactions.count == 1)
+        #expect(throws: LedgerError.self) { try JournalParser().parse(loose + "\n" + extra) }
+    }
+
+    /// A rate and an assertion are not amounts the entry claims to hold, so
+    /// neither tightens a commodity the entry writes a plain amount in.
+    @Test
+    func `a rate and an assertion do not tighten the entry`() throws {
+        let journal = try JournalParser().parse("""
+        2026-01-01 Exchange
+            assets:eur           100 EUR @ 1.100040 USD
+            assets:usd       -110.00 USD = -110.0000 USD
+        """)
+        #expect(journal.transactions.count == 1)
+    }
+
+    /// A commodity the entry reaches only through a price has no amount to be
+    /// measured by, so its rates are what set the boundary. Written to three
+    /// places, 0.0005 is in and 0.004 is out.
+    @Test(arguments: [(rate: "1.201", loads: true), (rate: "1.204", loads: false)])
+    func `a commodity written only as a price is measured by its rates`(
+        scenario: (rate: String, loads: Bool),
+    ) {
+        let text = """
+        2026-01-01 Exchange
+            a     0.5 EUR @ 1.200 USD
+            b    -0.5 EUR @ \(scenario.rate) USD
+        """
+        let journal = try? JournalParser().parse(text)
+        #expect((journal != nil) == scenario.loads)
+    }
+
+    /// A `commodity` directive states how to display an amount. Under
+    /// hledger's default balancing it does not move this boundary, and the
+    /// conformance journal `precision-balancing` is the same case read
+    /// against the binary.
+    @Test
+    func `a commodity directive does not tighten the entry`() throws {
+        let journal = try JournalParser().parse("""
+        commodity 1000.000000 USD
+
+        2026-01-01 Exchange
+            assets:eur          100 EUR @ 1.100040 USD
+            assets:usd      -110.00 USD
+        """)
+        #expect(journal.transactions.count == 1)
+    }
+
+    // MARK: - An amount nobody has written yet
+
+    private static let fourPlaceJournal = """
+    2026-01-01 Opening
+        Assets:Checking     $1.0000
+        Equity:Opening     $-1.0000
+    """
+
+    private static let twoPlaceJournal = """
+    2026-01-01 Opening
+        Assets:Checking     $1.00
+        Equity:Opening     $-1.00
+    """
+
+    /// The entry from the first test, built in code instead of read: the same
+    /// $0.0049 residual against a cash leg with no written form at all.
+    private static func roundingEntry() throws -> Transaction {
+        try Transaction(
+            date: makeDate(2026, 1, 2), description: "Card payment abroad",
+            postings: [
+                Posting(
+                    accountName: "Expenses:Travel",
+                    amount: Amount(quantity: 1, commodity: "EUR"),
+                    price: .perUnit(Amount(
+                        quantity: #require(Decimal(string: "1.0851")),
+                        commodity: "$",
+                        commodityIsPrefix: true,
+                    )),
+                ),
+                Posting(
+                    accountName: "Liabilities:Card",
+                    amount: Amount(
+                        quantity: #require(Decimal(string: "-1.09")),
+                        commodity: "$",
+                        commodityIsPrefix: true,
+                    ),
+                ),
+            ],
+        )
+    }
+
+    private static func manager(over text: String) throws -> (LedgerManager, URL) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tolerance-\(UUID().uuidString).ledger")
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        return try (LedgerManager(store: PlainTextJournalStore(url: url)), url)
+    }
+
+    /// With no journal to consult, `Transaction.init` holds an amount to the
+    /// digits the default style would write it with, which for `$` is two.
+    @Test
+    func `a transaction built in code is weighed in the default style`() throws {
+        #expect(throws: Never.self) { try Self.roundingEntry() }
+    }
+
+    /// The journal the entry is being saved into writes its dollars to four
+    /// places, so the cash leg will reach the file as `$-1.0900` and the next
+    /// parse will hold the entry to a hundredth of a cent. Accepting it here
+    /// would be writing a file SwiftLedger itself could not open.
+    @Test
+    func `add refuses an entry this journal would write in a shape it cannot read`() throws {
+        let (manager, url) = try Self.manager(over: Self.fourPlaceJournal)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let error = try #require(throws: LedgerError.self) {
+            try manager.add(.transaction(Self.roundingEntry()))
+        }
+        guard case let .unbalancedTransaction(residuals) = error else {
+            Issue.record("expected an unbalanced transaction, got \(error)")
+            return
+        }
+        #expect(residuals.map(\.commodity) == ["$"])
+    }
+
+    /// The same entry into a journal that writes its dollars to the cent: it
+    /// is accepted, and what comes out of the save loads again. This is the
+    /// round trip the whole written-scale machinery exists for.
+    @Test
+    func `what add accepts, the parser reads back`() throws {
+        let (manager, url) = try Self.manager(over: Self.twoPlaceJournal)
+        defer { try? FileManager.default.removeItem(at: url) }
+        try manager.add(.transaction(Self.roundingEntry()))
+
+        let written = try String(contentsOf: url, encoding: .utf8)
+        #expect(written.contains("$-1.09"))
+        let reparsed = try JournalParser().parse(written)
+        #expect(reparsed.transactions.count == 2)
+    }
+
+    /// A transaction still carrying its own source lines is replayed from
+    /// them, so it is weighed as it was written rather than as the journal
+    /// would write it.
+    @Test
+    func `a parsed entry is weighed as the file wrote it`() throws {
+        let (manager, url) = try Self.manager(over: Self.fourPlaceJournal)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let parsed = try JournalParser().parse("""
+        2026-01-03 Card payment abroad
+            Expenses:Travel    1.00 EUR @ $1.0851
+            Liabilities:Card   $-1.09
+        """)
+        let entry = try #require(parsed.transactions.first)
+        #expect(entry.sourceText != nil)
+        #expect(throws: Never.self) { try manager.add(.transaction(entry)) }
     }
 }
 

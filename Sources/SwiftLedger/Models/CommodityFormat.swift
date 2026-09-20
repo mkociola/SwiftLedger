@@ -159,6 +159,20 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
         return "\(integerDigits)\(decimalMark)\(fractionDigits)"
     }
 
+    /// How many digits `render` writes after the decimal mark for `magnitude`.
+    ///
+    /// The balancing tolerance is measured in written digits, and an amount
+    /// nobody has written yet has none to measure: what the next parse will
+    /// find on the line is whatever this style renders. So the answer comes
+    /// from the rendering itself rather than from `fractionDigits`, which is a
+    /// floor, and from a second rule about when a comma amount needs one more
+    /// digit to read back as itself. Both live in `render`, and this asks it.
+    public func writtenFractionDigits(of magnitude: Decimal) -> Int {
+        let written = render(abs(magnitude))
+        guard let mark = written.lastIndex(of: decimalMark) else { return 0 }
+        return written.distance(from: written.index(after: mark), to: written.endIndex)
+    }
+
     /// Whether the number about to be written would be read back as a grouped
     /// integer rather than as the fraction it is.
     ///
