@@ -158,15 +158,23 @@ struct JournalStyleCollector {
     var formats: [String: CommodityFormat] {
         var result: [String: CommodityFormat] = [:]
         for (commodity, counts) in fractionDigitCounts {
+            // A commodity that is posted is written no longer than its
+            // postings write it. A rate carries more digits than the money it
+            // converts, and a journal of `33.33 EUR @ 1.0837 USD` against
+            // `-36.12 USD` that let the rates vote would write a rebuilt cash
+            // leg as `-36.1200 USD`, at which the entry no longer balances.
+            //
+            // Posted amounts lower the count and never raise it. Often only
+            // a few are written: a journal that elides its cash legs has none
+            // until a rebuild writes one remainder out in full, and that one
+            // `-36.119721 USD` would otherwise become the house style and pad
+            // every rate after it. Raising the count is also the unsafe
+            // direction, since an entry is held to the digits it is written
+            // in and more of them can refuse a rebuild that used to pass.
+            let overall = Self.mostCommon(counts)
+            let posted = postedFractionDigitCounts[commodity].map(Self.mostCommon) ?? overall
             result[commodity] = CommodityFormat(
-                // A commodity that is posted is written the way its postings
-                // write it. A rate carries more digits than the money it
-                // converts, and a journal of `33.33 EUR @ 1.0837 USD` against
-                // `-36.12 USD` that let the rates vote would write a rebuilt
-                // cash leg as `-36.1200 USD`, at which the entry no longer
-                // balances. Prices and assertions decide only for a commodity
-                // nothing is posted in.
-                fractionDigits: Self.mostCommon(postedFractionDigitCounts[commodity] ?? counts),
+                fractionDigits: min(posted, overall),
                 maxFractionDigits: counts.keys.max() ?? 0,
                 groupsThousands: Self.groups(
                     separated: separated[commodity] ?? 0,

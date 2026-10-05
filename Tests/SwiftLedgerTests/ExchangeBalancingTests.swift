@@ -422,6 +422,89 @@ struct Probe: CustomTestStringConvertible {
     }
 
     @Test
+    func `one remainder written out in full does not become the commodity's digits`() throws {
+        // A journal that elides its cash legs writes no USD amount at all, so
+        // the first rebuild leaves exactly one: the remainder, in full. That
+        // one amount must not outvote the rates and pad them to six digits.
+        let elided = """
+        2026-01-01 Hotel
+            Expenses:Travel    33.33 EUR @ 1.0837 USD
+            Assets:Dollars
+
+        2026-01-02 Dinner
+            Expenses:Food      20.00 EUR @ 1.0841 USD
+            Assets:Dollars
+
+        2026-01-03 Taxi
+            Expenses:Travel    10.00 EUR @ 1.0850 USD
+            Assets:Dollars
+
+        """
+        let first = try manager(holding: elided)
+        let hotel = try #require(first.transactions().first)
+        try first.replace(.transaction(hotel), with: .transaction(Transaction(
+            id: hotel.id, date: hotel.date, description: "Hotel, two nights", postings: hotel.postings,
+        )))
+        let saved = JournalSerializer().serialize(first.currentJournal)
+        #expect(saved.contains("-36.119721 USD\n"))
+
+        // The next launch reads what the first one wrote.
+        let second = try manager(holding: saved)
+        #expect(second.currentJournal.commodityFormats["USD"]?.fractionDigits == 4)
+        let dinner = try #require(second.transactions().first { $0.description == "Dinner" })
+        try second.replace(.transaction(dinner), with: .transaction(Transaction(
+            id: dinner.id, date: dinner.date, description: "Dinner for two", postings: dinner.postings,
+        )))
+        let text = JournalSerializer().serialize(second.currentJournal)
+        #expect(text.contains("20.00 EUR @ 1.0841 USD\n"))
+        #expect(text.contains("-21.6820 USD\n"))
+    }
+
+    @Test
+    func `posted amounts lower a commodity's digits and never raise them`() throws {
+        // Whole-dollar prices outnumber the one amount posted to the cent.
+        // Raising `$` to two digits would refuse a rebuild of an entry that
+        // balances only at whole units, where it passed before.
+        let journal = try JournalParser().parse("""
+        2026-01-01 Buy
+            Assets:Broker    10 AAPL @ $150
+            Assets:Cash
+
+        2026-01-02 Buy
+            Assets:Broker    4 MSFT @ $300
+            Assets:Cash
+
+        2026-01-03 Buy
+            Assets:Broker    2 AAPL @ $151
+            Assets:Cash
+
+        2026-01-04 Coffee
+            Expenses:Food    $4.50
+            Assets:Cash
+
+        """)
+        #expect(journal.commodityFormats["$"]?.fractionDigits == 0)
+        #expect(journal.commodityFormats["$"]?.maxFractionDigits == 2)
+    }
+
+    @Test
+    func `a balance assertion is not a posted amount`() throws {
+        // Three whole-unit postings against four assertions to the cent: the
+        // postings decide. Counting an assertion as posted would answer 2.
+        let journal = try JournalParser().parse("""
+        2026-01-01 A
+            Assets:Checking    5 USD = 1000.00 USD
+            Equity:Opening    -5 USD = -1000.00 USD
+
+        2026-01-02 B
+            Assets:Checking    = 1000.00 USD
+            Equity:Opening     0 USD = -1000.00 USD
+
+        """)
+        #expect(journal.commodityFormats["USD"]?.fractionDigits == 0)
+    }
+
+    @Test
     func `replace reports a missing original before it weighs the replacement`() throws {
         let manager = try manager(holding: Self.cents)
         let stale = try entry([posting("5", "USD"), posting("-5", "USD")])
