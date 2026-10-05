@@ -99,6 +99,28 @@ private func posting(
     }
 
     @Test
+    func `total-priced postings that cancel in quantity but not in cost rule an exchange out`() {
+        let total = PostingPrice.total(amount("1500", "USD"))
+        let verdict = Transaction.balance(of: [
+            posting("4", "AAPL", price: total),
+            posting("6", "AAPL", price: total),
+            posting("-10", "AAPL", price: total),
+            posting("100", "EUR"),
+            posting("-110", "USD"),
+        ])
+        #expect(verdict.real == .unbalanced([amount("1390", "USD"), amount("100", "EUR")]))
+    }
+
+    @Test
+    func `a quantity that is not a number never balances`() throws {
+        let unknown = Posting(accountName: "Assets:Any", amount: Amount(quantity: .nan, commodity: "USD"))
+        let date = try JournalDate(year: 2026, month: 1, day: 1)
+        #expect(throws: LedgerError.self) {
+            try Transaction(date: date, description: "Not a number", postings: [unknown, posting("-1", "USD")])
+        }
+    }
+
+    @Test
     func `a residual under half of the last place written is zero`() {
         let verdict = Transaction.balance(of: [
             posting("33.33", "EUR", price: .perUnit(amount("1.0837", "USD"))),
@@ -224,6 +246,11 @@ struct Probe: CustomTestStringConvertible {
         Probe(body: "a  10 AAPL @ 150 USD\na2  -10 AAPL @ 150 USD\nc  100 EUR\nd  -110 USD", loads: true),
         Probe(body: "a  10 AAPL @@ 1500 USD\na2  -10 AAPL @@ 1500 USD\nc  100 EUR\nd  -110 USD", loads: true),
         Probe(body: "a  5 GBP\na2  -5 GBP\nc  100 EUR\nd  -110 USD", loads: true),
+        Probe(
+            body: "a  4 AAPL @@ 1500 USD\na2  6 AAPL @@ 1500 USD\na3  -10 AAPL @@ 1500 USD\nc  100 EUR\nd  -110 USD",
+            loads: false,
+        ),
+        Probe(body: "z  0 AAPL @@ 100 USD\nc  100 EUR\nd  -110 USD", loads: false),
         Probe(body: "a  5.001 GBP\na2  -5 GBP\nc  100 EUR\nd  -110 USD", loads: false),
         Probe(body: "a  100 EUR\nb  -110 USD\n[v1]  5 EUR\n[v2]  -6 USD", loads: true),
         Probe(body: "a  33.33 EUR @ 1.0837 USD\nb  -36.12 USD", loads: true),
@@ -371,12 +398,13 @@ struct Probe: CustomTestStringConvertible {
         let rebuilt = try Transaction(
             id: hotel.id, date: hotel.date, description: "Hotel, two nights", postings: hotel.postings,
         )
-        let refused = (try? manager.replace(.transaction(hotel), with: .transaction(rebuilt))) == nil
-        let text = JournalSerializer().serialize(manager.currentJournal)
-        // Either outcome is sound. What must never happen is a saved file
-        // that will not load.
-        #expect((try? JournalParser().parse(text)) != nil)
-        if refused { #expect(text == rates) }
+        // The spec's known limit: the journal would write the cash leg as
+        // -36.1200, where the entry is off by 0.000279, so the rewrite is
+        // refused and nothing is saved.
+        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: dec("-0.000279"))) {
+            try manager.replace(.transaction(hotel), with: .transaction(rebuilt))
+        }
+        #expect(JournalSerializer().serialize(manager.currentJournal) == rates)
     }
 
     @Test

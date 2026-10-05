@@ -103,6 +103,14 @@ enum TransactionBalancing {
               left.allSatisfy({ $0.key.price == nil }),
               (left[0].amount.quantity < 0) != (left[1].amount.quantity < 0)
         else { return .unbalanced(residuals) }
+
+        // The priced postings have to cancel in what they cost as well as in
+        // what they moved. A per-unit price that nets to no quantity costs
+        // nothing; a total price is charged in full on every posting that
+        // carries it, so `4 AAPL @@ 1500 USD`, `6 AAPL @@ 1500 USD` and
+        // `-10 AAPL @@ 1500 USD` move nothing and still cost 1500.
+        let costs = sums(group.filter { $0.price != nil }.map { ($0.balancingAmount.commodity, $0.balancingAmount) })
+        guard costs.allSatisfy({ isZero($0.amount, places: places) }) else { return .unbalanced(residuals) }
         return .exchange(from: left[0].amount, to: left[1].amount)
     }
 
@@ -135,6 +143,9 @@ enum TransactionBalancing {
     /// in, the boundary included. A commodity with no place on record has to
     /// be exactly zero.
     private static func isZero(_ amount: Amount, places: [String: Int]) -> Bool {
+        // `Decimal.nan` compares below everything, so it would pass the test
+        // underneath. It is never zero.
+        guard !amount.quantity.isNaN else { return false }
         guard let place = places[amount.commodity] else { return amount.quantity == .zero }
         return abs(amount.quantity) * 2 <= Decimal(sign: .plus, exponent: -place, significand: 1)
     }
