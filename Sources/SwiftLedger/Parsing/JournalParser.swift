@@ -253,16 +253,17 @@ public struct JournalParser {
             index += 1
         }
 
-        let postings = try resolveElisions(rawPostings)
+        let resolved = try resolveElisions(rawPostings)
         let transaction = try Transaction(
             date: header.date,
             auxDate: header.auxDate,
             status: header.status,
             code: header.code,
             description: header.description,
-            postings: postings,
+            postings: resolved.postings,
             comment: header.comment,
             leadingComments: leadingComments,
+            written: resolved.written,
         )
         // Keep the lines this came from, so that a transaction nobody edits is
         // written back exactly as the user wrote it.

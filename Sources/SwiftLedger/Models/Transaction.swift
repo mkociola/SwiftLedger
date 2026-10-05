@@ -94,6 +94,11 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     /// says which commodity it is off in rather than counting postings at the
     /// caller.
     ///
+    /// A group left in exactly two commodities of opposite sign, with no price,
+    /// is an exchange and balances, and a commodity counts as netting to zero
+    /// within half of the last decimal place the entry writes it in; see
+    /// `BalanceVerdict`.
+    ///
     /// - Throws: `LedgerError.lineBreakInField` if a field a journal writes
     ///   on one line contains a line break: the description, the code, an
     ///   inline comment, an account name, or one of the full-line comments in
@@ -115,6 +120,36 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         comment: String? = nil,
         leadingComments: [String] = [],
     ) throws {
+        try self.init(
+            id: id,
+            date: date,
+            auxDate: auxDate,
+            status: status,
+            code: code,
+            description: description,
+            postings: postings,
+            comment: comment,
+            leadingComments: leadingComments,
+            written: nil,
+        )
+    }
+
+    /// The parser's way in: the same checks, with the balance measured at the
+    /// digits the file wrote, which only the parser knows. `written` is index
+    /// for index with `postings`. `nil` is a transaction built in code, held
+    /// to the digits each number needs.
+    init(
+        id: UUID = UUID(),
+        date: JournalDate,
+        auxDate: JournalDate? = nil,
+        status: ClearingStatus = .unmarked,
+        code: String? = nil,
+        description: String,
+        postings: [Posting],
+        comment: String? = nil,
+        leadingComments: [String] = [],
+        written: [WrittenDigits]?,
+    ) throws {
         try Self.validateLineBreaks(
             description: description,
             code: code,
@@ -123,7 +158,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
             postings: postings,
         )
         try Self.validateAccountNames(postings)
-        try Self.validateBalance(postings)
+        try Self.requireBalanced(postings, written: written)
         self.id = id
         self.date = date
         self.auxDate = auxDate
@@ -282,31 +317,23 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         }
     }
 
-    /// Checks the two balancing groups, real postings first, so that the
-    /// message an ordinary mistake produces is the ordinary one.
-    private static func validateBalance(_ postings: [Posting]) throws {
-        try validate(postings.filter { $0.kind == .real }) {
-            LedgerError.unbalancedTransaction(commodity: $0, imbalance: $1)
-        }
-        try validate(postings.filter { $0.kind == .balancedVirtual }) {
-            LedgerError.unbalancedBracketedPostings(commodity: $0, imbalance: $1)
-        }
-    }
-
-    /// Throws `error` for the first commodity in `group` that does not net to
-    /// zero. `.virtual` postings never reach here: they take part in no
-    /// balance, which is the whole point of the parentheses.
-    private static func validate(
-        _ group: [Posting],
-        error: (String, Decimal) -> LedgerError,
+    /// Throws for the first group that does not balance, real postings first,
+    /// so that the message an ordinary mistake produces is the ordinary one.
+    /// The commodity named is the first one the group is off in, in the order
+    /// the entry writes them. An exchange is not an error.
+    static func requireBalanced(
+        _ postings: [Posting],
+        written: [WrittenDigits]? = nil,
+        formats: [String: CommodityFormat]? = nil,
     ) throws {
-        var sums: [String: Decimal] = [:]
-        for posting in group {
-            let balancing = posting.balancingAmount
-            sums[balancing.commodity, default: .zero] += balancing.quantity
+        let verdicts = TransactionBalancing.verdicts(of: postings, written: written, formats: formats)
+        if case let .unbalanced(residuals) = verdicts.real, let first = residuals.first {
+            throw LedgerError.unbalancedTransaction(commodity: first.commodity, imbalance: first.quantity)
         }
-        for (commodity, sum) in sums where sum != .zero {
-            throw error(commodity, sum)
+        if case let .unbalanced(residuals) = verdicts.bracketed, let first = residuals.first {
+            throw LedgerError.unbalancedBracketedPostings(
+                commodity: first.commodity, imbalance: first.quantity,
+            )
         }
     }
 }

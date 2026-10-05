@@ -188,3 +188,98 @@ private func posting(
         #expect(whole.writtenFractionDigits(of: dec("12345")) == 0)
     }
 }
+
+// MARK: - The same rules in a file
+
+/// One entry measured against hledger 1.52.4 on 2026-10-05.
+struct Probe: CustomTestStringConvertible {
+    /// The posting lines, without indentation.
+    let body: String
+    let loads: Bool
+
+    var testDescription: String {
+        body.replacingOccurrences(of: "\n", with: " / ")
+    }
+
+    var journal: String {
+        let lines = body.split(separator: "\n").map { "    \($0)" }
+        return (["2026-01-01 probe"] + lines).joined(separator: "\n") + "\n"
+    }
+}
+
+@Suite("exchange and rounding in a file") struct ExchangeInAFileTests {
+    static let probes: [Probe] = [
+        Probe(body: "a  100 EUR\nb  -110 USD", loads: true),
+        Probe(body: "b  -110 USD\na  100 EUR", loads: true),
+        Probe(body: "a  100 EUR\nb  110 USD", loads: false),
+        Probe(body: "a  100 EUR\nb  -110 USD\nc  5 GBP", loads: false),
+        Probe(body: "a  60 EUR\na2  40 EUR\nb  -110 USD", loads: true),
+        Probe(body: "a  2 EUR\na2  1 EUR\nb  -110 USD", loads: true),
+        Probe(body: "a  100 EUR\na2  -10 EUR\nb  -99 USD", loads: true),
+        Probe(body: "a  10 AAPL\nf  5 USD\nb  -1505 USD", loads: true),
+        Probe(body: "a  100 EUR\nb  -110 USD\nc", loads: true),
+        Probe(body: "a  10 AAPL @ 150 USD\nb  -1500 USD\nc  100 EUR\nd  -110 USD", loads: false),
+        Probe(body: "a  10 AAPL @ 150 USD\na2  -10 AAPL @ 150 USD\nc  100 EUR\nd  -110 USD", loads: true),
+        Probe(body: "a  10 AAPL @@ 1500 USD\na2  -10 AAPL @@ 1500 USD\nc  100 EUR\nd  -110 USD", loads: true),
+        Probe(body: "a  5 GBP\na2  -5 GBP\nc  100 EUR\nd  -110 USD", loads: true),
+        Probe(body: "a  5.001 GBP\na2  -5 GBP\nc  100 EUR\nd  -110 USD", loads: false),
+        Probe(body: "a  100 EUR\nb  -110 USD\n[v1]  5 EUR\n[v2]  -6 USD", loads: true),
+        Probe(body: "a  33.33 EUR @ 1.0837 USD\nb  -36.12 USD", loads: true),
+        Probe(body: "a  1 EUR @ 1.005 USD\nb  -1.00 USD", loads: true),
+        Probe(body: "a  1 EUR @ 1.006 USD\nb  -1.00 USD", loads: false),
+        Probe(body: "a  1 EUR @ 1.4 USD\nb  -1 USD", loads: true),
+        Probe(body: "a  1 EUR @ 1.5 USD\nb  -1 USD", loads: true),
+        Probe(body: "a  1 EUR @ 1.6 USD\nb  -1 USD", loads: false),
+        Probe(body: "a  10.00 USD\nb  -10.004 USD", loads: false),
+        Probe(body: "a  10.00 USD\nb  -9.996 USD", loads: false),
+        Probe(body: "a  36.100 USD\nb  -36.104 USD", loads: false),
+        Probe(body: "a  1 EUR @ 1.4 USD\nb  -1 USD\n(v)  5.00 USD", loads: false),
+        Probe(body: "a  1 EUR @ 1.4 USD\nb  -1 USD\n[v]  5.00 USD\n[w]  -5.00 USD", loads: false),
+        Probe(body: "a  1 EUR @ 1.0851 USD\nb  -0.5 GBP @ 2.17 USD", loads: false),
+        Probe(body: "a  1 EUR @ 1.09 USD\nb  -0.5 GBP @ 2.17 USD", loads: true),
+        Probe(body: "a  1 EUR @ 1.089 USD\nb  -0.5 GBP @ 2.17 USD", loads: false),
+        Probe(body: "a  1 EUR @@ 1.0851 USD\nb  -1 GBP @@ 1.08 USD", loads: false),
+        Probe(body: "a  1 EUR @@ 1.0851 USD\nb  -1 GBP @@ 1.0850 USD", loads: false),
+    ]
+
+    @Test(arguments: probes)
+    func `an entry loads exactly when hledger loads it`(probe: Probe) {
+        let journal = try? JournalParser().parse(probe.journal)
+        #expect((journal != nil) == probe.loads)
+    }
+
+    @Test
+    func `a refused exchange names the first commodity it is off in, and the line`() throws {
+        let text = """
+        2026-01-01 Same sign
+            Assets:Euros    100 EUR
+            Assets:Dollars  110 USD
+        """
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error.withoutLocation == .unbalancedTransaction(commodity: "EUR", imbalance: 100))
+        #expect(error.line == 1)
+    }
+
+    @Test
+    func `an exchange is written back as it was read, with no cost added`() throws {
+        let text = """
+        2026-01-01 Change money
+            Assets:Euros     100 EUR
+            Assets:Dollars  -110 USD
+
+        """
+        let journal = try JournalParser().parse(text)
+        #expect(JournalSerializer().serialize(journal) == text)
+        #expect(journal.transactions.first?.postings.allSatisfy { $0.price == nil } == true)
+    }
+
+    @Test
+    func `an exchange built in code is a valid transaction`() throws {
+        let transaction = try Transaction(
+            date: JournalDate(year: 2026, month: 1, day: 1),
+            description: "Change money",
+            postings: [posting("100", "EUR"), posting("-110", "USD")],
+        )
+        #expect(transaction.postings.count == 2)
+    }
+}

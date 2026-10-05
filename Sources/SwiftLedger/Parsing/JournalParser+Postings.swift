@@ -13,6 +13,8 @@ extension JournalParser {
         var comment: String?
         /// Full-line comments written below this posting, verbatim.
         var trailingComments: [String] = []
+        /// The fraction digits the line wrote its amount and its price with.
+        var written = WrittenDigits()
     }
 
     func parsePosting(
@@ -50,17 +52,20 @@ extension JournalParser {
         var amount: Amount?
         var price: PostingPrice?
         var balanceAssertion: Amount?
+        var written = WrittenDigits()
         if let rawAmount = amountStr {
             let field = splitAmountField(rawAmount)
             if !field.amount.isEmpty {
                 let parsed = try parseShapedAmount(field.amount, lineNumber: lineNumber)
                 style.observe(field.amount, shape: parsed.shape, as: parsed.amount)
                 amount = parsed.amount
+                written.amount = parsed.shape.fractionDigits
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
                 let priced = try parseShapedAmount(rawPrice, lineNumber: lineNumber)
                 style.observe(rawPrice, shape: priced.shape, as: priced.amount)
                 price = field.priceIsTotal ? .total(priced.amount) : .perUnit(priced.amount)
+                written.price = priced.shape.fractionDigits
             }
             if let rawAssertion = field.assertion, !rawAssertion.isEmpty {
                 let asserted = try parseShapedAmount(rawAssertion, lineNumber: lineNumber)
@@ -77,6 +82,7 @@ extension JournalParser {
             balanceAssertion: balanceAssertion,
             status: postingStatus,
             comment: comment?.trimmingCharacters(in: .whitespaces),
+            written: written,
         )
     }
 }

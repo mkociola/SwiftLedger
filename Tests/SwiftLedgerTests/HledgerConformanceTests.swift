@@ -31,7 +31,6 @@ import Testing
         "description-comment",
         "include",
         "posting-date-tag",
-        "precision-balancing",
         "secondary-date-without-year",
         "year-directive",
     ]
