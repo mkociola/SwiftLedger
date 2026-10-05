@@ -1,0 +1,7 @@
+hledger: Error: precision-trailing-zeros.journal:1-3:
+1 | 2024-03-01 Trailing zeros count
+  |     Assets:Checking      36.100 USD
+  |     Assets:Savings      -36.104 USD
+
+This transaction is unbalanced.
+The real postings' sum should be 0 but is: -0.004 USD

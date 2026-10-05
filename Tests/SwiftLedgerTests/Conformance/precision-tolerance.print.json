@@ -1,0 +1,183 @@
+[
+  {
+    "date": "2024-02-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Rounded cash leg",
+    "postings": [
+      {
+        "account": "Expenses:Travel",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 3333,
+            "places": 2,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 10837,
+              "places": 4
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Dollars",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -3612,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-02-02",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Half a cent",
+    "postings": [
+      {
+        "account": "Expenses:Travel",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 1,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 1005,
+              "places": 3
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Dollars",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -100,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-02-03",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Whole units",
+    "postings": [
+      {
+        "account": "Expenses:Travel",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 1,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 15,
+              "places": 1
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Whole",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -1,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-02-04",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Two foreign legs",
+    "postings": [
+      {
+        "account": "Expenses:Travel",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 1,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 109,
+              "places": 2
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Pounds",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "GBP",
+            "mantissa": -5,
+            "places": 1,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 217,
+              "places": 2
+            }
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,18 @@
+; A residual under half of the last place the entry writes is zero.
+2024-02-01 Rounded cash leg
+    Expenses:Travel    33.33 EUR @ 1.0837 USD
+    Assets:Dollars    -36.12 USD
+
+; Exactly half still balances.
+2024-02-02 Half a cent
+    Expenses:Travel    1 EUR @ 1.005 USD
+    Assets:Dollars    -1.00 USD
+
+2024-02-03 Whole units
+    Expenses:Travel    1 EUR @ 1.5 USD
+    Assets:Whole      -1 USD
+
+; A commodity named only by prices is measured at the prices' digits.
+2024-02-04 Two foreign legs
+    Expenses:Travel    1 EUR @ 1.09 USD
+    Assets:Pounds     -0.5 GBP @ 2.17 USD

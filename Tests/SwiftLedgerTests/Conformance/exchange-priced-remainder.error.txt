@@ -1,0 +1,11 @@
+hledger: Error: exchange-priced-remainder.journal:1-5:
+1 | 2024-03-01 A price left standing
+  |     Assets:Brokerage    10 AAPL @ 150 USD
+  |     Assets:Checking             -1500 USD
+  |     Assets:Euros                  100 EUR
+  |     Assets:Dollars               -110 USD
+
+This multi-commodity transaction is unbalanced.
+The real postings' sum should be 0 but is: 100 EUR, -110 USD
+Consider adjusting this entry's amounts, adding missing postings,
+or recording conversion price(s) with @, @@ or equity postings.

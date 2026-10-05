@@ -1,0 +1,57 @@
+[
+  {
+    "account": "Assets:Dollars",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": -3712,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Assets:Pounds",
+    "amounts": [
+      {
+        "commodity": "GBP",
+        "mantissa": -5,
+        "places": 1
+      }
+    ]
+  },
+  {
+    "account": "Assets:Whole",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": -1,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Travel",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 1,
+        "places": 0
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 3333,
+        "places": 2
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 1,
+        "places": 0
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 1,
+        "places": 0
+      }
+    ]
+  }
+]

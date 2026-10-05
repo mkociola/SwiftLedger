@@ -24,7 +24,6 @@ import Testing
         "amount-forms",
         "apply-account",
         "balance-assertion-fails",
-        "cost-inference",
         "date-formats",
         "decimal-mark-directive",
         "default-commodity",
@@ -150,10 +149,38 @@ import Testing
         if let mark = marker(transaction.status) { header += " \(mark)" }
         if let code = transaction.code, !code.isEmpty { header += " (\(code))" }
         header += " \(transaction.description)"
-        return [header] + transaction.postings.map(render)
+        let inferred = inferredCosts(of: transaction.postings)
+        return [header] + transaction.postings.enumerated().map { index, posting in
+            render(posting, inferred: inferred[index])
+        }
     }
 
-    private static func render(_ posting: Posting) -> String {
+    /// The cost hledger infers for an exchange, by posting index. SwiftLedger
+    /// stores none: it reports the exchange as a verdict. hledger hangs the
+    /// cost on the unpriced postings in the first commodity, a total when
+    /// there is one of them and a per-unit rate when there are several, so the
+    /// verdict is rendered the same way and the two readings compared whole.
+    private static func inferredCosts(of postings: [Posting]) -> [Int: PostingPrice] {
+        let verdicts = Transaction.balance(of: postings)
+        var costs: [Int: PostingPrice] = [:]
+        for (kind, verdict) in [(Posting.Kind.real, verdicts.real), (.balancedVirtual, verdicts.bracketed)] {
+            guard case let .exchange(from, target) = verdict else { continue }
+            let indices = postings.indices.filter {
+                postings[$0].kind == kind && postings[$0].price == nil
+                    && postings[$0].amount.commodity == from.commodity
+            }
+            let quantity = indices.count == 1 ? abs(target.quantity) : abs(target.quantity / from.quantity)
+            let cost = Amount(
+                quantity: quantity, commodity: target.commodity, commodityIsPrefix: target.commodityIsPrefix,
+            )
+            for index in indices {
+                costs[index] = indices.count == 1 ? .total(cost) : .perUnit(cost)
+            }
+        }
+        return costs
+    }
+
+    private static func render(_ posting: Posting, inferred: PostingPrice? = nil) -> String {
         var line = "    "
         if let mark = marker(posting.status ?? .unmarked) { line += "\(mark) " }
         line += posting.delimitedAccountName
@@ -161,7 +188,7 @@ import Testing
         // A total cost is rendered unsigned on both sides: hledger stores it
         // with the sign of the quantity and prints it without, and which sign
         // a store carries is representation, not reading.
-        switch posting.price {
+        switch posting.price ?? inferred {
         case let .perUnit(price): line += " @ " + render(price)
         case let .total(price): line += " @@ " + render(abs(price.quantity), price.commodity)
         case nil: break
@@ -234,9 +261,19 @@ import Testing
 
     private static func renderBalances(_ rows: [HledgerBalanceRow]) -> [String] {
         rows.flatMap { row in
-            row.amounts
-                .filter { $0.quantity != .zero }
-                .map { "\(row.account)  \(render($0.quantity, $0.commodity))" }
+            // hledger keeps amounts of one commodity apart when they carry
+            // different costs. That is how it stores a balance, not a
+            // different balance, so they are summed before the comparison.
+            var order: [String] = []
+            var totals: [String: Decimal] = [:]
+            for amount in row.amounts {
+                if totals[amount.commodity] == nil { order.append(amount.commodity) }
+                totals[amount.commodity, default: .zero] += amount.quantity
+            }
+            return order.compactMap { commodity -> String? in
+                guard let total = totals[commodity], total != .zero else { return nil }
+                return "\(row.account)  \(render(total, commodity))"
+            }
         }.sorted()
     }
 

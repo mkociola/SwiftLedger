@@ -1,0 +1,10 @@
+hledger: Error: exchange-three-commodities.journal:1-4:
+1 | 2024-03-01 Three commodities
+  |     Assets:Euros           100 EUR
+  |     Assets:Dollars        -110 USD
+  |     Assets:Pounds            5 GBP
+
+This multi-commodity transaction is unbalanced.
+The real postings' sum should be 0 but is: 100 EUR, 5 GBP, -110 USD
+Consider adjusting this entry's amounts, adding missing postings,
+or recording conversion price(s) with @, @@ or equity postings.
