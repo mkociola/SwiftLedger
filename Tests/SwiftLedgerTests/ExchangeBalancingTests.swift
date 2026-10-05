@@ -376,9 +376,10 @@ struct Probe: CustomTestStringConvertible {
     }
 
     @Test
-    func `add refuses a rebuilt entry in a journal that writes the commodity with more digits`() throws {
-        // USD appears mostly as a rate here, so its learned style has four
-        // digits and a rebuilt cash leg would be written as -36.1200.
+    func `a rebuilt entry is accepted in a journal that writes the commodity mostly as a rate`() throws {
+        // USD appears mostly as a rate here. Its digits are learned from the
+        // one amount posted in it, so a rebuilt cash leg is written -36.12
+        // and not -36.1200, where the entry would be off by 0.000279.
         let rates = """
         2026-01-01 Hotel
             Expenses:Travel    33.33 EUR @ 1.0837 USD
@@ -398,13 +399,118 @@ struct Probe: CustomTestStringConvertible {
         let rebuilt = try Transaction(
             id: hotel.id, date: hotel.date, description: "Hotel, two nights", postings: hotel.postings,
         )
-        // The spec's known limit: the journal would write the cash leg as
-        // -36.1200, where the entry is off by 0.000279, so the rewrite is
-        // refused and nothing is saved.
-        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: dec("-0.000279"))) {
-            try manager.replace(.transaction(hotel), with: .transaction(rebuilt))
-        }
-        #expect(JournalSerializer().serialize(manager.currentJournal) == rates)
+        let formats = manager.currentJournal.commodityFormats
+        #expect(formats["USD"]?.fractionDigits == 2)
+        #expect(formats["USD"]?.maxFractionDigits == 4)
+        #expect(try manager.replace(.transaction(hotel), with: .transaction(rebuilt)))
+        let text = JournalSerializer().serialize(manager.currentJournal)
+        #expect(text.contains("33.33 EUR @ 1.0837 USD\n"))
+        #expect(text.contains("-36.12 USD\n"))
+        #expect(try JournalParser().parse(text).transactions.count == 3)
+    }
+
+    @Test
+    func `a commodity nothing is posted in learns its digits from prices`() throws {
+        let journal = try JournalParser().parse("""
+        2026-01-02 Dinner
+            Expenses:Food      20.00 EUR @ 1.0841 USD
+            Assets:Euros      -20.00 EUR @ 1.0841 USD
+
+        """)
+        #expect(journal.commodityFormats["USD"]?.fractionDigits == 4)
+        #expect(journal.commodityFormats["EUR"]?.fractionDigits == 2)
+    }
+
+    @Test
+    func `one remainder written out in full does not become the commodity's digits`() throws {
+        // A journal that elides its cash legs writes no USD amount at all, so
+        // the first rebuild leaves exactly one: the remainder, in full. That
+        // one amount must not outvote the rates and pad them to six digits.
+        let elided = """
+        2026-01-01 Hotel
+            Expenses:Travel    33.33 EUR @ 1.0837 USD
+            Assets:Dollars
+
+        2026-01-02 Dinner
+            Expenses:Food      20.00 EUR @ 1.0841 USD
+            Assets:Dollars
+
+        2026-01-03 Taxi
+            Expenses:Travel    10.00 EUR @ 1.0850 USD
+            Assets:Dollars
+
+        """
+        let first = try manager(holding: elided)
+        let hotel = try #require(first.transactions().first)
+        try first.replace(.transaction(hotel), with: .transaction(Transaction(
+            id: hotel.id, date: hotel.date, description: "Hotel, two nights", postings: hotel.postings,
+        )))
+        let saved = JournalSerializer().serialize(first.currentJournal)
+        #expect(saved.contains("-36.119721 USD\n"))
+
+        // The next launch reads what the first one wrote.
+        let second = try manager(holding: saved)
+        #expect(second.currentJournal.commodityFormats["USD"]?.fractionDigits == 4)
+        let dinner = try #require(second.transactions().first { $0.description == "Dinner" })
+        try second.replace(.transaction(dinner), with: .transaction(Transaction(
+            id: dinner.id, date: dinner.date, description: "Dinner for two", postings: dinner.postings,
+        )))
+        let text = JournalSerializer().serialize(second.currentJournal)
+        #expect(text.contains("20.00 EUR @ 1.0841 USD\n"))
+        #expect(text.contains("-21.6820 USD\n"))
+    }
+
+    @Test
+    func `posted amounts lower a commodity's digits and never raise them`() throws {
+        // Whole-dollar prices outnumber the one amount posted to the cent.
+        // Raising `$` to two digits would refuse a rebuild of an entry that
+        // balances only at whole units, where it passed before.
+        let journal = try JournalParser().parse("""
+        2026-01-01 Buy
+            Assets:Broker    10 AAPL @ $150
+            Assets:Cash
+
+        2026-01-02 Buy
+            Assets:Broker    4 MSFT @ $300
+            Assets:Cash
+
+        2026-01-03 Buy
+            Assets:Broker    2 AAPL @ $151
+            Assets:Cash
+
+        2026-01-04 Coffee
+            Expenses:Food    $4.50
+            Assets:Cash
+
+        """)
+        #expect(journal.commodityFormats["$"]?.fractionDigits == 0)
+        #expect(journal.commodityFormats["$"]?.maxFractionDigits == 2)
+    }
+
+    @Test
+    func `a balance assertion is not a posted amount`() throws {
+        // Three whole-unit postings against four assertions to the cent: the
+        // postings decide. Counting an assertion as posted would answer 2.
+        let journal = try JournalParser().parse("""
+        2026-01-01 A
+            Assets:Checking    5 USD = 1000.00 USD
+            Equity:Opening    -5 USD = -1000.00 USD
+
+        2026-01-02 B
+            Assets:Checking    = 1000.00 USD
+            Equity:Opening     0 USD = -1000.00 USD
+
+        """)
+        #expect(journal.commodityFormats["USD"]?.fractionDigits == 0)
+    }
+
+    @Test
+    func `replace reports a missing original before it weighs the replacement`() throws {
+        let manager = try manager(holding: Self.cents)
+        let stale = try entry([posting("5", "USD"), posting("-5", "USD")])
+        let replacement = try entry(roughlyBalanced)
+        #expect(try manager.replace(.transaction(stale), with: .transaction(replacement)) == false)
+        #expect(JournalSerializer().serialize(manager.currentJournal) == Self.cents)
     }
 
     @Test

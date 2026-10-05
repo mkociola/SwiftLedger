@@ -49,7 +49,8 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
     /// The most digits any single amount in this commodity was written with.
     ///
     /// `fractionDigits` answers "how should I write one of these" and is the
-    /// most common count. This answers "how precisely does this file speak
+    /// most common count, or the most common among posting amounts when that
+    /// is fewer. This answers "how precisely does this file speak
     /// about this commodity" and is the largest, which is a different question
     /// with a different consumer: a display that rounds every figure to the
     /// common case turns a `0.00123456 BTC` holding into `BTC0.00`, while a

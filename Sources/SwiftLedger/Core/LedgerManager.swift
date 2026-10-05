@@ -53,15 +53,16 @@ public final class LedgerManager {
     /// in-memory ledger advances with it, or neither happens.
     ///
     /// A replacement built in code is refused the way `add` refuses one, before
-    /// anything is written.
+    /// anything is written. An original that is not in the journal is reported
+    /// first: `false`, whatever the replacement is.
     ///
     /// - Returns: `true` if a matching item was found and replaced;
     ///   `false` if no match exists, in which case nothing was written.
     @discardableResult
     public func replace(_ item: JournalItem, with replacement: JournalItem) throws -> Bool {
-        try requireReloadable(replacement)
         var updated = ledger
         guard updated.replace(item, with: replacement) else { return false }
+        try requireReloadable(replacement)
         try store?.save(updated)
         ledger = updated
         return true
