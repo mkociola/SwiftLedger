@@ -2,6 +2,8 @@ import Foundation
 @testable import SwiftLedger
 import Testing
 
+// swiftlint:disable file_length
+
 // MARK: - Helpers
 
 /// A `Decimal` from its text. A float literal would go through `Double`.
@@ -281,5 +283,148 @@ struct Probe: CustomTestStringConvertible {
             postings: [posting("100", "EUR"), posting("-110", "USD")],
         )
         #expect(transaction.postings.count == 2)
+    }
+}
+
+// MARK: - What a manager will save
+
+@Suite("saving what will load back") struct ReloadableSaveTests {
+    /// A journal that writes USD to the cent.
+    static let cents = """
+    2026-01-01 Opening
+        Assets:Checking   100.00 USD
+        Equity:Opening   -100.00 USD
+
+    """
+
+    /// A journal that writes USD in whole units.
+    static let whole = """
+    2026-01-01 Opening
+        Assets:Checking   100 USD
+        Equity:Opening   -100 USD
+
+    """
+
+    private func manager(holding text: String) throws -> LedgerManager {
+        try LedgerManager(store: InMemoryLedgerStore(ledger: Ledger(journal: JournalParser().parse(text))))
+    }
+
+    private func entry(_ postings: [Posting]) throws -> Transaction {
+        try Transaction(
+            date: JournalDate(year: 2026, month: 1, day: 2), description: "Built in code", postings: postings,
+        )
+    }
+
+    /// Balances at the digits the numbers need, off by 0.40 once USD is
+    /// written to the cent.
+    private var roughlyBalanced: [Posting] {
+        [posting("1", "EUR", price: .perUnit(amount("1.4", "USD"))), posting("-1", "USD")]
+    }
+
+    @Test
+    func `add accepts an exchange and the file holds no cost`() throws {
+        let manager = try manager(holding: Self.cents)
+        try manager.add(.transaction(entry([posting("100", "EUR"), posting("-110", "USD")])))
+        let text = JournalSerializer().serialize(manager.currentJournal)
+        #expect(!text.contains("@"))
+        #expect(try JournalParser().parse(text).transactions.count == 2)
+    }
+
+    @Test
+    func `add refuses an entry the journal would write unbalanced`() throws {
+        let manager = try manager(holding: Self.cents)
+        let transaction = try entry(roughlyBalanced)
+        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: dec("0.4"))) {
+            try manager.add(.transaction(transaction))
+        }
+        #expect(manager.transactions().count == 1)
+    }
+
+    @Test
+    func `add accepts the same entry where the journal writes whole units`() throws {
+        let manager = try manager(holding: Self.whole)
+        try manager.add(.transaction(entry(roughlyBalanced)))
+        let text = JournalSerializer().serialize(manager.currentJournal)
+        #expect(try JournalParser().parse(text).transactions.count == 2)
+    }
+
+    @Test
+    func `add refuses a rebuilt entry in a journal that writes the commodity with more digits`() throws {
+        // USD appears mostly as a rate here, so its learned style has four
+        // digits and a rebuilt cash leg would be written as -36.1200.
+        let rates = """
+        2026-01-01 Hotel
+            Expenses:Travel    33.33 EUR @ 1.0837 USD
+            Assets:Dollars    -36.12 USD
+
+        2026-01-02 Dinner
+            Expenses:Food      20.00 EUR @ 1.0841 USD
+            Assets:Euros      -20.00 EUR @ 1.0841 USD
+
+        2026-01-03 Taxi
+            Expenses:Travel    10.00 EUR @ 1.0850 USD
+            Assets:Euros      -10.00 EUR @ 1.0850 USD
+
+        """
+        let manager = try manager(holding: rates)
+        let hotel = try #require(manager.transactions().first)
+        let rebuilt = try Transaction(
+            id: hotel.id, date: hotel.date, description: "Hotel, two nights", postings: hotel.postings,
+        )
+        let refused = (try? manager.replace(.transaction(hotel), with: .transaction(rebuilt))) == nil
+        let text = JournalSerializer().serialize(manager.currentJournal)
+        // Either outcome is sound. What must never happen is a saved file
+        // that will not load.
+        #expect((try? JournalParser().parse(text)) != nil)
+        if refused { #expect(text == rates) }
+    }
+
+    @Test
+    func `a parsed entry removed and added again is accepted`() throws {
+        let entry = """
+        2026-01-02 Fewer digits than usual
+            Expenses:Travel    1 EUR @ 1.4 USD
+            Assets:Checking   -1 USD
+        """
+        let manager = try manager(holding: Self.cents + "\n" + entry + "\n")
+        let parsed = try #require(manager.transactions().last)
+        #expect(parsed.sourceText != nil)
+        try manager.remove(.transaction(parsed))
+        try manager.add(.transaction(parsed))
+        // Put back as the lines it was read from, not padded to `-1.00 USD`.
+        #expect(JournalSerializer().serialize(manager.currentJournal).contains(entry))
+        #expect(manager.transactions().count == 2)
+    }
+
+    @Test
+    func `replace refuses likewise and leaves the journal as it was`() throws {
+        let manager = try manager(holding: Self.cents)
+        let opening = try #require(manager.transactions().first)
+        let replacement = try entry(roughlyBalanced)
+        #expect(throws: LedgerError.self) {
+            try manager.replace(.transaction(opening), with: .transaction(replacement))
+        }
+        #expect(JournalSerializer().serialize(manager.currentJournal) == Self.cents)
+    }
+
+    @Test
+    func `the manager's verdict is the one its save gives`() throws {
+        let cents = try manager(holding: Self.cents)
+        let whole = try manager(holding: Self.whole)
+        #expect(cents.balance(of: roughlyBalanced).real == .unbalanced([amount("0.4", "USD")]))
+        #expect(whole.balance(of: roughlyBalanced).real == .balanced)
+    }
+
+    @Test(arguments: [
+        [("100", "EUR"), ("-110", "USD")],
+        [("10", "AAPL"), ("5", "USD"), ("-1505", "USD")],
+        [("36.12", "USD"), ("-36.12", "USD")],
+        [("0.5", "BTC"), ("-30000", "USD")],
+    ])
+    func `whatever add accepts parses back`(legs: [(String, String)]) throws {
+        let manager = try manager(holding: Self.cents)
+        try manager.add(.transaction(entry(legs.map { posting($0.0, $0.1) })))
+        let text = JournalSerializer().serialize(manager.currentJournal)
+        #expect(try JournalParser().parse(text).transactions.count == 2)
     }
 }
