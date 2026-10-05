@@ -14,7 +14,9 @@ public struct BalanceSheet: Sendable {
     ///
     /// Two things it does not claim. It folds `amount` rather than
     /// `balancingAmount`, so a journal holding an `@` price reads as unbalanced
-    /// even though each of its entries balances at cost. And it skips
+    /// even though each of its entries balances at cost. An exchange, an entry
+    /// left in two commodities with no price, likewise leaves both commodities
+    /// off zero, which is also what `hledger bal` prints. And it skips
     /// parenthesised postings, which move money outside the double-entry books
     /// by design; bracketed ones net to zero per transaction and so cost
     /// nothing to include.
