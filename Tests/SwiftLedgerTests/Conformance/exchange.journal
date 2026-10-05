@@ -1,0 +1,53 @@
+; An unpriced entry in two commodities of opposite sign is an exchange.
+2024-01-01 Change money
+    Assets:Euros      100 EUR
+    Assets:Dollars   -110 USD
+
+; The cost lands on the commodity written first, whichever side that is.
+2024-01-02 Change money back
+    Assets:Dollars   -110 USD
+    Assets:Euros      100 EUR
+
+; Several postings in the first commodity take a per-unit cost.
+2024-01-03 Split purchase
+    Assets:Euros       60 EUR
+    Assets:Travel      40 EUR
+    Assets:Dollars   -110 USD
+
+2024-01-04 Purchase with a refund
+    Assets:Euros      100 EUR
+    Assets:Travel     -10 EUR
+    Assets:Dollars    -99 USD
+
+; A fee in the second commodity is netted before the cost is inferred.
+2024-01-05 Buy shares
+    Assets:Brokerage   10 AAPL
+    Expenses:Fees       5 USD
+    Assets:Dollars  -1505 USD
+
+; An elided posting takes both remainders and nothing is inferred.
+2024-01-06 Opening
+    Assets:Euros      100 EUR
+    Assets:Dollars   -110 USD
+    Equity:Opening
+
+; Priced postings that cancel leave the exchange standing.
+2024-01-07 Wash and exchange
+    Assets:Brokerage   10 AAPL @ 150 USD
+    Assets:Custody    -10 AAPL @ 150 USD
+    Assets:Euros      100 EUR
+    Assets:Dollars   -110 USD
+
+; A commodity that nets to zero is not one of the two.
+2024-01-08 Pounds in and out
+    Assets:Pounds       5 GBP
+    Assets:Sterling    -5 GBP
+    Assets:Euros      100 EUR
+    Assets:Dollars   -110 USD
+
+; Bracketed postings are an exchange of their own.
+2024-01-09 Envelopes
+    Assets:Euros      100 EUR
+    Assets:Dollars   -110 USD
+    [Budget:Euros]      5 EUR
+    [Budget:Dollars]   -6 USD

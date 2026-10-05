@@ -29,7 +29,12 @@ extension JournalParser {
     ///
     /// A transaction with no postings has nothing to resolve and comes back
     /// empty.
-    func resolveElisions(_ rawPostings: [RawPosting]) throws -> [Posting] {
+    ///
+    /// Returns, beside the postings and index for index with them, the digits
+    /// each one's numbers were written with.
+    func resolveElisions(
+        _ rawPostings: [RawPosting],
+    ) throws -> (postings: [Posting], written: [WrittenDigits]) {
         var fills: [Posting.Kind: [Amount]] = [:]
         for kind in [Posting.Kind.real, .balancedVirtual] {
             let group = rawPostings.filter { $0.kind == kind }
@@ -38,16 +43,19 @@ extension JournalParser {
             if elided == 1 { fills[kind] = try remainders(of: group, in: rawPostings) }
         }
 
-        return try rawPostings.flatMap { raw -> [Posting] in
-            if let amount = raw.amount { return [Self.posting(from: raw, amount: amount)] }
+        // An amount the parser inferred was written by nobody, so it brings
+        // no digits of its own and is measured at the digits it needs.
+        let resolved = try rawPostings.flatMap { raw -> [(Posting, WrittenDigits)] in
+            if let amount = raw.amount { return [(Self.posting(from: raw, amount: amount), raw.written)] }
             if raw.kind == .virtual {
-                return try [Self.posting(from: raw, amount: zeroAmount(matching: rawPostings))]
+                return try [(Self.posting(from: raw, amount: zeroAmount(matching: rawPostings)), WrittenDigits())]
             }
             guard let fill = fills[raw.kind], !fill.isEmpty else {
                 throw LedgerError.cannotResolveElision
             }
-            return Self.postings(from: raw, amounts: fill)
+            return Self.postings(from: raw, amounts: fill).map { ($0, WrittenDigits()) }
         }
+        return (resolved.map(\.0), resolved.map(\.1))
     }
 
     /// What the one posting of a group that elided its amount takes: minus the

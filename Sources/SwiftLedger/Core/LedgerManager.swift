@@ -14,7 +14,13 @@ public final class LedgerManager {
     ///
     /// Atomic: if the store's `save` throws, the in-memory ledger is
     /// left unchanged, so callers can safely retry.
+    ///
+    /// A transaction built in code is refused, with the balance error
+    /// `Transaction.init` throws, when the journal would write it with more
+    /// digits than it balances at: the file would not load back. See
+    /// `balance(of:)`.
     public func add(_ item: JournalItem) throws {
+        try requireReloadable(item)
         var updated = ledger
         updated.add(item)
         try store?.save(updated)
@@ -46,15 +52,40 @@ public final class LedgerManager {
     /// by hand. Nothing to unwind here — either the save succeeds and the
     /// in-memory ledger advances with it, or neither happens.
     ///
+    /// A replacement built in code is refused the way `add` refuses one, before
+    /// anything is written.
+    ///
     /// - Returns: `true` if a matching item was found and replaced;
     ///   `false` if no match exists, in which case nothing was written.
     @discardableResult
     public func replace(_ item: JournalItem, with replacement: JournalItem) throws -> Bool {
+        try requireReloadable(replacement)
         var updated = ledger
         guard updated.replace(item, with: replacement) else { return false }
         try store?.save(updated)
         ledger = updated
         return true
+    }
+
+    /// Refuses a transaction the serializer would write as lines the next
+    /// parse, or hledger, refuses.
+    ///
+    /// A transaction that still carries the lines it was parsed from is
+    /// replayed verbatim and was checked when it was read, so it passes: that
+    /// is what lets a removed entry be put back exactly as it was.
+    private func requireReloadable(_ item: JournalItem) throws {
+        guard case let .transaction(transaction) = item, transaction.sourceText == nil else { return }
+        try Transaction.requireBalanced(transaction.postings, formats: ledger.journal.commodityFormats)
+    }
+
+    /// Whether `postings` balance as this journal would write them: the answer
+    /// `add` and `replace` give, without throwing.
+    ///
+    /// A number is padded to the digits the journal writes its commodity
+    /// with, and an entry is held to the digits it is written in. So an entry
+    /// that balances at `-1 USD` can be off once the file says `-1.00 USD`.
+    public func balance(of postings: [Posting]) -> (real: BalanceVerdict, bracketed: BalanceVerdict) {
+        Transaction.balance(of: postings, formats: ledger.journal.commodityFormats)
     }
 
     /// Removes the `account` directive declaring `name` and persists the result.
