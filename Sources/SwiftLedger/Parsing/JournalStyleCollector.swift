@@ -12,6 +12,9 @@ import Foundation
 struct JournalStyleCollector {
     /// The number of fraction digits seen for a commodity, and how often.
     private var fractionDigitCounts: [String: [Int: Int]] = [:]
+    /// The same count over posting amounts alone, leaving out prices and
+    /// balance assertions.
+    private var postedFractionDigitCounts: [String: [Int: Int]] = [:]
     /// Per commodity: amounts large enough to show grouping that used a
     /// separator, and amounts large enough that did not.
     private var separated: [String: Int] = [:]
@@ -49,10 +52,14 @@ struct JournalStyleCollector {
     /// `raw` is the amount exactly as the file has it, commodity symbol and
     /// all, which is all that is left to read the sign's placement out of.
     /// `amount` is what the parser made of it, so that the two always agree on
-    /// which commodity was written and which way round it was.
-    mutating func observe(_ raw: String, shape: NumberShape, as amount: Amount) {
+    /// which commodity was written and which way round it was. `posted` is
+    /// true for a posting's own amount and false for a price or an assertion.
+    mutating func observe(_ raw: String, shape: NumberShape, as amount: Amount, posted: Bool) {
         let commodity = amount.commodity
         fractionDigitCounts[commodity, default: [:]][shape.fractionDigits, default: 0] += 1
+        if posted {
+            postedFractionDigitCounts[commodity, default: [:]][shape.fractionDigits, default: 0] += 1
+        }
         if shape.canShowGrouping {
             if shape.usesSeparator {
                 separated[commodity, default: 0] += 1
@@ -152,7 +159,14 @@ struct JournalStyleCollector {
         var result: [String: CommodityFormat] = [:]
         for (commodity, counts) in fractionDigitCounts {
             result[commodity] = CommodityFormat(
-                fractionDigits: Self.mostCommon(counts),
+                // A commodity that is posted is written the way its postings
+                // write it. A rate carries more digits than the money it
+                // converts, and a journal of `33.33 EUR @ 1.0837 USD` against
+                // `-36.12 USD` that let the rates vote would write a rebuilt
+                // cash leg as `-36.1200 USD`, at which the entry no longer
+                // balances. Prices and assertions decide only for a commodity
+                // nothing is posted in.
+                fractionDigits: Self.mostCommon(postedFractionDigitCounts[commodity] ?? counts),
                 maxFractionDigits: counts.keys.max() ?? 0,
                 groupsThousands: Self.groups(
                     separated: separated[commodity] ?? 0,

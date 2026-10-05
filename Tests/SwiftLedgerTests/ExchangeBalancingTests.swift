@@ -376,9 +376,10 @@ struct Probe: CustomTestStringConvertible {
     }
 
     @Test
-    func `add refuses a rebuilt entry in a journal that writes the commodity with more digits`() throws {
-        // USD appears mostly as a rate here, so its learned style has four
-        // digits and a rebuilt cash leg would be written as -36.1200.
+    func `a rebuilt entry is accepted in a journal that writes the commodity mostly as a rate`() throws {
+        // USD appears mostly as a rate here. Its digits are learned from the
+        // one amount posted in it, so a rebuilt cash leg is written -36.12
+        // and not -36.1200, where the entry would be off by 0.000279.
         let rates = """
         2026-01-01 Hotel
             Expenses:Travel    33.33 EUR @ 1.0837 USD
@@ -398,13 +399,35 @@ struct Probe: CustomTestStringConvertible {
         let rebuilt = try Transaction(
             id: hotel.id, date: hotel.date, description: "Hotel, two nights", postings: hotel.postings,
         )
-        // The spec's known limit: the journal would write the cash leg as
-        // -36.1200, where the entry is off by 0.000279, so the rewrite is
-        // refused and nothing is saved.
-        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: dec("-0.000279"))) {
-            try manager.replace(.transaction(hotel), with: .transaction(rebuilt))
-        }
-        #expect(JournalSerializer().serialize(manager.currentJournal) == rates)
+        let formats = manager.currentJournal.commodityFormats
+        #expect(formats["USD"]?.fractionDigits == 2)
+        #expect(formats["USD"]?.maxFractionDigits == 4)
+        #expect(try manager.replace(.transaction(hotel), with: .transaction(rebuilt)))
+        let text = JournalSerializer().serialize(manager.currentJournal)
+        #expect(text.contains("33.33 EUR @ 1.0837 USD\n"))
+        #expect(text.contains("-36.12 USD\n"))
+        #expect(try JournalParser().parse(text).transactions.count == 3)
+    }
+
+    @Test
+    func `a commodity nothing is posted in learns its digits from prices`() throws {
+        let journal = try JournalParser().parse("""
+        2026-01-02 Dinner
+            Expenses:Food      20.00 EUR @ 1.0841 USD
+            Assets:Euros      -20.00 EUR @ 1.0841 USD
+
+        """)
+        #expect(journal.commodityFormats["USD"]?.fractionDigits == 4)
+        #expect(journal.commodityFormats["EUR"]?.fractionDigits == 2)
+    }
+
+    @Test
+    func `replace reports a missing original before it weighs the replacement`() throws {
+        let manager = try manager(holding: Self.cents)
+        let stale = try entry([posting("5", "USD"), posting("-5", "USD")])
+        let replacement = try entry(roughlyBalanced)
+        #expect(try manager.replace(.transaction(stale), with: .transaction(replacement)) == false)
+        #expect(JournalSerializer().serialize(manager.currentJournal) == Self.cents)
     }
 
     @Test

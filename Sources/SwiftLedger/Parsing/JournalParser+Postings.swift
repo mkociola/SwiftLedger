@@ -57,19 +57,19 @@ extension JournalParser {
             let field = splitAmountField(rawAmount)
             if !field.amount.isEmpty {
                 let parsed = try parseShapedAmount(field.amount, lineNumber: lineNumber)
-                style.observe(field.amount, shape: parsed.shape, as: parsed.amount)
+                style.observe(field.amount, shape: parsed.shape, as: parsed.amount, posted: true)
                 amount = parsed.amount
                 written.amount = parsed.shape.fractionDigits
             }
             if let rawPrice = field.price, !rawPrice.isEmpty {
                 let priced = try parseShapedAmount(rawPrice, lineNumber: lineNumber)
-                style.observe(rawPrice, shape: priced.shape, as: priced.amount)
+                style.observe(rawPrice, shape: priced.shape, as: priced.amount, posted: false)
                 price = field.priceIsTotal ? .total(priced.amount) : .perUnit(priced.amount)
                 written.price = priced.shape.fractionDigits
             }
             if let rawAssertion = field.assertion, !rawAssertion.isEmpty {
                 let asserted = try parseShapedAmount(rawAssertion, lineNumber: lineNumber)
-                style.observe(rawAssertion, shape: asserted.shape, as: asserted.amount)
+                style.observe(rawAssertion, shape: asserted.shape, as: asserted.amount, posted: false)
                 balanceAssertion = asserted.amount
             }
         }
