@@ -1,0 +1,22 @@
+[
+  {
+    "account": "Assets:Cash",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": 10500,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Equity:Opening",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": -10500,
+        "places": 2
+      }
+    ]
+  }
+]

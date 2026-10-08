@@ -75,9 +75,16 @@ extension JournalParser {
     /// Everything, which is what makes `$100 USD` and `$1 000` invalid rather
     /// than 100 and 1. A prefixed amount names its commodity once, so text
     /// left over after the digits is not a second commodity, it is a typo.
+    ///
+    /// A space between the two is layout and no part of the name, the same as
+    /// behind the number: `USD 100` is a hundred `USD`, as hledger reads it.
+    /// Kept in the name, it made `USD 100` and `USD100` two commodities, and
+    /// an entry rebuilt by a caller that spelled it `USD` stopped netting
+    /// against every other entry in the file. `CommodityFormat` records that
+    /// the file writes the space, so a rebuilt entry still gets it back.
     private func parsePrefixCommodityAmount(_ str: String, sign: Decimal, raw: String) throws -> ShapedAmount {
         let commodityEnd = str.firstIndex(where: Self.opensSignedNumber) ?? str.endIndex
-        let commodity = String(str[..<commodityEnd])
+        let commodity = str[..<commodityEnd].trimmingCharacters(in: .whitespaces)
         var numberText = String(str[commodityEnd...])
         var adjustedSign = sign
         if numberText.hasPrefix("-") {

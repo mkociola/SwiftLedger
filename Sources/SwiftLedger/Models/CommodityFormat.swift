@@ -3,8 +3,9 @@ import Foundation
 /// How one commodity's amounts are written in a particular journal: how many
 /// digits follow the decimal mark (both the usual count and the most any one
 /// amount carries), which characters divide the fraction and separate the digit
-/// groups, whether the integer part carries those separators at all, and which
-/// side of the symbol a minus sign goes on.
+/// groups, whether the integer part carries those separators at all, which
+/// side of the symbol a minus sign goes on, and which side of the number the
+/// symbol itself goes on, with a space or without.
 ///
 /// `Decimal` can answer none of it. It normalises its own scale on
 /// construction (`Decimal(string: "1240.50")` and `Decimal(string: "1240.5")`
@@ -99,18 +100,46 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
         decimalMark == "," ? "." : ","
     }
 
+    /// Which side of the number the file writes this commodity on: `true` for
+    /// `$100`, `false` for `100 USD`, and `nil` when the file has written no
+    /// amount in it, which is a commodity it only declares or one the caller
+    /// is introducing.
+    ///
+    /// The serializer does not read this. An `Amount` says for itself where
+    /// its commodity goes, and that is what gets written. This is for the
+    /// caller about to build one: `Amount.init` has to be told, and guessing
+    /// from the name (a symbol in front, a code behind) spells `100 €` and
+    /// `USD 100` journals the other way from every amount already in them.
+    /// The side most of the commodity's amounts are written on, prices and
+    /// balance assertions included, a tie going behind the number, which is
+    /// what `Amount.init` assumes when it is not told.
+    public var commodityIsPrefix: Bool?
+
+    /// Whether a commodity written in front is followed by a space: `USD 100`
+    /// when `true`, `$100` when `false`.
+    ///
+    /// The space is no part of the commodity's name, so the parser drops it
+    /// and this is the only record that the file writes one. Nothing to do
+    /// with a commodity behind its number, which always gets a space. `false`
+    /// is the default because it is what SwiftLedger has always written.
+    public var separatesPrefixCommodity: Bool
+
     public init(
         fractionDigits: Int = 0,
         maxFractionDigits: Int = 0,
         groupsThousands: Bool = false,
         signPrecedesCommodity: Bool = true,
         decimalMark: Character = ".",
+        commodityIsPrefix: Bool? = nil,
+        separatesPrefixCommodity: Bool = false,
     ) {
         self.fractionDigits = fractionDigits
         self.maxFractionDigits = max(maxFractionDigits, fractionDigits)
         self.groupsThousands = groupsThousands
         self.signPrecedesCommodity = signPrecedesCommodity
         self.decimalMark = decimalMark
+        self.commodityIsPrefix = commodityIsPrefix
+        self.separatesPrefixCommodity = separatesPrefixCommodity
     }
 
     /// The style to write a commodity in when the journal shows no example of
@@ -213,6 +242,7 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case fractionDigits, maxFractionDigits, groupsThousands, signPrecedesCommodity, decimalMark
+        case commodityIsPrefix, separatesPrefixCommodity
     }
 
     /// Written by hand for one reason: `Character` is not `Codable`, so the
@@ -222,7 +252,8 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
     /// before this property existed, decodes to the `.` those versions wrote,
     /// and so does a string that is not exactly one character. A value of some
     /// other type there is a payload that disagrees about what this field is,
-    /// and that still throws.
+    /// and that still throws. Where the commodity goes is absent from older
+    /// payloads in the same way, and decodes to a format that does not say.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let mark = try container.decodeIfPresent(String.self, forKey: .decimalMark)
@@ -232,6 +263,8 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
             groupsThousands: container.decode(Bool.self, forKey: .groupsThousands),
             signPrecedesCommodity: container.decode(Bool.self, forKey: .signPrecedesCommodity),
             decimalMark: mark.flatMap { $0.count == 1 ? $0.first : nil } ?? ".",
+            commodityIsPrefix: container.decodeIfPresent(Bool.self, forKey: .commodityIsPrefix),
+            separatesPrefixCommodity: container.decodeIfPresent(Bool.self, forKey: .separatesPrefixCommodity) ?? false,
         )
     }
 
@@ -242,5 +275,7 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
         try container.encode(groupsThousands, forKey: .groupsThousands)
         try container.encode(signPrecedesCommodity, forKey: .signPrecedesCommodity)
         try container.encode(String(decimalMark), forKey: .decimalMark)
+        try container.encodeIfPresent(commodityIsPrefix, forKey: .commodityIsPrefix)
+        try container.encode(separatesPrefixCommodity, forKey: .separatesPrefixCommodity)
     }
 }

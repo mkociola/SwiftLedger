@@ -146,6 +146,14 @@ account Expenses:Utilities
     Assets:EuroAccount     -€30,00
     Assets:PoundAccount
 
+; A code can stand in front of its number too, with a space between them:
+; CHF 80.00 is eighty francs, the same commodity as CHF80.00, as it is in
+; ledger and in hledger. The space is layout and no part of the name, and an
+; entry SwiftLedger rebuilds in francs gets it back because this file writes it.
+2024-03-10 Dinner in Zurich
+    Expenses:Food:Restaurants  CHF 80.00
+    Assets:SwissAccount    -CHF 80.00
+
 ; ── Decimal marks and a comment after an amount ─────────────────────────────
 ; Which mark divides the fraction is read out of the number: a mark with
 ; anything other than three digits after it divides, so €12,50 is twelve euros
