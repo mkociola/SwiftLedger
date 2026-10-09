@@ -85,7 +85,9 @@ struct JournalStyleCollector {
             if let end = raw.range(of: commodity)?.upperBound, end < raw.endIndex, raw[end].isWhitespace {
                 spacedPrefix[commodity, default: 0] += 1
             }
-        } else {
+        } else if raw.contains(commodity) {
+            // A bare number is read as USD without writing it on either side,
+            // so it casts no vote.
             suffixed[commodity, default: 0] += 1
         }
         // Only a negative amount with its commodity in front can show which
@@ -191,6 +193,7 @@ struct JournalStyleCollector {
             let posted = postedFractionDigitCounts[commodity].map(Self.mostCommon) ?? overall
             let inFront = prefixed[commodity] ?? 0
             let spaced = spacedPrefix[commodity] ?? 0
+            let behind = suffixed[commodity] ?? 0
             result[commodity] = CommodityFormat(
                 fractionDigits: min(posted, overall),
                 maxFractionDigits: counts.keys.max() ?? 0,
@@ -203,9 +206,10 @@ struct JournalStyleCollector {
                 signPrecedesCommodity: (signFirst[commodity] ?? 0) >= (signAfterCommodity[commodity] ?? 0),
                 decimalMark: Self.mostCommonMark(decimalMarks[commodity] ?? [:]),
                 // A tie goes behind the number, where `Amount.init` puts a
-                // commodity it is told nothing about. The space has to win
+                // commodity it is told nothing about, and a commodity written
+                // on neither side has shown none. The space has to win
                 // outright, since writing none is the default.
-                commodityIsPrefix: inFront > (suffixed[commodity] ?? 0),
+                commodityIsPrefix: inFront + behind == 0 ? nil : inFront > behind,
                 separatesPrefixCommodity: spaced > inFront - spaced,
             )
         }
@@ -213,23 +217,21 @@ struct JournalStyleCollector {
         // parser guessing it from what they happened to type, so it wins —
         // including for a commodity no posting in the file uses yet.
         for (commodity, stated) in declared {
-            let observed = result[commodity] ?? CommodityFormat()
-            result[commodity] = CommodityFormat(
-                fractionDigits: stated.fractionDigits,
-                // A declaration states how to write one, not how precisely the
-                // file actually speaks, so it can raise the observed maximum
-                // but never lower it.
-                maxFractionDigits: max(observed.maxFractionDigits, stated.fractionDigits),
-                groupsThousands: stated.groupsThousands,
-                signPrecedesCommodity: observed.signPrecedesCommodity,
-                // A declaration whose sample could not name a mark overrules
-                // nothing here, and the amounts keep the vote.
-                decimalMark: stated.decimalMark ?? observed.decimalMark,
-                // Where the commodity goes is likewise left to the amounts,
-                // and is unknown for a commodity that has none.
-                commodityIsPrefix: observed.commodityIsPrefix,
-                separatesPrefixCommodity: observed.separatesPrefixCommodity,
-            )
+            // Everything a declaration does not state is left to the amounts:
+            // where the sign goes, where the commodity goes, and whether a
+            // space follows it. The last two are unknown for a commodity that
+            // has no amounts.
+            var merged = result[commodity] ?? CommodityFormat()
+            merged.fractionDigits = stated.fractionDigits
+            // A declaration states how to write one, not how precisely the
+            // file actually speaks, so it can raise the observed maximum but
+            // never lower it.
+            merged.maxFractionDigits = max(merged.maxFractionDigits, stated.fractionDigits)
+            merged.groupsThousands = stated.groupsThousands
+            // A declaration whose sample could not name a mark overrules
+            // nothing here, and the amounts keep the vote.
+            merged.decimalMark = stated.decimalMark ?? merged.decimalMark
+            result[commodity] = merged
         }
         return result
     }

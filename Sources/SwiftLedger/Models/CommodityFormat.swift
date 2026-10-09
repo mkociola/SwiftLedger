@@ -101,9 +101,9 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
     }
 
     /// Which side of the number the file writes this commodity on: `true` for
-    /// `$100`, `false` for `100 USD`, and `nil` when the file has written no
-    /// amount in it, which is a commodity it only declares or one the caller
-    /// is introducing.
+    /// `$100`, `false` for `100 USD`, and `nil` when the file has written it
+    /// beside no number: a commodity it only declares, one the caller is
+    /// introducing, or the USD that bare numbers are read as.
     ///
     /// The serializer does not read this. An `Amount` says for itself where
     /// its commodity goes, and that is what gets written. This is for the

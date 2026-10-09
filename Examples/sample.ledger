@@ -9,6 +9,7 @@ account Assets:Brokerage
 account Assets:PettyCash
 account Assets:EuroAccount
 account Assets:PoundAccount
+account Assets:SwissAccount
 account Liabilities:CreditCard
 account Equity:Opening
 account Income:Salary

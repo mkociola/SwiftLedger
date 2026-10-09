@@ -1,4 +1,5 @@
 2024-01-01 A code in front, with a space and without
     Assets:Cash    USD 100.00
     Assets:Cash    USD5.00
-    Equity:Opening    USD -105.00
+    Assets:Cash    - USD 2.00
+    Equity:Opening    USD -103.00

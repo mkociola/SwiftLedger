@@ -4,7 +4,7 @@
     "amounts": [
       {
         "commodity": "USD",
-        "mantissa": 10500,
+        "mantissa": 10300,
         "places": 2
       }
     ]
@@ -14,7 +14,7 @@
     "amounts": [
       {
         "commodity": "USD",
-        "mantissa": -10500,
+        "mantissa": -10300,
         "places": 2
       }
     ]
