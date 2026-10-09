@@ -9,6 +9,7 @@ account Assets:Brokerage
 account Assets:PettyCash
 account Assets:EuroAccount
 account Assets:PoundAccount
+account Assets:SwissAccount
 account Liabilities:CreditCard
 account Equity:Opening
 account Income:Salary
@@ -145,6 +146,21 @@ account Expenses:Utilities
     Expenses:Food:Restaurants  £25.00
     Assets:EuroAccount     -€30,00
     Assets:PoundAccount
+
+; A code can stand in front of its number too, with a space between them:
+; CHF 80.00 is eighty francs, the same commodity as CHF80.00, as it is in
+; ledger and in hledger. The space is layout and no part of the name, and an
+; entry SwiftLedger rebuilds in francs gets it back because this file writes it.
+2024-03-10 Dinner in Zurich
+    Expenses:Food:Restaurants  CHF 80.00
+    Assets:SwissAccount    -CHF 80.00
+
+; A sign can stand apart from its number, and a commodity can follow the
+; number as readily as lead it: - 4 VTI is four shares out, as it is in ledger
+; and in hledger. The space after the sign is layout, like the one before VTI.
+2024-03-11 Shares moved to another broker
+    Assets:Brokerage:Old   - 4 VTI
+    Assets:Brokerage:New   4 VTI
 
 ; ── Decimal marks and a comment after an amount ─────────────────────────────
 ; Which mark divides the fraction is read out of the number: a mark with

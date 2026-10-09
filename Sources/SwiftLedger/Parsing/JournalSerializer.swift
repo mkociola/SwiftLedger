@@ -231,8 +231,9 @@ public struct JournalSerializer {
         guard amount.commodityIsPrefix else {
             return "\(sign)\(absValue) \(amount.commodity)"
         }
+        let gap = format.separatesPrefixCommodity ? " " : ""
         return format.signPrecedesCommodity
-            ? "\(sign)\(amount.commodity)\(absValue)"
-            : "\(amount.commodity)\(sign)\(absValue)"
+            ? "\(sign)\(amount.commodity)\(gap)\(absValue)"
+            : "\(amount.commodity)\(gap)\(sign)\(absValue)"
     }
 }

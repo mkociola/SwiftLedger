@@ -897,6 +897,35 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
             #expect(a.commodity == "£")
             #expect(a.commodityIsPrefix == true)
         }
+
+        /// The space between a commodity and its number is layout, as it is
+        /// behind the number, and hledger reads `USD 100` as a hundred `USD`.
+        /// Kept in the name it made `USD 100` and `USD100` two commodities
+        /// that never net against each other.
+        @Test
+        func `a commodity written in front with a space is named without it`() throws {
+            let a = try JournalParser().parseAmount("USD 100", lineNumber: 1)
+            #expect(a.quantity == 100)
+            #expect(a.commodity == "USD")
+            #expect(a.commodityIsPrefix == true)
+
+            let negative = try JournalParser().parseAmount("USD -2,400.00", lineNumber: 1)
+            #expect(negative.quantity == -2400)
+            #expect(negative.commodity == "USD")
+        }
+
+        /// A sign set off from a bare number by a space is still a bare
+        /// number. With the space trimmed off the name it was an amount in a
+        /// commodity with no name at all, written back as `-100` and read as
+        /// USD from then on.
+        @Test
+        func `a sign and a space in front of a bare number name no commodity`() throws {
+            let bare = try JournalParser().parseAmount("- 100", lineNumber: 1)
+            #expect(bare == Amount(quantity: -100, commodity: "USD"))
+
+            let coded = try JournalParser().parseAmount("- USD 100", lineNumber: 1)
+            #expect(coded == Amount(quantity: -100, commodity: "USD", commodityIsPrefix: true))
+        }
         // swiftlint:enable identifier_name
     }
 }
@@ -2333,6 +2362,23 @@ private extension LedgerError {
         #expect(bal[0].commodity == "USD")
     }
 
+    @Test
+    func `a code in front is one commodity with or without its space`() throws {
+        let text = """
+        2026-01-01 Seed
+            Assets:Cash    USD 100
+            Equity:Opening    USD -100
+
+        2026-01-02 Found in a coat
+            Assets:Cash    USD5
+            Equity:Opening    USD-5
+        """
+        let ledger = try Ledger(journal: JournalParser().parse(text))
+        #expect(ledger.balance(for: "Assets:Cash") == [
+            Amount(quantity: 105, commodity: "USD", commodityIsPrefix: true),
+        ])
+    }
+
     /// The account an opening-balances entry elides reports both commodities,
     /// because the elided line resolved into a posting in each. `balance(for:)`
     /// nets by commodity and sorts by the commodity symbol, which puts `$`
@@ -3038,8 +3084,13 @@ private func renaming(
             fractionDigits: 2,
             groupsThousands: true,
             signPrecedesCommodity: false,
+            commodityIsPrefix: true,
         ))
-        #expect(journal.commodityFormats["AAPL"] == CommodityFormat(fractionDigits: 0, groupsThousands: false))
+        #expect(journal.commodityFormats["AAPL"] == CommodityFormat(
+            fractionDigits: 0,
+            groupsThousands: false,
+            commodityIsPrefix: false,
+        ))
 
         try renaming(#require(journal.transactions.first), to: "Groceries (revised)", in: &journal)
         #expect(journal.commodityFormats["$"]?.fractionDigits == 2)
@@ -3106,6 +3157,7 @@ private func renaming(
             fractionDigits: 2,
             groupsThousands: true,
             signPrecedesCommodity: false,
+            commodityIsPrefix: true,
         ))
         // Reading a line is not modelling it: every one of them still goes
         // back exactly as written.
@@ -3139,6 +3191,147 @@ private func renaming(
         let plain = CommodityFormat()
         #expect(try plain.render(#require(Decimal(string: "1234567.5"))) == "1234567.5")
         #expect(plain.render(10) == "10")
+    }
+}
+
+// MARK: - Which side of the number the commodity goes on
+
+/// Where a commodity is written, and whether a space parts it from its
+/// number, is the file's choice. Neither is in the commodity's name, so the
+/// format is what records both.
+@Suite("commodity placement") struct CommodityPlacementTests {
+    /// The space is the author's choice the same way the sign's side is, and
+    /// it is no longer carried in the commodity's name, so the format is the
+    /// only thing left that can put it back.
+    @Test
+    func `a commodity written in front with a space gets the space back`() throws {
+        let text = """
+        2026-02-01 * Rent
+            Expenses:Rent                             USD 2,400.00
+            Assets:Checking                           USD -2,400.00
+        """
+        var journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["USD"]?.separatesPrefixCommodity == true)
+        try renaming(#require(journal.transactions.first), to: "Rent (Feb)", in: &journal)
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("USD 2,400.00"))
+        #expect(written.contains("USD -2,400.00"))
+        #expect(try JournalParser().parse(written).commodityFormats.keys.sorted() == ["USD"])
+    }
+
+    @Test
+    func `the space goes after the sign when the sign comes first`() throws {
+        let text = """
+        2026-02-01 * Rent
+            Expenses:Rent                             USD 2,400.00
+            Assets:Checking                           -USD 2,400.00
+        """
+        var journal = try JournalParser().parse(text)
+        try renaming(#require(journal.transactions.first), to: "Rent (Feb)", in: &journal)
+        #expect(JournalSerializer().serialize(journal).contains("-USD 2,400.00"))
+    }
+
+    @Test
+    func `a symbol written against its number is not given a space`() throws {
+        var journal = try JournalParser().parse(handWrittenJournal)
+        #expect(journal.commodityFormats["$"]?.separatesPrefixCommodity == false)
+        try renaming(#require(journal.transactions.first), to: "Groceries (revised)", in: &journal)
+        #expect(JournalSerializer().serialize(journal).contains("$1,234.50"))
+    }
+
+    /// A declaration states digits and marks. It says nothing about the space,
+    /// so a commodity that is declared keeps the one its amounts write.
+    @Test
+    func `a declared commodity keeps the space its amounts write`() throws {
+        let text = """
+        commodity USD 1,000.00
+
+        2026-02-01 * Rent
+            Expenses:Rent                             USD 2400.00
+            Assets:Checking                           USD -2400.00
+        """
+        var journal = try JournalParser().parse(text)
+        #expect(journal.commodityFormats["USD"]?.separatesPrefixCommodity == true)
+        #expect(journal.commodityFormats["USD"]?.commodityIsPrefix == true)
+        try renaming(#require(journal.transactions.first), to: "Rent (Feb)", in: &journal)
+
+        // Grouped because the declaration says so, spaced because the amounts do.
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("USD 2,400.00"))
+        #expect(written.contains("USD -2,400.00"))
+    }
+
+    /// Both ties fall to what SwiftLedger writes when it is told nothing: no
+    /// space after a commodity in front, and a commodity behind its number.
+    @Test
+    func `a tie writes no space and puts the commodity behind`() throws {
+        let text = """
+        2026-02-01 Rent
+            Expenses:Rent                             USD 100.00
+            Assets:Checking                           USD-100.00
+
+        2026-02-02 Coffee
+            Expenses:Food                             CHF 4.50
+            Assets:Cash                              -4.50 CHF
+        """
+        let formats = try JournalParser().parse(text).commodityFormats
+        #expect(formats["USD"]?.commodityIsPrefix == true)
+        #expect(formats["USD"]?.separatesPrefixCommodity == false)
+        #expect(formats["CHF"]?.commodityIsPrefix == false)
+    }
+
+    /// A caller introducing an amount has to say which side its commodity
+    /// goes on, and the file already shows it. Most of the amounts decide,
+    /// prices and assertions included, and a commodity the file only declares
+    /// has shown no side at all.
+    @Test
+    func `a format says which side of the number the file writes its commodity on`() throws {
+        let text = """
+        commodity 1,000.00 CHF
+
+        2026-02-01 Coffee
+            Expenses:Food                             4.50 €
+            Assets:Cash                              -4.50 €
+
+        2026-02-02 Lunch
+            Expenses:Food                             $12.00
+            Assets:Card                              $-12.00
+
+        2026-02-03 Shares
+            Assets:Brokerage                          2 AAPL @ USD 150.00
+            Assets:Card                               USD -300.00 = GBP 0
+        """
+        let formats = try JournalParser().parse(text).commodityFormats
+        // Pounds appear in the assertion and nowhere else.
+        #expect(formats["GBP"]?.commodityIsPrefix == true)
+        #expect(formats["€"]?.commodityIsPrefix == false)
+        #expect(formats["$"]?.commodityIsPrefix == true)
+        #expect(formats["USD"]?.commodityIsPrefix == true)
+        #expect(formats["USD"]?.separatesPrefixCommodity == true)
+        #expect(formats["CHF"] != nil)
+        #expect(formats["CHF"]?.commodityIsPrefix == nil)
+    }
+
+    /// A bare number is read as USD and writes no commodity on either side,
+    /// so it has no say in which side the file writes one on.
+    @Test
+    func `a bare number does not vote on which side its commodity goes`() throws {
+        let mixed = """
+        2026-02-01 Rent
+            Expenses:Rent                             USD 2,400.00
+            Assets:Checking                           -2,400.00
+        """
+        #expect(try JournalParser().parse(mixed).commodityFormats["USD"]?.commodityIsPrefix == true)
+
+        let bare = """
+        2026-02-01 Rent
+            Expenses:Rent                             2,400.00
+            Assets:Checking                           -2,400.00
+        """
+        let formats = try JournalParser().parse(bare).commodityFormats
+        #expect(formats["USD"] != nil)
+        #expect(formats["USD"]?.commodityIsPrefix == nil)
     }
 }
 
@@ -3793,6 +3986,23 @@ private func renaming(
         """
         let decoded = try JSONDecoder().decode(CommodityFormat.self, from: Data(empty.utf8))
         #expect(decoded.decimalMark == ".")
+    }
+
+    /// A format encoded before it recorded where the commodity goes says
+    /// nothing about it, which is what `nil` and no space mean.
+    @Test
+    func `a commodity format keeps where its commodity goes, and decodes without it`() throws {
+        let format = CommodityFormat(fractionDigits: 2, commodityIsPrefix: true, separatesPrefixCommodity: true)
+        let decoded = try JSONDecoder().decode(CommodityFormat.self, from: JSONEncoder().encode(format))
+        #expect(decoded == format)
+
+        let json = """
+        {"fractionDigits":2,"maxFractionDigits":2,"groupsThousands":true,
+         "signPrecedesCommodity":false,"decimalMark":"."}
+        """
+        let older = try JSONDecoder().decode(CommodityFormat.self, from: Data(json.utf8))
+        #expect(older.commodityIsPrefix == nil)
+        #expect(older.separatesPrefixCommodity == false)
     }
 
     @Test

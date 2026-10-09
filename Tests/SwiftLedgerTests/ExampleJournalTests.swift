@@ -205,6 +205,33 @@ import Testing
         #expect(!written.contains("€1,500.00"))
     }
 
+    /// The franc entry writes its code in front with a space. The space is
+    /// not in the commodity's name, and the format is what remembers it.
+    @Test
+    func `the example's franc entry is in CHF, written with a space`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let dinner = try #require(journal.transactions.first { $0.description == "Dinner in Zurich" })
+        #expect(dinner.postings.map(\.amount) == [
+            Amount(quantity: 80, commodity: "CHF", commodityIsPrefix: true),
+            Amount(quantity: -80, commodity: "CHF", commodityIsPrefix: true),
+        ])
+        #expect(journal.commodityFormats["CHF"]?.commodityIsPrefix == true)
+        #expect(journal.commodityFormats["CHF"]?.separatesPrefixCommodity == true)
+    }
+
+    /// The share transfer sets its sign apart from the number and writes the
+    /// commodity behind it. Read with the space left on the number, the whole
+    /// example stops loading.
+    @Test
+    func `the example's share transfer reads a sign set apart from its number`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let moved = try #require(journal.transactions.first { $0.description == "Shares moved to another broker" })
+        #expect(moved.postings.map(\.amount) == [
+            Amount(quantity: -4, commodity: "VTI"),
+            Amount(quantity: 4, commodity: "VTI"),
+        ])
+    }
+
     /// The example is also a style sample: every entry a reader adds to it,
     /// and every entry SwiftLedger rebuilds in it, is laid out from what the
     /// file already shows. An entry that lines its amounts up somewhere new,

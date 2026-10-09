@@ -23,6 +23,12 @@ struct JournalStyleCollector {
     /// negative amounts written `-$50`, and negative amounts written `$-50`.
     private var signFirst: [String: Int] = [:]
     private var signAfterCommodity: [String: Int] = [:]
+    /// Per commodity: amounts written with it in front of the number, those of
+    /// them that left a space between the two, and amounts written with it
+    /// behind.
+    private var prefixed: [String: Int] = [:]
+    private var spacedPrefix: [String: Int] = [:]
+    private var suffixed: [String: Int] = [:]
     /// Per commodity: how many of its amounts wrote each decimal mark. An
     /// amount whose own marks could not be told apart casts no vote.
     private var decimalMarks: [String: [Character: Int]] = [:]
@@ -71,6 +77,18 @@ struct JournalStyleCollector {
         // `1.000,00` shows both and still counts once.
         if let mark = Self.decimalMark(of: shape) {
             decimalMarks[commodity, default: [:]][mark, default: 0] += 1
+        }
+        if amount.commodityIsPrefix {
+            prefixed[commodity, default: 0] += 1
+            // The parser took the space off the name, so the text is the only
+            // place left that shows one was written.
+            if let end = raw.range(of: commodity)?.upperBound, end < raw.endIndex, raw[end].isWhitespace {
+                spacedPrefix[commodity, default: 0] += 1
+            }
+        } else if raw.contains(commodity) {
+            // A bare number is read as USD without writing it on either side,
+            // so it casts no vote.
+            suffixed[commodity, default: 0] += 1
         }
         // Only a negative amount with its commodity in front can show which
         // side the sign goes on. `-1500.00 EUR` has nowhere else to put it.
@@ -173,6 +191,9 @@ struct JournalStyleCollector {
             // in and more of them can refuse a rebuild that used to pass.
             let overall = Self.mostCommon(counts)
             let posted = postedFractionDigitCounts[commodity].map(Self.mostCommon) ?? overall
+            let inFront = prefixed[commodity] ?? 0
+            let spaced = spacedPrefix[commodity] ?? 0
+            let behind = suffixed[commodity] ?? 0
             result[commodity] = CommodityFormat(
                 fractionDigits: min(posted, overall),
                 maxFractionDigits: counts.keys.max() ?? 0,
@@ -184,25 +205,33 @@ struct JournalStyleCollector {
                 // the placement SwiftLedger has always written.
                 signPrecedesCommodity: (signFirst[commodity] ?? 0) >= (signAfterCommodity[commodity] ?? 0),
                 decimalMark: Self.mostCommonMark(decimalMarks[commodity] ?? [:]),
+                // A tie goes behind the number, where `Amount.init` puts a
+                // commodity it is told nothing about, and a commodity written
+                // on neither side has shown none. The space has to win
+                // outright, since writing none is the default.
+                commodityIsPrefix: inFront + behind == 0 ? nil : inFront > behind,
+                separatesPrefixCommodity: spaced > inFront - spaced,
             )
         }
         // A declaration is the user stating their house style rather than the
         // parser guessing it from what they happened to type, so it wins —
         // including for a commodity no posting in the file uses yet.
         for (commodity, stated) in declared {
-            let observed = result[commodity] ?? CommodityFormat()
-            result[commodity] = CommodityFormat(
-                fractionDigits: stated.fractionDigits,
-                // A declaration states how to write one, not how precisely the
-                // file actually speaks, so it can raise the observed maximum
-                // but never lower it.
-                maxFractionDigits: max(observed.maxFractionDigits, stated.fractionDigits),
-                groupsThousands: stated.groupsThousands,
-                signPrecedesCommodity: observed.signPrecedesCommodity,
-                // A declaration whose sample could not name a mark overrules
-                // nothing here, and the amounts keep the vote.
-                decimalMark: stated.decimalMark ?? observed.decimalMark,
-            )
+            // Everything a declaration does not state is left to the amounts:
+            // where the sign goes, where the commodity goes, and whether a
+            // space follows it. The last two are unknown for a commodity that
+            // has no amounts.
+            var merged = result[commodity] ?? CommodityFormat()
+            merged.fractionDigits = stated.fractionDigits
+            // A declaration states how to write one, not how precisely the
+            // file actually speaks, so it can raise the observed maximum but
+            // never lower it.
+            merged.maxFractionDigits = max(merged.maxFractionDigits, stated.fractionDigits)
+            merged.groupsThousands = stated.groupsThousands
+            // A declaration whose sample could not name a mark overrules
+            // nothing here, and the amounts keep the vote.
+            merged.decimalMark = stated.decimalMark ?? merged.decimalMark
+            result[commodity] = merged
         }
         return result
     }
