@@ -158,6 +158,8 @@ account Expenses:Utilities
 ; A sign can stand apart from its number, and a commodity can follow the
 ; number as readily as lead it: - 4 VTI is four shares out, as it is in ledger
 ; and in hledger. The space after the sign is layout, like the one before VTI.
+; The sign itself is written once: - - 4 VTI is no amount, and neither is a
+; bare - - 4, which hledger refuses as it refuses the first.
 2024-03-11 Shares moved to another broker
     Assets:Brokerage:Old   - 4 VTI
     Assets:Brokerage:New   4 VTI

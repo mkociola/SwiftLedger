@@ -232,6 +232,16 @@ import Testing
         ])
     }
 
+    /// The sign is written once. Doubled in the share transfer, with or
+    /// without the commodity behind the number, it is no amount, and the
+    /// example stops loading rather than moving four shares the wrong way.
+    @Test(arguments: ["- - 4 VTI", "- - 4"])
+    func `the example's share transfer is refused with its sign doubled`(doubled: String) throws {
+        let text = try Self.exampleText.replacingOccurrences(of: "- 4 VTI", with: doubled)
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error.withoutLocation == .invalidAmount(doubled))
+    }
+
     /// The example is also a style sample: every entry a reader adds to it,
     /// and every entry SwiftLedger rebuilds in it, is laid out from what the
     /// file already shows. An entry that lines its amounts up somewhere new,
