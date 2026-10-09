@@ -15,5 +15,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # pre-commit builds SwiftLint from source with whatever `swift` is on the
+      # PATH, so the runner image decides which compiler sees the pinned
+      # revision. Swift 6.4, which ubuntu-24.04 ships from image 20261004,
+      # refuses SwiftLint 0.63.0 (`Baseline.swift` reads a SourceKitten member
+      # without importing the module, an error under MemberImportVisibility),
+      # and the hook environment is only cached once a build succeeds. Pinning
+      # the toolchain the package already builds with keeps the hook versions
+      # independent of the image.
+      - name: 🛠️ Setup Swift
+        uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: "6.3"
+
       - name: 🔍 Run pre-commit hooks
         uses: tox-dev/action-pre-commit-uv@v1
