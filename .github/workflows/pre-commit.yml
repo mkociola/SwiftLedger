@@ -23,6 +23,16 @@ jobs:
       # and the hook environment is only cached once a build succeeds. Pinning
       # the toolchain the package already builds with keeps the hook versions
       # independent of the image.
+      #
+      # On Linux, setup-swift verifies the Swiftly download against the Swift
+      # signing keys but never imports them, so a fresh runner has no key to
+      # check the signature with. Importing swift.org's keyring first keeps
+      # the verification instead of skipping it. The file is served gzipped,
+      # and `zcat -f` passes it through unchanged should that ever stop.
+      - name: 🔑 Import the Swift signing keys
+        shell: bash
+        run: curl -fsSL https://swift.org/keys/all-keys.asc | zcat -f | gpg --import
+
       - name: 🛠️ Setup Swift
         uses: swift-actions/setup-swift@v3
         with:
