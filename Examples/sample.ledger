@@ -155,6 +155,13 @@ account Expenses:Utilities
     Expenses:Food:Restaurants  CHF 80.00
     Assets:SwissAccount    -CHF 80.00
 
+; A sign can stand apart from its number, and a commodity can follow the
+; number as readily as lead it: - 4 VTI is four shares out, as it is in ledger
+; and in hledger. The space after the sign is layout, like the one before VTI.
+2024-03-11 Shares moved to another broker
+    Assets:Brokerage:Old   - 4 VTI
+    Assets:Brokerage:New   4 VTI
+
 ; ── Decimal marks and a comment after an amount ─────────────────────────────
 ; Which mark divides the fraction is read out of the number: a mark with
 ; anything other than three digits after it divides, so €12,50 is twelve euros

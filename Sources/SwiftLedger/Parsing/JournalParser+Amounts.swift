@@ -63,7 +63,7 @@ extension JournalParser {
         // A space after the sign is layout too. Left on, it sent `- 100` down
         // the prefix path as a commodity made of that space, where `-100` is
         // a bare number.
-        str = str.trimmingCharacters(in: .whitespaces)
+        str = str.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard let first = str.first else { throw LedgerError.invalidAmount(raw) }
         if Self.opensNumber(first) {

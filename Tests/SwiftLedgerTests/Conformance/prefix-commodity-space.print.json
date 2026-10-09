@@ -52,6 +52,21 @@
         "assertion": null
       },
       {
+        "account": "Assets:Cash",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -100,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
         "account": "Equity:Opening",
         "kind": "RegularPosting",
         "status": "Unmarked",
@@ -59,7 +74,7 @@
         "amounts": [
           {
             "commodity": "USD",
-            "mantissa": -10300,
+            "mantissa": -10200,
             "places": 2,
             "cost": null
           }

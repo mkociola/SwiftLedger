@@ -110,9 +110,9 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
     /// caller about to build one: `Amount.init` has to be told, and guessing
     /// from the name (a symbol in front, a code behind) spells `100 €` and
     /// `USD 100` journals the other way from every amount already in them.
-    /// The side most of the commodity's amounts are written on, prices and
-    /// balance assertions included, a tie going behind the number, which is
-    /// what `Amount.init` assumes when it is not told.
+    /// The side most of the amounts that write the commodity put it on, prices
+    /// and balance assertions included, a tie going behind the number, which
+    /// is what `Amount.init` assumes when it is not told.
     public var commodityIsPrefix: Bool?
 
     /// Whether a commodity written in front is followed by a space: `USD 100`
