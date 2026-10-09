@@ -22,7 +22,9 @@ jobs:
       # without importing the module, an error under MemberImportVisibility),
       # and the hook environment is only cached once a build succeeds. Pinning
       # the toolchain the package already builds with keeps the hook versions
-      # independent of the image.
+      # independent of the image. The patch release is spelled out because
+      # setup-swift compares versions as semver and reports "6.3" as a
+      # mismatch against the 6.3.3 it installs.
       #
       # On Linux, setup-swift verifies the Swiftly download against the Swift
       # signing keys but never imports them, so a fresh runner has no key to
@@ -36,7 +38,21 @@ jobs:
       - name: 🛠️ Setup Swift
         uses: swift-actions/setup-swift@v3
         with:
-          swift-version: "6.3"
+          swift-version: "6.3.3"
+
+      # SwiftLint loads SourceKit at run time, and on Linux SourceKitten looks
+      # for it beside the `swift` on the PATH after resolving symlinks. The
+      # runner's own Swift links into its toolchain, but the `swift` Swiftly
+      # installs is a proxy that resolves to the Swiftly binary, so the
+      # lookup misses and SwiftLint aborts with "Loading
+      # libsourcekitdInProc.so failed". The compiler reports where its
+      # toolchain lives, and the library sits one level above the runtime.
+      - name: 🧭 Point SourceKitten at the toolchain
+        shell: bash
+        run: |
+          lib="$(dirname "$(swift -print-target-info | jq -r .paths.runtimeResourcePath)")"
+          test -f "$lib/libsourcekitdInProc.so"
+          echo "LINUX_SOURCEKIT_LIB_PATH=$lib" >> "$GITHUB_ENV"
 
       - name: 🔍 Run pre-commit hooks
         uses: tox-dev/action-pre-commit-uv@v1
