@@ -1,0 +1,4 @@
+# The point of this journal is its CRLF line endings. Without -text a checkout
+# that normalises line endings would hand the test an LF file, and it would
+# pass without testing anything.
+Tests/SwiftLedgerTests/Conformance/comment-block-crlf.journal -text
