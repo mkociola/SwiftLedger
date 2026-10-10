@@ -88,10 +88,9 @@ extension JournalParser {
     /// the file writes the space, so a rebuilt entry still gets it back.
     ///
     /// The name cannot be empty. The caller has taken one sign off already,
-    /// so a second one in front here has no commodity before it: `--5`,
-    /// `- -5`, `+-5`. Read on, it became the number's own sign and the amount
-    /// five of a commodity called nothing. hledger refuses these, and goes
-    /// on reading a sign on each side of a commodity that is there, `-$-5`.
+    /// so in `--5` or `+-5` the second stands where the commodity would, and
+    /// read on it made five of a commodity called nothing. hledger refuses
+    /// these and still reads a sign on each side of a commodity, `-$-5`.
     private func parsePrefixCommodityAmount(_ str: String, sign: Decimal, raw: String) throws -> ShapedAmount {
         let commodityEnd = str.firstIndex(where: Self.opensSignedNumber) ?? str.endIndex
         let commodity = str[..<commodityEnd].trimmingCharacters(in: .whitespaces)

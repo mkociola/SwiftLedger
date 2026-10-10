@@ -234,7 +234,7 @@ import Testing
 
     /// The sign is written once. Doubled in the share transfer, with or
     /// without the commodity behind the number, it is no amount, and the
-    /// example stops loading rather than moving four shares the wrong way.
+    /// example stops loading on that amount, named as the file wrote it.
     @Test(arguments: ["- - 4 VTI", "- - 4"])
     func `the example's share transfer is refused with its sign doubled`(doubled: String) throws {
         let text = try Self.exampleText.replacingOccurrences(of: "- 4 VTI", with: doubled)

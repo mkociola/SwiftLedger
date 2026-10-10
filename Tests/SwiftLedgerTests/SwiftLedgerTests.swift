@@ -1075,11 +1075,9 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
         }
     }
 
-    /// A sign may stand in front of the commodity and again in front of the
-    /// number, and the commodity is what keeps the two apart. With nothing
-    /// between them the first was taken as the amount's sign and the second
-    /// as the number's, which left `--5` as five of a commodity whose name
-    /// was the empty string. hledger refuses every one of these.
+    /// With no commodity between them, two signs left `--5` as five of a
+    /// commodity whose name was the empty string. hledger refuses every one
+    /// of these.
     @Test(arguments: ["--5", "- -5", "- - 5", "+-5", "+ -5", "-+5", "++5"])
     func `a second sign where the commodity would stand is refused`(raw: String) throws {
         #expect(throws: LedgerError.invalidAmount(raw)) {
