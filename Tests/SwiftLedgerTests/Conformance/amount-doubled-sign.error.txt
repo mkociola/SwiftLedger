@@ -1,0 +1,6 @@
+hledger: Error: amount-doubled-sign.journal:2:20:
+  |
+2 |     Expenses:A    --5
+  |                    ^
+unexpected '-'
+expecting amount

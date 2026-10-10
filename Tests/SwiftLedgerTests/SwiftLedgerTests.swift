@@ -1075,6 +1075,24 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
         }
     }
 
+    /// With no commodity between them, two signs left `--5` as five of a
+    /// commodity whose name was the empty string. hledger refuses every one
+    /// of these.
+    @Test(arguments: ["--5", "- -5", "- - 5", "+-5", "+ -5", "-+5", "++5"])
+    func `a second sign where the commodity would stand is refused`(raw: String) throws {
+        #expect(throws: LedgerError.invalidAmount(raw)) {
+            try JournalParser().parseAmount(raw, lineNumber: 1)
+        }
+    }
+
+    /// The same two signs with a commodity between them are an amount in
+    /// hledger, each sign counting once, and they stay one here.
+    @Test(arguments: [("-$-5", 5), ("+$-5", -5), ("-$+5", -5), ("- $ - 5", 5)] as [(String, Decimal)])
+    func `a sign on each side of the commodity is read twice`(raw: String, quantity: Decimal) throws {
+        let amount = try JournalParser().parseAmount(raw, lineNumber: 1)
+        #expect(amount == Amount(quantity: quantity, commodity: "$", commodityIsPrefix: true))
+    }
+
     /// The journal from the issue, which used to load without complaint and
     /// report `€-1249` where the file says nine hundred and eighty-seven fifty.
     @Test

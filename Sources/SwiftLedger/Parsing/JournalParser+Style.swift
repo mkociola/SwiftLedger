@@ -32,8 +32,7 @@ extension JournalParser {
         // `commodity $` names a commodity without stating a style; only the
         // sample-amount forms say anything to record.
         guard let sample, sample.contains(where: \.isNumber),
-              let parsed = try? parseShapedAmount(sample, lineNumber: 0),
-              !parsed.amount.commodity.isEmpty else { return }
+              let parsed = try? parseShapedAmount(sample, lineNumber: 0) else { return }
         style.declare(parsed.shape, commodity: parsed.amount.commodity)
     }
 
