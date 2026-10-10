@@ -30,6 +30,7 @@ import Testing
         "description-comment",
         "include",
         "posting-date-tag",
+        "posting-status-tabs",
         "secondary-date-without-year",
         "year-directive",
     ]

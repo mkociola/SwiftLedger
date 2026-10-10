@@ -18,6 +18,12 @@ import Foundation
 /// `Posting.trailingComments` on one line apiece, so none of them may hold a
 /// line break. `LedgerError.lineBreakInField` names the field that does, an
 /// index into those arrays included, and it is the first thing `init` checks.
+/// Each of those values is also written bare into a position the header or
+/// posting grammar reads by rule, so a value that looks like the syntax around
+/// it, a code holding `)`, a description opening `*` with no status written in
+/// front of it, an account name holding two spaces, would come back from the
+/// next parse as a different entry. `LedgerError.syntaxInField` refuses one,
+/// naming the field and the rule, and is the second thing `init` checks.
 ///
 /// `Posting.kind` is what tells the three apart, and it takes part in
 /// `Posting ==`: two postings that differ only in their delimiters are not the
@@ -103,6 +109,9 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     ///   on one line contains a line break: the description, the code, an
     ///   inline comment, an account name, or one of the full-line comments in
     ///   `leadingComments` or `Posting.trailingComments`,
+    ///   `LedgerError.syntaxInField` if the header or posting grammar would
+    ///   read a field back as something other than the field, by the rules
+    ///   `validateHeaderSyntax` and `validatePostingSyntax` state,
     ///   `LedgerError.unbalancedTransaction` if the real postings do
     ///   not sum to zero for any commodity,
     ///   `LedgerError.unbalancedBracketedPostings` if the balanced virtual ones
@@ -157,6 +166,10 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
             leadingComments: leadingComments,
             postings: postings,
         )
+        try Self.validateHeaderSyntax(
+            auxDate: auxDate, status: status, code: code, description: description, comment: comment,
+        )
+        try Self.validatePostingSyntax(postings)
         try Self.validateAccountNames(postings)
         try Self.requireBalanced(postings, written: written)
         self.id = id
