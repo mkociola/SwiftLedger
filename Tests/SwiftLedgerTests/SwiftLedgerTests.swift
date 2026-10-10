@@ -4632,6 +4632,190 @@ private func renaming(
     }
 }
 
+// MARK: - Appending to a journal that ends in an open block comment
+
+/// Issue #47: a `comment` or `test` block that nothing closes runs to the end
+/// of the file, so an item written after its last line is written into it. The
+/// add succeeded and was counted until the next load, which read it as text.
+@Suite("appending before an open block comment") struct AppendBeforeOpenBlockTests {
+    private static let opening = """
+    2026-01-01 Opening
+        Assets:Checking    $100.00
+        Equity:Opening    $-100.00
+
+    """
+
+    private static let parkedEntry = """
+    2026-01-02 Parked
+        Expenses:Food    $5.00
+        Assets:Checking  $-5.00
+    """
+
+    /// A journal that ends inside the block `opener` opens.
+    private static func journalEndingInBlock(_ opener: String = "comment") -> String {
+        "\(opening)\n\(opener)\n\(parkedEntry)"
+    }
+
+    private static func meal(_ description: String, day: Int, costing quantity: Decimal) throws -> JournalItem {
+        try .transaction(Transaction(
+            date: makeDate(2026, 1, day), description: description,
+            postings: [
+                Posting(
+                    accountName: "Expenses:Food",
+                    amount: Amount(quantity: quantity, commodity: "$", commodityIsPrefix: true),
+                ),
+                Posting(
+                    accountName: "Assets:Checking",
+                    amount: Amount(quantity: -quantity, commodity: "$", commodityIsPrefix: true),
+                ),
+            ],
+        ))
+    }
+
+    private static func lunch() throws -> JournalItem {
+        try meal("Lunch", day: 3, costing: 20)
+    }
+
+    private static func reparsed(_ journal: Journal) throws -> Journal {
+        try JournalParser().parse(JournalSerializer().serialize(journal))
+    }
+
+    @Test
+    func `a transaction added to a journal ending in an open block is read back on the next load`() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-\(UUID().uuidString).ledger")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Self.journalEndingInBlock().write(to: url, atomically: true, encoding: .utf8)
+
+        try LedgerManager(store: PlainTextJournalStore(url: url)).add(Self.lunch())
+
+        let fresh = try LedgerManager(store: PlainTextJournalStore(url: url))
+        #expect(fresh.transactions().map(\.description) == ["Opening", "Lunch"])
+        #expect(fresh.balance(for: "Expenses:Food") == [Amount(quantity: 20, commodity: "$", commodityIsPrefix: true)])
+        #expect(try String(contentsOf: url, encoding: .utf8) == """
+        2026-01-01 Opening
+            Assets:Checking    $100.00
+            Equity:Opening    $-100.00
+
+        2026-01-03 Lunch
+            Expenses:Food       $20.00
+            Assets:Checking    $-20.00
+        comment
+        2026-01-02 Parked
+            Expenses:Food    $5.00
+            Assets:Checking  $-5.00
+        """)
+    }
+
+    @Test
+    func `an account directive added to a journal ending in an open block is read back on the next load`() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-\(UUID().uuidString).ledger")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Self.journalEndingInBlock().write(to: url, atomically: true, encoding: .utf8)
+
+        let declaration = AccountDirective(name: "Expenses:Food", comment: "meals out")
+        try LedgerManager(store: PlainTextJournalStore(url: url)).add(.accountDirective(declaration))
+
+        let fresh = try LedgerManager(store: PlainTextJournalStore(url: url))
+        #expect(fresh.accountDirective(named: "Expenses:Food") == declaration)
+        #expect(fresh.transactions().map(\.description) == ["Opening"])
+    }
+
+    /// Either closing keyword closes either kind of block, so neither journal
+    /// here ends inside one and the item goes where it always went.
+    @Test(arguments: ["end comment", "end test"])
+    func `an item appended after a closed block is the last item`(closer: String) throws {
+        var journal = try JournalParser().parse("\(Self.journalEndingInBlock())\n\(closer)")
+        let lunch = try Self.lunch()
+        journal.append(lunch)
+
+        #expect(journal.items.last == lunch)
+        #expect(try Self.reparsed(journal).transactions.map(\.description) == ["Opening", "Lunch"])
+    }
+
+    /// An opening keyword inside a block is one more line of it. Taking the
+    /// last such line for the start of the block would put the item between
+    /// `notes` and `comment more notes`, where it is as lost as at the end.
+    @Test
+    func `an opening keyword inside the open block does not move where the item goes`() throws {
+        var journal = try JournalParser().parse("""
+        comment
+        notes
+        comment more notes
+        \(Self.parkedEntry)
+        """)
+        let lunch = try Self.lunch()
+        journal.append(lunch)
+
+        #expect(journal.items.prefix(2) == [lunch, .directive("comment")])
+        #expect(try Self.reparsed(journal).transactions.map(\.description) == ["Lunch"])
+    }
+
+    @Test
+    func `a block opened by test is stepped over like one opened by comment`() throws {
+        var journal = try JournalParser().parse(Self.journalEndingInBlock("test"))
+        try journal.append(Self.lunch())
+
+        #expect(try Self.reparsed(journal).transactions.map(\.description) == ["Opening", "Lunch"])
+    }
+
+    @Test
+    func `two items added in a row keep their order in front of the block`() throws {
+        var journal = try JournalParser().parse(Self.journalEndingInBlock())
+        try journal.append(Self.lunch())
+        try journal.append(Self.meal("Dinner", day: 4, costing: 35))
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(try JournalParser().parse(written).transactions.map(\.description) == ["Opening", "Lunch", "Dinner"])
+        #expect(written.hasSuffix("    Assets:Checking    $-35.00\ncomment\n\(Self.parkedEntry)"))
+    }
+
+    /// `append` adds the item and nothing beside it, so an undo is exact. A
+    /// blank line written to keep the entry off the `comment` line would stay
+    /// behind, one more for every add that is taken back.
+    @Test
+    func `removing an added item gives the journal back byte for byte`() throws {
+        let text = Self.journalEndingInBlock()
+        var journal = try JournalParser().parse(text)
+        for item in try [Self.lunch(), .accountDirective(AccountDirective(name: "Expenses:Food"))] {
+            journal.append(item)
+            #expect(JournalSerializer().serialize(journal) != text)
+            journal.remove(item)
+            #expect(JournalSerializer().serialize(journal) == text)
+        }
+    }
+
+    /// The lines of a block are items like any other, so they have to go at
+    /// the end even while the block they belong to is still open. Stepping
+    /// them over it would turn the block inside out and book what it parked.
+    @Test(arguments: ["\nend comment\n\n2026-01-05 Rent\n    Expenses:Rent    $40.00\n    Assets:Checking", ""])
+    func `a journal copied one item at a time keeps its block comments`(rest: String) throws {
+        let text = Self.journalEndingInBlock() + rest
+        var copy = Journal()
+        for item in try JournalParser().parse(text).items {
+            copy.append(item)
+        }
+        #expect(JournalSerializer().serialize(copy) == text)
+    }
+
+    /// The parser makes a block of directives and blanks and nothing else, so
+    /// a comment is stepped over an open block as an entry is, and a note
+    /// written above an entry stays above it.
+    @Test
+    func `a comment added before an entry stays with it in front of the block`() throws {
+        var journal = try JournalParser().parse(Self.journalEndingInBlock())
+        journal.append(.comment("; imported"))
+        try journal.append(Self.lunch())
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("\n\n; imported\n2026-01-03 Lunch\n"))
+        let reloaded = try JournalParser().parse(written)
+        #expect(reloaded.items.contains(.comment("; imported")))
+        #expect(reloaded.transactions.map(\.description) == ["Opening", "Lunch"])
+    }
+}
+
 // MARK: - Series queries
 
 @Suite("SeriesQueries") struct SeriesQueriesTests {
