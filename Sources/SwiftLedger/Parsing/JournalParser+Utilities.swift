@@ -59,7 +59,16 @@ extension JournalParser {
     /// Whether `line` is `keyword` at column 0, standing alone (trailing
     /// spaces or tabs aside) or followed by whitespace and anything at all.
     /// The whitespace is what keeps `comments` from reading as `comment`.
+    ///
+    /// The `\r` a Windows line ending leaves on the line is taken off before
+    /// any of that is asked. `parse` splits on `\n` alone, so a bare keyword
+    /// in a CRLF journal arrives as `comment\r`, and a `\r` is neither the end
+    /// of the line nor a space: read as it came, the keyword would open no
+    /// block and the entries parked under it would be booked, which is issue
+    /// #48. The line is only read this way, never changed: `parseCommentBlock`
+    /// stores it as it came, so the file still goes back byte for byte.
     private func startsWithKeyword(_ line: String, keyword: String) -> Bool {
+        let line = contentOf(line: line)
         guard line.hasPrefix(keyword) else { return false }
         let rest = line.dropFirst(keyword.count)
         guard let next = rest.first else { return true }

@@ -2364,6 +2364,58 @@ private extension LedgerError {
     }
 }
 
+/// The same blocks in a journal saved on Windows. `parse` splits on `\n`
+/// alone, so the keyword lines arrive as `comment\r` and `end comment\r`, and
+/// that `\r` is the line ending rather than a character standing after the
+/// keyword. Read as one, it made the opening line an ordinary directive and
+/// booked the entry parked under it, which is issue #48.
+@Suite("comment blocks with windows line endings") struct CommentBlockLineEndingTests {
+    /// The entry after the block is there for the closing line: left
+    /// unrecognised, it would let the block run on and swallow it.
+    @Test(arguments: ["comment", "test"])
+    func `a block in a journal with windows line endings is text, not data`(keyword: String) throws {
+        let text = """
+        2026-01-01 Opening
+            Assets:Checking    $100.00
+            Equity:Opening    $-100.00
+
+        \(keyword)
+        2026-01-02 Parked
+            Expenses:Food    $5.00
+            Assets:Checking  $-5.00
+        end \(keyword)
+
+        2026-01-03 Rent
+            Expenses:Rent    $40.00
+            Assets:Checking
+        """.replacingOccurrences(of: "\n", with: "\r\n")
+        let journal = try JournalParser().parse(text)
+        let ledger = Ledger(journal: journal)
+        #expect(journal.transactions.map(\.description) == ["Opening", "Rent"])
+        #expect(ledger.balance(for: "Expenses:Food").isEmpty)
+        #expect(ledger.balance(for: "Assets:Checking").map(\.quantity) == [60])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+
+    @Test
+    func `an unterminated block with windows line endings runs to the end of the file`() throws {
+        let text = """
+        2026-01-01 Opening
+            Assets:Checking    $100.00
+            Equity:Opening    $-100.00
+
+        comment
+        2026-01-02 Parked
+            Expenses:Food    $5.00
+            Assets:Checking  $-5.00
+        """.replacingOccurrences(of: "\n", with: "\r\n")
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.map(\.description) == ["Opening"])
+        #expect(Ledger(journal: journal).balance(for: "Expenses:Food").isEmpty)
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
+}
+
 // MARK: - Ledger
 
 @Suite("Ledger") struct LedgerTests {

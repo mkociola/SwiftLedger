@@ -87,9 +87,12 @@ import Foundation
 ///   than part of the field in front of it: a description, an account name or
 ///   a comment that runs to the end of its line comes back without it. The
 ///   lines themselves are still kept exactly as they came, so the file goes
-///   back byte for byte. Only a transaction's own lines are read this way: a
-///   blank CRLF line is still the item `.directive("\r")`, and an `account`
-///   directive keeps the `\r` in the name it declares.
+///   back byte for byte. The keyword lines of a block comment are recognised
+///   the same way, so `comment` and `end comment` open and close a block
+///   whichever ending the file has, and are likewise kept as they came.
+///   Nothing else outside a transaction is read this way: a blank CRLF line
+///   is still the item `.directive("\r")`, and an `account` directive keeps
+///   the `\r` in the name it declares.
 /// - Indented full-line comments inside a transaction are commentary, not
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
