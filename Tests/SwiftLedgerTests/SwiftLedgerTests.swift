@@ -4648,7 +4648,6 @@ private func renaming(
         2026-01-03 Lunch
             Expenses:Food       $20.00
             Assets:Checking    $-20.00
-
         comment
         2026-01-02 Parked
             Expenses:Food    $5.00
@@ -4697,7 +4696,7 @@ private func renaming(
         let lunch = try Self.lunch()
         journal.append(lunch)
 
-        #expect(journal.items.prefix(3) == [lunch, .blank, .directive("comment")])
+        #expect(journal.items.prefix(2) == [lunch, .directive("comment")])
         #expect(try Self.reparsed(journal).transactions.map(\.description) == ["Lunch"])
     }
 
@@ -4717,7 +4716,51 @@ private func renaming(
 
         let written = JournalSerializer().serialize(journal)
         #expect(try JournalParser().parse(written).transactions.map(\.description) == ["Opening", "Lunch", "Dinner"])
-        #expect(written.hasSuffix("\n\ncomment\n\(Self.parkedEntry)"))
+        #expect(written.hasSuffix("    Assets:Checking    $-35.00\ncomment\n\(Self.parkedEntry)"))
+    }
+
+    /// `append` adds the item and nothing beside it, so an undo is exact. A
+    /// blank line written to keep the entry off the `comment` line would stay
+    /// behind, one more for every add that is taken back.
+    @Test
+    func `removing an added item gives the journal back byte for byte`() throws {
+        let text = Self.journalEndingInBlock()
+        var journal = try JournalParser().parse(text)
+        for item in try [Self.lunch(), .accountDirective(AccountDirective(name: "Expenses:Food"))] {
+            journal.append(item)
+            #expect(JournalSerializer().serialize(journal) != text)
+            journal.remove(item)
+            #expect(JournalSerializer().serialize(journal) == text)
+        }
+    }
+
+    /// The lines of a block are items like any other, so they have to go at
+    /// the end even while the block they belong to is still open. Stepping
+    /// them over it would turn the block inside out and book what it parked.
+    @Test(arguments: ["\nend comment\n\n2026-01-05 Rent\n    Expenses:Rent    $40.00\n    Assets:Checking", ""])
+    func `a journal copied one item at a time keeps its block comments`(rest: String) throws {
+        let text = Self.journalEndingInBlock() + rest
+        var copy = Journal()
+        for item in try JournalParser().parse(text).items {
+            copy.append(item)
+        }
+        #expect(JournalSerializer().serialize(copy) == text)
+    }
+
+    /// The parser makes a block of directives and blanks and nothing else, so
+    /// a comment is stepped over an open block as an entry is, and a note
+    /// written above an entry stays above it.
+    @Test
+    func `a comment added before an entry stays with it in front of the block`() throws {
+        var journal = try JournalParser().parse(Self.journalEndingInBlock())
+        journal.append(.comment("; imported"))
+        try journal.append(Self.lunch())
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("\n\n; imported\n2026-01-03 Lunch\n"))
+        let reloaded = try JournalParser().parse(written)
+        #expect(reloaded.items.contains(.comment("; imported")))
+        #expect(reloaded.transactions.map(\.description) == ["Opening", "Lunch"])
     }
 }
 

@@ -147,21 +147,31 @@ public struct Journal: Sendable, Codable {
     }
 
     /// Appends an item to the journal: at the end, unless the journal ends
-    /// inside a block comment.
+    /// inside a block comment and the item is of a kind a block cannot hold.
     ///
     /// A `comment` or `test` block that nothing closes runs to the end of the
-    /// file, so an item written after its last line would be written into it.
+    /// file, so an entry written after its last line would be written into it.
     /// It would be counted until the next load and read as text from then on,
-    /// with nothing thrown to say so. The item goes in front of the line that
-    /// opens the block instead, with a blank line to keep it off that line,
-    /// and the open block stays the last thing in the file.
+    /// with nothing thrown to say so. A transaction, an `account` directive or
+    /// a comment goes in front of the line that opens the block instead, and
+    /// the open block stays the last thing in the file.
     ///
-    /// An open block can therefore not be extended through `append`, nor
-    /// closed by it: a line meant for the inside of one lands in front of it
-    /// like any other item.
+    /// Only the item is inserted, with no blank line beside it, exactly as at
+    /// the end of a journal. Removing it again therefore gives the file back
+    /// byte for byte, which an undo step depends on.
+    ///
+    /// A `.directive` or a `.blank` goes at the end whatever the journal ends
+    /// in. Those are the items a block is made of, so a journal copied or
+    /// built one item at a time keeps its blocks where they were. The price is
+    /// that such a line appended to a journal ending inside a block is part of
+    /// the block from then on: a `D` or `P` line added there states nothing.
     public mutating func append(_ item: JournalItem) {
-        guard let opening = openBlockCommentIndex else { return items.append(item) }
-        items.insert(contentsOf: [item, .blank], at: opening)
+        switch item {
+        case .transaction, .accountDirective, .comment:
+            items.insert(item, at: openBlockCommentIndex ?? items.endIndex)
+        case .directive, .blank:
+            items.append(item)
+        }
     }
 
     /// The index of the line opening the block comment this journal ends
@@ -171,10 +181,33 @@ public struct Journal: Sendable, Codable {
     /// keyword rule, because a block cannot be told from its last lines: an
     /// opening keyword inside a block is one more line of it, so the last
     /// such line in the journal is not always where its block began.
+    ///
+    /// The reading starts after the last item that is neither a directive nor
+    /// a blank, rather than at the top. The parser reads no other kind inside
+    /// a block and `append` puts none there, so in a journal those two made,
+    /// whatever follows the last such item starts outside a block. Reading
+    /// from the top instead costs a pass over every item on every append,
+    /// which an importer adding entries in a loop pays once per entry.
+    ///
+    /// `remove` and `replace` can undo that, by taking a closing line out or
+    /// putting an opening one in front of an entry, and so can a hand-built
+    /// list of items. The entry left behind the opening line is then already
+    /// text on the next load, and one appended afterwards follows it there.
     private var openBlockCommentIndex: Int? {
+        // ponytail: starts after the last non-block item, which trusts that
+        // none sits inside an open block. Scan from index 0, or have the
+        // parser record the open block, if `remove`/`replace` on a block's
+        // keyword lines has to be survived.
+        let lastOutside = items.lastIndex {
+            switch $0 {
+            case .transaction, .accountDirective, .comment: true
+            case .directive, .blank: false
+            }
+        }
         let parser = JournalParser()
         var opening: Int?
-        for case let (index, .directive(text)) in items.enumerated() {
+        for index in (lastOutside.map { $0 + 1 } ?? items.startIndex) ..< items.endIndex {
+            guard case let .directive(text) = items[index] else { continue }
             if opening == nil {
                 if parser.isCommentBlockStart(text) { opening = index }
             } else if parser.isCommentBlockEnd(text) {
@@ -220,8 +253,8 @@ public struct Journal: Sendable, Codable {
     /// Keyed by name, so the caller neither has to know the directive's `type`
     /// and `comment` to remove it, nor loses them by removing it: handed back
     /// to `append(_:)`, the returned value reproduces the line verbatim, where
-    /// every append lands (the end of the journal, or in front of a block
-    /// comment left open there) and not at its old position.
+    /// an appended `account` directive lands (the end of the journal, or in front of a
+    /// block comment left open there) and not at its old position.
     /// Removing by value through `remove(_:)` can do neither.
     ///
     /// If two lines declare the same account, only the first is removed.

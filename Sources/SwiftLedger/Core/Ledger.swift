@@ -15,8 +15,9 @@ public struct Ledger: Sendable {
     // MARK: - Mutation
 
     /// Appends an item to the journal, where `Journal.append(_:)` puts it: at
-    /// the end, or in front of a block comment left open there, because an
-    /// item written into the block is text on the next load.
+    /// the end, or for a transaction, an `account` directive or a comment in
+    /// front of a block comment left open there, because an entry written into
+    /// the block is text on the next load.
     public mutating func add(_ item: JournalItem) {
         journal.append(item)
     }
