@@ -1,0 +1,22 @@
+[
+  {
+    "account": "$5",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 5,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Assets:Cash",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -5,
+        "places": 0
+      }
+    ]
+  }
+]

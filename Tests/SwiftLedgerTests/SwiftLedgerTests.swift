@@ -561,6 +561,220 @@ enum OneLineField: CaseIterable {
     }
 }
 
+// MARK: - Transaction: fields the parser would read back as syntax
+
+/// The field a `LedgerError.syntaxInField` names, or `nil` for any other
+/// error, so a test can pin the field at fault without repeating the wording
+/// of the rule it broke.
+private func syntaxField(of error: LedgerError?) -> String? {
+    if case let .syntaxInField(field, _) = error { return field }
+    return nil
+}
+
+/// The header fields of an entry, so a case can state just the ones it sets.
+struct HeaderFields {
+    var auxDate: JournalDate?
+    var status: ClearingStatus = .unmarked
+    var code: String?
+    var description: String
+    var comment: String?
+
+    /// A balanced entry with these header fields.
+    func entry() throws -> Transaction {
+        try Transaction(
+            date: makeDate(2024, 1, 1), auxDate: auxDate, status: status, code: code,
+            description: description,
+            postings: [
+                Posting(accountName: "Expenses:Food", amount: usd(5)),
+                Posting(accountName: "Assets:Cash", amount: usd(-5)),
+            ],
+            comment: comment,
+        )
+    }
+}
+
+/// A balanced entry whose first posting is `posting`, so a case can state the
+/// one posting it is about. A virtual posting balances nothing, so the real
+/// legs are supplied beside it.
+private func postingEntry(_ posting: Posting) throws -> Transaction {
+    var postings = [posting, Posting(accountName: "Assets:Cash", amount: usd(-5))]
+    if posting.kind != .real {
+        postings.insert(Posting(accountName: "Expenses:Food", amount: usd(5)), at: 1)
+    }
+    return try Transaction(date: makeDate(2024, 1, 1), description: "Lunch", postings: postings)
+}
+
+/// `transaction` written to a journal and read back, which is the trip every
+/// entry built in code makes.
+private func reread(_ transaction: Transaction) throws -> Transaction {
+    let text = JournalSerializer().serialize(Journal(items: [.transaction(transaction)]))
+    return try #require(JournalParser().parse(text).transactions.first)
+}
+
+/// `JournalSerializer` writes a description, a code, a comment and an account
+/// name bare into a position `JournalParser` reads by rule, so a value that
+/// looks like the syntax around it comes back as that syntax: a `)` ends the
+/// code, a leading `*` is a status, two spaces and a `;` open a comment. The
+/// entry then reads back as a different entry, with no error anywhere, or the
+/// file SwiftLedger itself has just written refuses to load. `Transaction.init`
+/// is the last place the value still has a field name to report under.
+@Suite("fields read back as syntax") struct SyntaxInFieldTests {
+    /// Every header value whose line would read back as another entry, with
+    /// the field the error has to name. The rules are the header grammar's:
+    /// a code runs to the first `)`; with no code in front of it a
+    /// description opening `(`…`)` is a code; with no status or code a
+    /// leading `*` or `!` is the status; with nothing at all in front of it a
+    /// leading `=` introduces a secondary date; and two spaces then `;` open
+    /// the comment wherever they fall. A description or comment the parser
+    /// would trim is refused too, so what is stored is what a reload returns.
+    @Test(arguments: [
+        (HeaderFields(code: "a)b", description: "Lunch"), "code"),
+        (HeaderFields(code: "a  ;b", description: "Lunch"), "code"),
+        (HeaderFields(description: "(note) lunch"), "description"),
+        (HeaderFields(status: .cleared, description: "(note) lunch"), "description"),
+        (HeaderFields(description: "* Lunch"), "description"),
+        (HeaderFields(description: "! Lunch"), "description"),
+        (HeaderFields(description: "*"), "description"),
+        (HeaderFields(description: "= Lunch"), "description"),
+        (HeaderFields(status: .cleared, code: "CHQ", description: "Lunch  ; with client"), "description"),
+        (HeaderFields(description: "Lunch\t\t; with client"), "description"),
+        (HeaderFields(description: " Lunch"), "description"),
+        (HeaderFields(description: "Lunch "), "description"),
+        (HeaderFields(description: "Lunch", comment: " with client"), "comment"),
+        (HeaderFields(description: "Lunch", comment: "with client "), "comment"),
+    ])
+    func `a header field the grammar would read as syntax is refused by name`(
+        header: HeaderFields, field: String,
+    ) throws {
+        let error = #expect(throws: LedgerError.self) { try header.entry() }
+        #expect(syntaxField(of: error) == field)
+    }
+
+    /// Every posting value whose line would read back as another posting, and
+    /// the field named. A real posting with no status of its own is written
+    /// bare, so a name that is `*` or `!` or opens `* ` or `! ` is read as the
+    /// status, and one opening `;` or `#` makes the whole line a comment;
+    /// a run of two spaces or tabs ends the name whatever the kind;
+    /// a name the parser would trim, or an empty one, is not what a reload
+    /// returns; and a comment is trimmed on the way back in.
+    @Test(arguments: [
+        (Posting(accountName: "* Expenses:Food", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "! Expenses:Food", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "*", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "* Expenses:Food", amount: usd(5), status: .unmarked), "postings[0].accountName"),
+        (Posting(accountName: ";Expenses:Food", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "#Expenses:Food", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: ";Expenses:Food", amount: usd(5), status: .unmarked), "postings[0].accountName"),
+        (Posting(accountName: "Expenses:Food  Drinks", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "Expenses:Food\t\tDrinks", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "Reserve  capital", kind: .virtual, amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "Expenses:Food ", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: " Expenses:Food", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "", amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "", kind: .virtual, amount: usd(5)), "postings[0].accountName"),
+        (Posting(accountName: "Expenses:Food", amount: usd(5), comment: " paid"), "postings[0].comment"),
+        (Posting(accountName: "Expenses:Food", amount: usd(5), comment: "paid "), "postings[0].comment"),
+    ])
+    func `a posting field the grammar would read as syntax is refused by name`(
+        posting: Posting, field: String,
+    ) throws {
+        let error = #expect(throws: LedgerError.self) { try postingEntry(posting) }
+        #expect(syntaxField(of: error) == field)
+    }
+
+    /// The rules are positional, so the same text is fine with something in
+    /// front of it: the serializer writes the status before the description,
+    /// so a cleared entry described `* Lunch` is written `* * Lunch` and
+    /// reads back as itself, and so on down the line. Each of these builds
+    /// and comes back from a reload as the entry that was built.
+    @Test(arguments: try [
+        HeaderFields(status: .cleared, description: "* Lunch"),
+        HeaderFields(status: .pending, description: "! Lunch"),
+        HeaderFields(code: "CHQ", description: "* Lunch"),
+        HeaderFields(code: "CHQ", description: "(note) lunch"),
+        HeaderFields(status: .cleared, description: "= Lunch"),
+        HeaderFields(code: "CHQ", description: "= Lunch"),
+        HeaderFields(auxDate: makeDate(2024, 1, 2), description: "= Lunch"),
+        HeaderFields(description: "(note lunch"),
+        HeaderFields(description: "Lunch ; one space is not a comment"),
+        HeaderFields(description: "Lunch\t; nor is one tab"),
+        HeaderFields(code: " CHQ ", description: "Lunch"),
+        HeaderFields(code: "", description: "Lunch"),
+        HeaderFields(description: ""),
+        HeaderFields(description: "Lunch", comment: "a ; inside  ; the comment"),
+    ])
+    func `a header the grammar reads back as itself still builds and round-trips`(header: HeaderFields) throws {
+        let read = try reread(header.entry())
+        #expect(read.auxDate == header.auxDate)
+        #expect(read.status == header.status)
+        #expect(read.code == header.code)
+        #expect(read.description == header.description)
+        #expect(read.comment == header.comment)
+    }
+
+    /// A posting's status is written before its name, and a virtual name goes
+    /// inside its delimiters, so each of these reads back as the posting that
+    /// was built. A single tab inside a name is content: only a run of two
+    /// ends the name.
+    @Test(arguments: [
+        Posting(accountName: "* Expenses:Food", amount: usd(5), status: .cleared),
+        Posting(accountName: "! Expenses:Food", amount: usd(5), status: .pending),
+        Posting(accountName: "*", amount: usd(5), status: .cleared),
+        Posting(accountName: "* Reserve", kind: .virtual, amount: usd(5)),
+        Posting(accountName: ";Expenses:Food", amount: usd(5), status: .cleared),
+        Posting(accountName: "#Expenses:Food", amount: usd(5), status: .pending),
+        Posting(accountName: ";Reserve", kind: .virtual, amount: usd(5)),
+        Posting(accountName: "Expenses:Food\tDrinks", amount: usd(5)),
+        Posting(accountName: "*\tExpenses", amount: usd(5)),
+        Posting(accountName: "Exp;enses ; Food", amount: usd(5)),
+        Posting(accountName: "Expenses:Food", amount: usd(5), comment: "a ; inside  ; the comment"),
+    ])
+    func `a posting the grammar reads back as itself still builds and round-trips`(posting: Posting) throws {
+        let read = try reread(postingEntry(posting))
+        #expect(read.postings.first == posting)
+    }
+
+    /// A line break is the more basic complaint and is reported first; a
+    /// value the grammar would misread is reported before the matched pair it
+    /// also happens to be and before the dollars, since an entry that cannot
+    /// be written as itself is wrong whatever it adds up to.
+    @Test
+    func `syntax in a field is reported after a line break and before the name and the balance`() throws {
+        #expect(throws: LedgerError.lineBreakInField("description")) {
+            try HeaderFields(description: "* Multi\nline").entry()
+        }
+        let name = #expect(throws: LedgerError.self) {
+            try postingEntry(Posting(accountName: "(a  b)", amount: usd(5)))
+        }
+        #expect(syntaxField(of: name) == "postings[0].accountName")
+        let balance = #expect(throws: LedgerError.self) {
+            try Transaction(
+                date: makeDate(2024, 1, 1), description: "* Lunch",
+                postings: [Posting(accountName: "Expenses:Food", amount: usd(5))],
+            )
+        }
+        #expect(syntaxField(of: balance) == "description")
+    }
+
+    @Test
+    func `the syntax message names the field and the rule`() {
+        let error = LedgerError.syntaxInField("code", rule: "a code may not contain ')'")
+        #expect(error.errorDescription == "Field 'code' would not read back as written: a code may not contain ')'")
+    }
+
+    /// The one line a file can hand `init` that it refuses: `*` and two tabs
+    /// names the account `*`, which would be written back as a status. The
+    /// file refuses to load naming the field, rather than reading an entry
+    /// that cannot be written as itself. hledger reads the `*` as a status;
+    /// `posting-status-tabs` in the conformance suite records the distance.
+    @Test
+    func `a posting of a bare marker and two tabs refuses to load by name`() throws {
+        let text = "2024-01-01 Lunch\n    *\t\t$5\n    Assets:Cash  $-5"
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(syntaxField(of: error.withoutLocation) == "postings[0].accountName")
+    }
+}
+
 // MARK: - Journal
 
 @Suite("Journal") struct JournalTests {
