@@ -9,50 +9,33 @@ on:
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
+    # pre-commit builds SwiftLint from source with whatever `swift` is on the
+    # PATH, so whoever supplies that compiler decides whether the pinned
+    # revision builds. Swift 6.4, which ubuntu-24.04 ships from image
+    # 20261004, refuses SwiftLint 0.63.0 (`Baseline.swift` reads a
+    # SourceKitten member without importing the module, an error under
+    # MemberImportVisibility). The official image installs the 6.3 toolchain
+    # the package builds with under /usr, which is also where SourceKitten
+    # looks for the SourceKit library SwiftLint loads at run time, so the
+    # hooks need no further setup.
+    #
+    # The hook environment is cached under a key that covers only
+    # .pre-commit-config.yaml, so a SwiftLint built here is restored even
+    # after this image changes. Bump the image together with a hook revision,
+    # or clear the cache, so the hooks are rebuilt with the new compiler.
+    container: swift:6.3.3-noble
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      # pre-commit builds SwiftLint from source with whatever `swift` is on the
-      # PATH, so the runner image decides which compiler sees the pinned
-      # revision. Swift 6.4, which ubuntu-24.04 ships from image 20261004,
-      # refuses SwiftLint 0.63.0 (`Baseline.swift` reads a SourceKitten member
-      # without importing the module, an error under MemberImportVisibility),
-      # and the hook environment is only cached once a build succeeds. Pinning
-      # the toolchain the package already builds with keeps the hook versions
-      # independent of the image. The patch release is spelled out because
-      # setup-swift compares versions as semver and reports "6.3" as a
-      # mismatch against the 6.3.3 it installs.
-      #
-      # On Linux, setup-swift verifies the Swiftly download against the Swift
-      # signing keys but never imports them, so a fresh runner has no key to
-      # check the signature with. Importing swift.org's keyring first keeps
-      # the verification instead of skipping it. The file is served gzipped,
-      # and `zcat -f` passes it through unchanged should that ever stop.
-      - name: 🔑 Import the Swift signing keys
-        shell: bash
-        run: curl -fsSL https://swift.org/keys/all-keys.asc | zcat -f | gpg --import
-
-      - name: 🛠️ Setup Swift
-        uses: swift-actions/setup-swift@v3
-        with:
-          swift-version: "6.3.3"
-
-      # SwiftLint loads SourceKit at run time, and on Linux SourceKitten looks
-      # for it beside the `swift` on the PATH after resolving symlinks. The
-      # runner's own Swift links into its toolchain, but the `swift` Swiftly
-      # installs is a proxy that resolves to the Swiftly binary, so the
-      # lookup misses and SwiftLint aborts with "Loading
-      # libsourcekitdInProc.so failed". The compiler reports where its
-      # toolchain lives, and the library sits one level above the runtime.
-      - name: 🧭 Point SourceKitten at the toolchain
-        shell: bash
-        run: |
-          lib="$(dirname "$(swift -print-target-info | jq -r .paths.runtimeResourcePath)")"
-          test -f "$lib/libsourcekitdInProc.so"
-          echo "LINUX_SOURCEKIT_LIB_PATH=$lib" >> "$GITHUB_ENV"
+      # The job runs as root, but the runner creates the workspace as its own
+      # user, and git refuses to read a repository someone else owns. The
+      # checkout only trusts it for its own commands, while pre-commit runs
+      # git too.
+      - name: 🔓 Trust the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: 🔍 Run pre-commit hooks
         uses: tox-dev/action-pre-commit-uv@v1
