@@ -91,22 +91,22 @@ extension Transaction {
     /// lesser divergence.
     static func validatePostingSyntax(_ postings: [Posting]) throws {
         for (index, posting) in postings.enumerated() {
-            let field = "postings[\(index)].accountName"
+            let field = { "postings[\(index)].accountName" }
             let name = posting.accountName
-            try requireTrimmed(name, at: field)
-            try require(!name.isEmpty, at: field, rule: "an account name may not be empty")
+            try requireTrimmed(name, at: field())
+            try require(!name.isEmpty, at: field(), rule: "an account name may not be empty")
             try require(
-                !containsWhitespaceRun(name), at: field,
+                !containsWhitespaceRun(name), at: field(),
                 rule: "two spaces or tabs in a row end an account name",
             )
             if posting.kind == .real, (posting.status ?? .unmarked) == .unmarked {
                 try require(
-                    name != "*" && name != "!" && !name.hasPrefix("* ") && !name.hasPrefix("! "), at: field,
+                    name != "*" && name != "!" && !name.hasPrefix("* ") && !name.hasPrefix("! "), at: field(),
                     rule: "with no status of its own, a real posting's name may not be '*' or '!' "
                         + "or open with '* ' or '! ', which mark a status",
                 )
                 try require(
-                    !name.hasPrefix(";") && !name.hasPrefix("#"), at: field,
+                    !name.hasPrefix(";") && !name.hasPrefix("#"), at: field(),
                     rule: "with no status of its own, a real posting's name may not open with ';' or '#', "
                         + "which mark a comment line",
                 )
@@ -130,19 +130,28 @@ extension Transaction {
     }
 
     /// Throws `LedgerError.syntaxInField(field, rule:)` unless `holds`. The
-    /// rule is spelled out only when it is broken: these run on every entry a
-    /// file parses, and the passing path should not pay to build its wording.
-    private static func require(_ holds: Bool, at field: String, rule: @autoclosure () -> String) throws {
-        guard holds else { throw LedgerError.syntaxInField(field, rule: rule()) }
+    /// field path and the rule are spelled out only when the rule is broken:
+    /// these run on every entry a file parses, and the passing path should
+    /// not pay to build either.
+    private static func require(
+        _ holds: Bool, at field: @autoclosure () -> String, rule: @autoclosure () -> String,
+    ) throws {
+        guard holds else { throw LedgerError.syntaxInField(field(), rule: rule()) }
     }
 
+    /// What the parser trims from either end of a field, held once so that
+    /// asking about a value builds nothing.
+    private static let trimmed = CharacterSet.whitespaces
+
     /// Refuses a value the parser would trim, so that what is stored is what
-    /// a reload returns. The character set is the parser's own. A `nil` value
-    /// is a field nothing writes.
-    private static func requireTrimmed(_ value: String?, at field: String) throws {
-        guard let value else { return }
+    /// a reload returns. The character set is the parser's own, and it is
+    /// asked about the two ends alone, which is all trimming looks at, rather
+    /// than building a trimmed copy to compare. A `nil` value is a field
+    /// nothing writes, and an empty one has no ends.
+    private static func requireTrimmed(_ value: String?, at field: @autoclosure () -> String) throws {
+        guard let first = value?.unicodeScalars.first, let last = value?.unicodeScalars.last else { return }
         try require(
-            value == value.trimmingCharacters(in: .whitespaces), at: field,
+            !trimmed.contains(first) && !trimmed.contains(last), at: field(),
             rule: "the parser trims whitespace from either end, so the value may carry none",
         )
     }
@@ -150,9 +159,9 @@ extension Transaction {
     /// Refuses a value holding the two spaces or tabs and `;` that open the
     /// inline comment, which the parser looks for across the whole header
     /// line before it reads anything else out of it.
-    private static func requireNoCommentMarker(_ value: String, at field: String) throws {
+    private static func requireNoCommentMarker(_ value: String, at field: @autoclosure () -> String) throws {
         try require(
-            !commentOpeners.contains { value.contains($0) }, at: field,
+            !commentOpeners.contains { value.contains($0) }, at: field(),
             rule: "two spaces or tabs followed by ';' open the inline comment",
         )
     }
