@@ -776,6 +776,53 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
         #expect(syntaxField(of: error.withoutLocation) == "postings[0].accountName")
     }
+
+    /// Every string of up to three of these characters, the ones the two
+    /// grammars read by position.
+    private static let shortValues = (0 ..< 3).reduce([""]) { values, _ in
+        let marks = [" ", "\t", ";", "#", "*", "!", "=", "(", ")", "[", "]", "a"]
+        return [""] + values.flatMap { value in marks.map { value + $0 } }
+    }
+
+    /// The rules mirror `parseHeader` by hand, and the cases above are the
+    /// ones somebody thought of. This asks about every short value in every
+    /// position the serializer writes a description or a code: one `init`
+    /// takes has to come back from a reload as it was built, so the test
+    /// fails when the parser moves and the rules do not.
+    @Test
+    func `every short header value init accepts reads back as built`() throws {
+        let headers = try Self.shortValues.flatMap { value in
+            try [ClearingStatus.unmarked, .cleared].flatMap { status in
+                try [nil, "CHQ"].flatMap { code in
+                    try [nil, makeDate(2024, 1, 2)].map { auxDate in
+                        HeaderFields(auxDate: auxDate, status: status, code: code, description: value)
+                    }
+                }
+            } + [HeaderFields(code: value, description: "Lunch")]
+        }
+        for header in headers {
+            guard let built = try? header.entry() else { continue }
+            let read = try? reread(built)
+            let same = read?.auxDate == header.auxDate && read?.status == header.status
+                && read?.code == header.code && read?.description == header.description
+            #expect(same, "\(header)")
+        }
+    }
+
+    /// The same for an account name, under each kind of posting and with and
+    /// without a status in front of it, against `parsePosting`.
+    @Test
+    func `every short account name init accepts reads back as built`() {
+        for name in Self.shortValues {
+            for kind in [Posting.Kind.real, .virtual, .balancedVirtual] {
+                for status in [nil, ClearingStatus.cleared] {
+                    let posting = Posting(accountName: name, kind: kind, amount: usd(5), status: status)
+                    guard let built = try? postingEntry(posting) else { continue }
+                    #expect((try? reread(built))?.postings.first == posting, "\(posting)")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Journal
