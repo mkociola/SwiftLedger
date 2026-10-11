@@ -81,10 +81,13 @@ extension Transaction {
     /// read as the name. A run of two spaces or tabs ends a name of any kind,
     /// and a single tab is content, as it is to the parser.
     ///
-    /// A file hands the parser none of these, with one corner: a posting line
-    /// of `*` and two tabs names the account `*`, which cannot be written
-    /// back, so such a file refuses to load with the name reported. hledger
-    /// reads that line as a status rather than a name, so refusing it is the
+    /// A file hands the parser none of these, with one corner. The parser
+    /// takes `*` or `!` for a status only when a space follows it, so a
+    /// posting line that is the marker alone, or the marker with a tab
+    /// straight after it and a second space or tab after that, names the
+    /// account `*` or `!`. That name cannot be written back, so such a file
+    /// refuses to load with the name reported. hledger reads the marker as a
+    /// status on both lines and never as a name, so refusing them is the
     /// lesser divergence.
     static func validatePostingSyntax(_ postings: [Posting]) throws {
         for (index, posting) in postings.enumerated() {

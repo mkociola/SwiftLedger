@@ -762,14 +762,17 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         #expect(error.errorDescription == "Field 'code' would not read back as written: a code may not contain ')'")
     }
 
-    /// The one line a file can hand `init` that it refuses: `*` and two tabs
-    /// names the account `*`, which would be written back as a status. The
-    /// file refuses to load naming the field, rather than reading an entry
-    /// that cannot be written as itself. hledger reads the `*` as a status;
-    /// `posting-status-tabs` in the conformance suite records the distance.
-    @Test
-    func `a posting of a bare marker and two tabs refuses to load by name`() throws {
-        let text = "2024-01-01 Lunch\n    *\t\t$5\n    Assets:Cash  $-5"
+    /// The lines a file can hand `init` that it refuses. The parser takes a
+    /// marker for a status only when a space follows it, so the marker alone,
+    /// or with a tab straight after it and a second space or tab after that,
+    /// names the account `*` or `!`, which would be written back as a status.
+    /// The file refuses to load naming the field, rather than reading an
+    /// entry that cannot be written as itself. hledger reads the marker as a
+    /// status every time; `posting-status-tabs` and `posting-status-alone` in
+    /// the conformance suite record what it makes of each.
+    @Test(arguments: ["*\t\t$5", "!\t $5", "*", "!"])
+    func `a posting whose marker no space follows refuses to load by name`(line: String) throws {
+        let text = "2024-01-01 Lunch\n    \(line)\n    Assets:Cash  $-5"
         let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
         #expect(syntaxField(of: error.withoutLocation) == "postings[0].accountName")
     }
