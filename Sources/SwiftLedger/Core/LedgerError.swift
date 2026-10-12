@@ -50,7 +50,8 @@ public enum LedgerError: Error, Sendable, Equatable {
     /// associated value is the path of the field on the transaction, spelled
     /// the way a caller reaches it: `"description"`, `"code"`, `"comment"`,
     /// `"leadingComments[0]"`, `"postings[1].accountName"`,
-    /// `"postings[1].comment"`, `"postings[1].trailingComments[2]"`.
+    /// `"postings[1].comment"`, `"postings[1].trailingComments[2]"`; or on
+    /// the account directive: `"name"`, `"comment"`.
     ///
     /// `JournalSerializer` writes every one of those values verbatim, so a
     /// break inside one puts the rest of the value on a line of its own, where
@@ -59,15 +60,16 @@ public enum LedgerError: Error, Sendable, Equatable {
     /// postings being a valid entry, nothing downstream objects, and the
     /// amounts that followed the broken line stop counting without a word.
     ///
-    /// The parser takes the line ending off a transaction's lines before it
-    /// reads a field out of them, so a file with Unix or with Windows endings
-    /// never hands one of these back. A `\r` anywhere else on a line is not a
-    /// line ending, and the file refuses to load with this same error naming
-    /// the field it landed in, rather than being mended into text nobody
-    /// wrote. Everything else that reaches here is a transaction built in
-    /// code: a caller who forgot to strip the newlines out of pasted input
-    /// hears about it from the entry it typed, instead of from a file that
-    /// quietly stopped saying what it used to.
+    /// The parser takes the line ending off a transaction's lines and off an
+    /// `account` line before it reads a field out of them, so a file with
+    /// Unix or with Windows endings never hands one of these back. A `\r`
+    /// anywhere else on a line is not a line ending, and the file refuses to
+    /// load with this same error naming the field it landed in, rather than
+    /// being mended into text nobody wrote. Everything else that reaches here
+    /// is a transaction or a directive built in code: a caller who forgot to
+    /// strip the newlines out of pasted input hears about it from the entry
+    /// it typed, instead of from a file that quietly stopped saying what it
+    /// used to.
     case lineBreakInField(String)
 
     /// A field a journal writes bare into a position the header or posting

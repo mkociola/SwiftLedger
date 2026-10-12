@@ -90,9 +90,9 @@ import Foundation
 ///   back byte for byte. The keyword lines of a block comment are recognised
 ///   the same way, so `comment` and `end comment` open and close a block
 ///   whichever ending the file has, and are likewise kept as they came.
-///   Nothing else outside a transaction is read this way: a blank CRLF line
-///   is still the item `.directive("\r")`, and an `account` directive keeps
-///   the `\r` in the name it declares.
+///   An `account` line is read the same way, so the name and the comment it
+///   declares come back without the `\r`. Nothing else outside a transaction
+///   is read this way: a blank CRLF line is still the item `.directive("\r")`.
 /// - Indented full-line comments inside a transaction are commentary, not
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
@@ -152,7 +152,8 @@ public struct JournalParser {
 
             // account directive. A nameless `account` line is not one we can
             // model, and falls through to be kept verbatim.
-            if let directive = parseAccountDirective(trimmed) {
+            let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(trimmed) }
+            if let directive {
                 items.append(.accountDirective(directive))
                 index += 1
                 continue
@@ -194,12 +195,23 @@ public struct JournalParser {
     ///
     /// Returns `nil` when the line is not an `account` directive, or names no
     /// account at all.
-    private func parseAccountDirective(_ trimmed: String) -> AccountDirective? {
+    ///
+    /// The line ending comes off first, as it does for a transaction's lines:
+    /// in a CRLF file the `\r` would otherwise land in the name, or in the
+    /// comment when there is one, and `Ledger.accounts` would list the
+    /// declared account twice, the second time with nothing posted to it. A
+    /// directive is written back from the model rather than from its line, so
+    /// inside a CRLF file that one line goes back with a Unix ending until #35
+    /// teaches the serializer the file's own. A `\r` anywhere else on the line
+    /// is not a line ending, and the name or comment it lands in is one no
+    /// journal can write, so `AccountDirective.init` refuses it and the file
+    /// does not load, as it does not for a transaction's field.
+    private func parseAccountDirective(_ trimmed: String) throws -> AccountDirective? {
         guard trimmed.lowercased().hasPrefix("account ") else { return nil }
-        let (mainPart, comment) = splitInlineComment(trimmed)
+        let (mainPart, comment) = splitInlineComment(contentOf(line: trimmed))
         let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return nil }
-        return AccountDirective(
+        return try AccountDirective(
             name: name,
             comment: comment?.trimmingCharacters(in: .whitespaces),
         )

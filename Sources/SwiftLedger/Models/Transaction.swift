@@ -302,7 +302,10 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     /// single `Character` that is neither `"\n"` nor `"\r"`, so
     /// `"a\r\nb".contains("\n")` is `false` and a `Character`-based check
     /// would wave through the one spelling every Windows editor produces.
-    private static func requireOneLine(_ value: String?, at field: String) throws {
+    ///
+    /// `AccountDirective.init` puts its two fields through the same test, so
+    /// what counts as a break is decided in one place.
+    static func requireOneLine(_ value: String?, at field: String) throws {
         guard let value else { return }
         guard !value.unicodeScalars.contains(where: { $0 == "\n" || $0 == "\r" }) else {
             throw LedgerError.lineBreakInField(field)

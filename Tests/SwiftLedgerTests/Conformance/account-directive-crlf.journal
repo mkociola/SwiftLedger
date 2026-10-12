@@ -1,0 +1,6 @@
+account Assets:Checking  ; main
+account Expenses:Food
+
+2024-01-01 Lunch
+    Expenses:Food  $5.00
+    Assets:Checking

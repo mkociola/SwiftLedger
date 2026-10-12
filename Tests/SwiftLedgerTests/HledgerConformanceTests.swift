@@ -19,7 +19,13 @@ import Testing
 /// by the suite.
 @Suite("hledger conformance") struct HledgerConformanceTests {
     /// Journals SwiftLedger does not yet read the way hledger does.
+    ///
+    /// `account-directive-stray-cr` is there by choice rather than by delay:
+    /// hledger folds a `\r` stranded inside an `account` line into a space,
+    /// where SwiftLedger refuses the file by the rule it applies to a
+    /// transaction's fields, since the name is one no journal can write back.
     static let knownDivergences: Set<String> = [
+        "account-directive-stray-cr",
         "alias",
         "amount-forms",
         "apply-account",
