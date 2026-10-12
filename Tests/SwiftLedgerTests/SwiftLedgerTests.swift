@@ -916,6 +916,37 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
     }
 }
 
+// MARK: - AccountDirective
+
+@Suite("account directives") struct AccountDirectiveTests {
+    /// `parse` splits on `\n` alone, so in a CRLF file the `account` line
+    /// arrives with its `\r`, which used to go into the name, or into the
+    /// comment when there was one: `Ledger.accounts` then listed
+    /// `Assets:Checking\r` beside `Assets:Checking`, with nothing posted to it.
+    /// A directive is written back from the model rather than from its line,
+    /// so until #35 teaches the serializer the file's line ending that line
+    /// comes back with a Unix ending.
+    @Test
+    func `a windows file declares its accounts without the line ending`() throws {
+        let text = [
+            "account Assets:Checking  ; main",
+            "account Expenses:Food",
+            "",
+            "2024-01-01 Lunch",
+            "    Expenses:Food  $5",
+            "    Assets:Checking",
+        ].joined(separator: "\r\n")
+        let journal = try JournalParser().parse(text)
+        #expect(journal.accountDirectives.map(\.name) == ["Assets:Checking", "Expenses:Food"])
+        #expect(journal.accountDirectives.map(\.comment) == ["main", nil])
+        let accounts = Ledger(journal: journal).accounts.map(\.name)
+        #expect(accounts == ["Assets", "Assets:Checking", "Expenses", "Expenses:Food"])
+        withKnownIssue("#35: an account directive in a CRLF file is written back with a Unix ending") {
+            #expect(JournalSerializer().serialize(journal) == text)
+        }
+    }
+}
+
 // MARK: - JournalParser
 
 /// Every text a transaction holds that a journal writes on one line, the
