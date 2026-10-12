@@ -37,8 +37,6 @@ struct JournalStyleCollector {
     private struct DeclaredStyle {
         var fractionDigits: Int
         var groupsThousands: Bool
-        /// `nil` when the sample could not say which of its marks was which.
-        var decimalMark: Character?
     }
 
     /// Styles a `D` or `commodity` directive states outright.
@@ -124,7 +122,6 @@ struct JournalStyleCollector {
         declared[commodity] = DeclaredStyle(
             fractionDigits: shape.fractionDigits,
             groupsThousands: shape.usesSeparator,
-            decimalMark: mark,
         )
         // A sample that names no mark leaves the reading marks as they were:
         // a mark-less `commodity €1000` after `commodity €1.000,00` would
