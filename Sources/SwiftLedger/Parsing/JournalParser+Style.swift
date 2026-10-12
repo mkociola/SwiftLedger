@@ -25,9 +25,16 @@ extension JournalParser {
     func declareFormat(from line: String, into style: inout JournalStyleCollector) {
         let isIndented = line.first == " " || line.first == "\t"
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        let keyword = ["D ", "commodity ", "format ", "decimal-mark "].first { trimmed.hasPrefix($0) }
+        // The keyword ends at a space or a tab, as it does in hledger, where
+        // `decimal-mark\t,` declares the comma as much as `decimal-mark ,`
+        // does. Matched on the space alone, a tab dropped the whole line
+        // without a word, and from this version that silence changes what the
+        // amounts below it are worth.
+        let keyword = ["D", "commodity", "format", "decimal-mark"].first {
+            trimmed.hasPrefix($0) && trimmed.dropFirst($0.count).first?.isWhitespace == true
+        }
         guard let keyword else { return }
-        guard keyword != "format " || isIndented else { return }
+        guard keyword != "format" || isIndented else { return }
 
         // A directive may carry a comment of its own, and `D $1,000.00 ; house
         // style` states a style all the same, so the sample is what precedes
@@ -38,7 +45,7 @@ extension JournalParser {
         // The newline trim is for the `\r` a CRLF file leaves on the line, as
         // in `parseShapedAmount`.
         guard let sample = sample?.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
-        if keyword == "decimal-mark " {
+        if keyword == "decimal-mark" {
             if sample == "." || sample == ",", let mark = sample.first { style.declareDecimalMark(mark) }
             return
         }
@@ -46,7 +53,7 @@ extension JournalParser {
         // sample-amount forms say anything to record.
         guard sample.contains(where: \.isNumber),
               let parsed = try? parseShapedAmount(sample, lineNumber: 0, in: style) else { return }
-        style.declare(parsed.shape, commodity: parsed.amount.commodity, isDefault: keyword == "D ")
+        style.declare(parsed.shape, commodity: parsed.amount.commodity, isDefault: keyword == "D")
     }
 
     /// The column `line`'s amount field starts at: past the account token,

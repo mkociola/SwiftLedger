@@ -42,8 +42,12 @@ import Testing
 
     /// Each way a file states a commodity's style settles the shape, and
     /// settles it both ways round: under a comma declaration `€1,000` is one
-    /// euro to three places, as it is in hledger.
-    @Test(arguments: ["D €1.000,00", "commodity €1.000,00", "commodity €\n    format €1.000,00"])
+    /// euro to three places, as it is in hledger. A tab after the keyword is
+    /// the space hledger allows there, not a line to drop.
+    @Test(arguments: [
+        "D €1.000,00", "D\t€1.000,00", "commodity €1.000,00", "commodity €\n    format €1.000,00",
+        "decimal-mark ,", "decimal-mark\t,",
+    ])
     func `a declared decimal mark settles a lone mark before three digits`(directive: String) throws {
         let text = """
         \(directive)
