@@ -1,0 +1,11 @@
+decimal-mark ,
+
+2024-01-01 A leading mark divides, since there is nothing in front of it to group
+    Expenses:Rent    €.500
+    Assets:Checking
+
+decimal-mark .
+
+2024-01-02 The same the other way round, after a spaced symbol
+    Expenses:Rent    EUR ,500
+    Assets:Checking

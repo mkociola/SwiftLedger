@@ -277,18 +277,26 @@ extension JournalParser {
         if marks.count > 1 { return MarkReading(decimal: nil, isSettled: true) }
         // Nothing groups a zero, so a lone mark with only zeros in front of it
         // divides however many digits follow it: `0,500` is half a unit. An
-        // empty integer part is not that case, and `,000` stays a group mark
-        // with nothing on its left, which is no number at all.
+        // empty integer part is not that case, and with no directive to say
+        // what the mark is, `,000` stays a group mark with nothing on its left,
+        // which is no number at all.
         let integerPart = characters[..<last]
         if !integerPart.isEmpty, integerPart.allSatisfy({ $0 == "0" }) {
             return MarkReading(decimal: last, isSettled: true)
         }
         guard characters.count - last - 1 == 3 else { return MarkReading(decimal: last, isSettled: true) }
-        // The one shape the number cannot settle. A directive settles it when
-        // the file has one; without one it gets the tie-break, and abstains
-        // from the vote on the file's marks.
-        let mark = declaredMark ?? "."
-        return MarkReading(decimal: characters[last] == mark ? last : nil, isSettled: declaredMark != nil)
+        // The one shape the number cannot settle. Without a directive it gets
+        // the tie-break, and abstains from the vote on the file's marks.
+        guard let declaredMark else {
+            return MarkReading(decimal: characters[last] == "." ? last : nil, isSettled: false)
+        }
+        // A directive settles it. A mark with nothing in front of it divides
+        // under either directive, since there is nothing there to group:
+        // `€.500` under `decimal-mark ,` is half a euro, here and in hledger,
+        // where read as a group mark it was no number at all and the file
+        // stopped loading.
+        let divides = integerPart.isEmpty || characters[last] == declaredMark
+        return MarkReading(decimal: divides ? last : nil, isSettled: true)
     }
 
     /// Whether every group mark is the same character, written between two

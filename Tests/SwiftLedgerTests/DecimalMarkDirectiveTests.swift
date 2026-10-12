@@ -311,4 +311,16 @@ import Testing
         #expect(declared?.groupsThousands == true)
         #expect(declared?.decimalMark == ",")
     }
+
+    /// A mark with nothing in front of it divides under either declaration,
+    /// since there is nothing there to group: `€.500` under `decimal-mark ,`
+    /// is half a euro, as it is in hledger and as it was before the directive
+    /// was read, where taking the point for a group mark left no number at
+    /// all. The comma case is spelled after a spaced symbol because hledger
+    /// lets a bare leading comma open a commodity symbol instead.
+    @Test(arguments: [("decimal-mark ,", "€.500"), ("decimal-mark .", "EUR ,500")])
+    func `a leading mark divides under either declaration`(directive: String, amount: String) throws {
+        let text = "\(directive)\n\n2024-01-01 rent\n    expenses:rent    \(amount)\n    assets:bank"
+        #expect(try Self.quantities(in: text) == [Decimal(string: "0.5"), Decimal(string: "-0.5")])
+    }
 }
