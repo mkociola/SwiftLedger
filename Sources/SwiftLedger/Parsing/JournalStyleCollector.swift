@@ -251,7 +251,13 @@ struct JournalStyleCollector {
                 // Ties, and files with no negative prefixed amount at all, keep
                 // the placement SwiftLedger has always written.
                 signPrecedesCommodity: (signFirst[commodity] ?? 0) >= (signAfterCommodity[commodity] ?? 0),
-                decimalMark: Self.mostCommonMark(decimalMarks[commodity] ?? [:]),
+                // A declared reading mark outranks the vote. Every amount
+                // below the directive is read by it, so a rebuilt amount
+                // written with the other mark reads back wrong: in a file of
+                // `€1000` under `decimal-mark ,`, nothing votes, and an
+                // eighth written `€1.125` came back as eleven hundred odd.
+                decimalMark: declaredDecimalMark(for: commodity)
+                    ?? Self.mostCommonMark(decimalMarks[commodity] ?? [:]),
                 // A tie goes behind the number, where `Amount.init` puts a
                 // commodity it is told nothing about, and a commodity written
                 // on neither side has shown none. The space has to win
@@ -275,9 +281,10 @@ struct JournalStyleCollector {
             // never lower it.
             merged.maxFractionDigits = max(merged.maxFractionDigits, stated.fractionDigits)
             merged.groupsThousands = stated.groupsThousands
-            // A declaration whose sample could not name a mark overrules
-            // nothing here, and the amounts keep the vote.
-            merged.decimalMark = stated.decimalMark ?? merged.decimalMark
+            // The mark is the one the amounts below the directives are read
+            // by, as above; a declaration whose sample could not name a mark
+            // overrules nothing here, and the amounts keep the vote.
+            merged.decimalMark = declaredDecimalMark(for: commodity) ?? merged.decimalMark
             result[commodity] = merged
         }
         return result

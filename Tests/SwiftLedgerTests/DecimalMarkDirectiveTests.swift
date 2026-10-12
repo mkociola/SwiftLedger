@@ -250,6 +250,37 @@ import Testing
         #expect(reparsed.postings.map(\.amount.quantity) == [Decimal(string: "12.5"), Decimal(string: "-12.5")])
     }
 
+    /// A declared mark is also the mark a rebuilt amount is written with,
+    /// even when no amount in the file voted for it: in a file of `€1000`
+    /// under `decimal-mark ,`, an eighth written `€1.125` would be read back
+    /// as eleven hundred and twenty-five, here and in hledger.
+    @Test
+    func `a rebuilt amount is written with the declared mark when nothing voted`() throws {
+        var journal = try JournalParser().parse("""
+        decimal-mark ,
+
+        2024-01-01 rent
+            expenses:rent    €1000
+            assets:bank     €-1000
+        """)
+        let rent = try #require(journal.transactions.first)
+        let eighth = try #require(Decimal(string: "1.125"))
+        let euros = { Amount(quantity: $0, commodity: "€", commodityIsPrefix: true) }
+        let rebuilt = try Transaction(
+            id: rent.id, date: rent.date, description: rent.description, postings: [
+                Posting(accountName: "expenses:rent", amount: euros(eighth)),
+                Posting(accountName: "assets:bank", amount: euros(-eighth)),
+            ],
+        )
+        let replaced = journal.replace(.transaction(rent), with: .transaction(rebuilt))
+        #expect(replaced)
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains("€1,125"))
+        let reparsed = try #require(JournalParser().parse(written).transactions.first)
+        #expect(reparsed.postings.map(\.amount.quantity) == [eighth, -eighth])
+    }
+
     /// A sample that names no mark declares nothing about the marks, so it
     /// cannot take away what an earlier directive declared: `€1.000` is still
     /// a thousand below both lines. hledger refuses the mark-less sample.
