@@ -1,0 +1,9 @@
+decimal-mark ,
+
+2024-01-01 One directive, every commodity
+    Expenses:Rent    €1.000
+    Assets:Checking  €-1.000
+    Expenses:Rent    $1.000
+    Assets:Checking  $-1.000
+    Expenses:Rent    1.000 EUR
+    Assets:Checking  -1.000 EUR

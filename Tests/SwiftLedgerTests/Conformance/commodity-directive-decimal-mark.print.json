@@ -1,0 +1,80 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "A whole thousand, settled by the directive above",
+    "postings": [
+      {
+        "account": "Expenses:Rent",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "€",
+            "mantissa": 1000,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "€",
+            "mantissa": -1000,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-02",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "An amount that settles itself",
+    "postings": [
+      {
+        "account": "Expenses:Food",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "€",
+            "mantissa": 1250,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "€",
+            "mantissa": -1250,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]
