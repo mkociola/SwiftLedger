@@ -281,6 +281,21 @@ these. A `\r` stranded anywhere else on a line is not a line ending: the file
 refuses to load with the same error naming the field it landed in, rather than
 being mended into text nobody wrote.
 
+**Read back as written:** each of those fields is also written bare into a
+position the parser reads by rule, so a value that looks like the syntax
+around it would come back as that syntax: a code holding `)` ends early, a
+description opening `*` with no status in front of it is read as the status,
+two spaces and a `;` inside a description open a comment, an account name
+holding two spaces ends there, a real posting named `* …` or `! …` with no
+status of its own is read as the status, and one named `;…` or `#…` is a
+comment line. `Transaction.init` throws
+`LedgerError.syntaxInField` naming the field and the rule it broke. The rules
+are positional, so the same text is fine with something written in front of
+it: a cleared entry described `* Lunch` is written `* * Lunch` and reads back
+as itself. A description, a comment or an account name is refused with
+whitespace at either end rather than trimmed, so that what is stored is what
+a reload returns.
+
 **Signs:** amounts are signed `Decimal` values. Positive = value flowing *into* an account; negative = value flowing *out*.
 
 **Comments:** `Posting.comment` and `Transaction.comment` hold the *inline*

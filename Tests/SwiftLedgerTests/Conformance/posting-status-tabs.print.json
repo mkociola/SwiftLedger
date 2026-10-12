@@ -1,0 +1,41 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Lunch",
+    "postings": [
+      {
+        "account": "$5",
+        "kind": "RegularPosting",
+        "status": "Cleared",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 5,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Cash",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -5,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

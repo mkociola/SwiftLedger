@@ -1,0 +1,6 @@
+hledger: Error: posting-status-alone.journal:3:5:
+  |
+3 |     Assets:Cash  $-5
+  |     ^
+unexpected 'A'
+expecting newline

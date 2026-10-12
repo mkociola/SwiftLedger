@@ -70,6 +70,18 @@ public enum LedgerError: Error, Sendable, Equatable {
     /// quietly stopped saying what it used to.
     case lineBreakInField(String)
 
+    /// A field a journal writes bare into a position the header or posting
+    /// grammar reads by rule, holding a value that rule reads as something
+    /// else: a code holding `)`, a description opening `*` with no status
+    /// written in front of it, an account name holding two spaces. The entry
+    /// would come back from the next parse as a different entry, with no
+    /// error anywhere, so `Transaction.init` refuses it instead; the rules,
+    /// and why each is positional, are stated where it checks them. The first
+    /// associated value is the path of the field, spelled the way
+    /// `lineBreakInField` spells it; `rule` says in words which rule the
+    /// value broke.
+    case syntaxInField(String, rule: String)
+
     // MARK: - Commodity
 
     case commodityMismatch(String, String)
@@ -103,6 +115,8 @@ extension LedgerError: LocalizedError {
                 + "a matched pair of parentheses or brackets"
         case let .lineBreakInField(field):
             "Field '\(field)' contains a line break and cannot be written on one line"
+        case let .syntaxInField(field, rule):
+            "Field '\(field)' would not read back as written: \(rule)"
         case let .commodityMismatch(first, second):
             "Commodity mismatch: '\(first)' vs '\(second)'"
         case let .storeError(msg):
