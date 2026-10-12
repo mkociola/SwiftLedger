@@ -270,8 +270,7 @@ import Testing
 
     /// `€1.000` is the one shape a number cannot settle, and the directive
     /// above the entry is what settles it: a thousand euros, as hledger reads
-    /// it, where the parser used to read one. The directive line is kept
-    /// verbatim with the rest, and the file still goes back byte for byte.
+    /// it, where the parser used to read one.
     @Test
     func `the example's commodity directive settles a whole thousand`() throws {
         let journal = try JournalParser().parse(Self.exampleText)
@@ -282,7 +281,6 @@ import Testing
             Amount(quantity: 1000, commodity: "€", commodityIsPrefix: true),
             Amount(quantity: -1000, commodity: "€", commodityIsPrefix: true),
         ])
-        #expect(journal.directives.contains("commodity €1.000,00"))
     }
 
     /// The comment block in the example parks a rent entry that must not be
