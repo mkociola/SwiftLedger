@@ -3,13 +3,24 @@
 /// Declaring an account explicitly is optional in plain-text accounting;
 /// accounts are also inferred from postings. Directives allow an explicit
 /// account type to be specified.
+///
+/// A directive is written on one line, `account NAME  ; COMMENT`, so neither
+/// value may hold a line break: the rest of it would land on a line of its
+/// own, where the next parse reads a dated line as an entry nobody wrote and
+/// anything else as a directive. `init` refuses one with
+/// `LedgerError.lineBreakInField`, naming `"name"` or `"comment"`, by the
+/// same test `Transaction.init` applies to its own fields.
 public struct AccountDirective: Sendable, Codable, Hashable {
     public let name: String
     public let type: AccountType?
     /// Inline comment text following the account name (the part after `; `).
     public let comment: String?
 
-    public init(name: String, type: AccountType? = nil, comment: String? = nil) {
+    /// - Throws: `LedgerError.lineBreakInField` if `name` or `comment` holds
+    ///   `\n` or `\r`.
+    public init(name: String, type: AccountType? = nil, comment: String? = nil) throws {
+        try Transaction.requireOneLine(name, at: "name")
+        try Transaction.requireOneLine(comment, at: "comment")
         self.name = name
         self.type = type
         self.comment = comment

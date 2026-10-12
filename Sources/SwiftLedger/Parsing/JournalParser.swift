@@ -152,7 +152,8 @@ public struct JournalParser {
 
             // account directive. A nameless `account` line is not one we can
             // model, and falls through to be kept verbatim.
-            if let directive = parseAccountDirective(trimmed) {
+            let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(trimmed) }
+            if let directive {
                 items.append(.accountDirective(directive))
                 index += 1
                 continue
@@ -201,13 +202,16 @@ public struct JournalParser {
     /// declared account twice, the second time with nothing posted to it. A
     /// directive is written back from the model rather than from its line, so
     /// inside a CRLF file that one line goes back with a Unix ending until #35
-    /// teaches the serializer the file's own.
-    private func parseAccountDirective(_ trimmed: String) -> AccountDirective? {
+    /// teaches the serializer the file's own. A `\r` anywhere else on the line
+    /// is not a line ending, and the name or comment it lands in is one no
+    /// journal can write, so `AccountDirective.init` refuses it and the file
+    /// does not load, as it does not for a transaction's field.
+    private func parseAccountDirective(_ trimmed: String) throws -> AccountDirective? {
         guard trimmed.lowercased().hasPrefix("account ") else { return nil }
         let (mainPart, comment) = splitInlineComment(contentOf(line: trimmed))
         let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return nil }
-        return AccountDirective(
+        return try AccountDirective(
             name: name,
             comment: comment?.trimmingCharacters(in: .whitespaces),
         )

@@ -863,7 +863,7 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
     func `removeAccountDirective(named:) removes a directive the caller cannot reconstruct`() throws {
         var journal = try JournalParser().parse("account Expenses:Rent  ; declared but unused so far")
         // Removing by value fails: the caller does not know the comment.
-        let removedByValue = journal.remove(.accountDirective(AccountDirective(name: "Expenses:Rent")))
+        let removedByValue = try journal.remove(.accountDirective(AccountDirective(name: "Expenses:Rent")))
         #expect(!removedByValue)
         let directive = journal.removeAccountDirective(named: "Expenses:Rent")
         #expect(try #require(directive).comment == "declared but unused so far")
@@ -919,6 +919,21 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
 // MARK: - AccountDirective
 
 @Suite("account directives") struct AccountDirectiveTests {
+    /// `JournalSerializer` writes `account NAME  ; COMMENT` on one line, so a
+    /// break in either value puts the rest on a line of its own, where the
+    /// next parse reads a dated line as an entry nobody wrote. All three
+    /// spellings of a break are tried, `\r\n` because Swift folds it into one
+    /// `Character` that a check over characters would wave through.
+    @Test(arguments: ["name", "comment"], ["\n", "\r", "\r\n"])
+    func `a directive refuses a line break in its name or comment`(field: String, lineBreak: String) {
+        let text = "Multi\(lineBreak)line"
+        #expect(throws: LedgerError.lineBreakInField(field)) {
+            try field == "name"
+                ? AccountDirective(name: text)
+                : AccountDirective(name: "Assets:Cash", comment: text)
+        }
+    }
+
     /// `parse` splits on `\n` alone, so in a CRLF file the `account` line
     /// arrives with its `\r`, which used to go into the name, or into the
     /// comment when there was one: `Ledger.accounts` then listed
@@ -944,6 +959,17 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         withKnownIssue("#35: an account directive in a CRLF file is written back with a Unix ending") {
             #expect(JournalSerializer().serialize(journal) == text)
         }
+    }
+
+    /// A `\r` anywhere but at the end of the line is not a line ending, and
+    /// the name it lands in is one no journal can write, so the file refuses
+    /// to load with the line named, as it does for a transaction's field.
+    /// There is no entry to name: a directive sits outside every entry.
+    @Test
+    func `a carriage return inside an account line refuses to load`() throws {
+        let text = "; declarations\r\naccount Assets\rCash\r\n"
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error == .inJournal(line: 2, entry: nil, underlying: .lineBreakInField("name")))
     }
 }
 
@@ -2881,7 +2907,7 @@ private extension LedgerError {
         var ledger = Ledger()
         let date = try makeDate(2024, 1, 1)
         // "Suspense" root would infer .unclassified; directive sets it to .asset
-        ledger.add(.accountDirective(AccountDirective(name: "Suspense", type: .asset)))
+        try ledger.add(.accountDirective(AccountDirective(name: "Suspense", type: .asset)))
         try ledger.add(
             .transaction(makeTx(date: date, debit: "Suspense", credit: "Assets:Cash", amount: 100)),
         )
@@ -5009,7 +5035,7 @@ private func renaming(
         defer { try? FileManager.default.removeItem(at: url) }
         try Self.journalEndingInBlock().write(to: url, atomically: true, encoding: .utf8)
 
-        let declaration = AccountDirective(name: "Expenses:Food", comment: "meals out")
+        let declaration = try AccountDirective(name: "Expenses:Food", comment: "meals out")
         try LedgerManager(store: PlainTextJournalStore(url: url)).add(.accountDirective(declaration))
 
         let fresh = try LedgerManager(store: PlainTextJournalStore(url: url))
@@ -5501,7 +5527,7 @@ private func monthlyStarts() throws -> [JournalDate] {
     @Test
     func `an account directive type overrides name-based inference on a row`() throws {
         var ledger = Ledger()
-        ledger.add(.accountDirective(AccountDirective(name: "Suspense", type: .asset)))
+        try ledger.add(.accountDirective(AccountDirective(name: "Suspense", type: .asset)))
         try ledger.add(
             .transaction(
                 makeTx(date: makeDate(2024, 1, 5), debit: "Suspense", credit: "Assets:Cash"),
