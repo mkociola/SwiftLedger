@@ -156,9 +156,12 @@ struct JournalStyleCollector {
     /// commodity, taking the old one's mark with it. `decimal-mark` names no
     /// commodity and reaches all of them, and so does `D`: hledger reads every
     /// commodity without a declaration of its own by the default commodity's
-    /// marks.
-    func declaredDecimalMark(for commodity: String) -> Character? {
-        decimalMarkDirective ?? commodityDirectiveMarks[commodity] ?? defaultCommodityMark
+    /// marks. A bare number, `nil` here, is in no commodity however `Amount`
+    /// later names it, so no `commodity` directive reaches it, not even one
+    /// for the `USD` the parser reads it as; hledger reads it by the other
+    /// two alone.
+    func declaredDecimalMark(for commodity: String?) -> Character? {
+        decimalMarkDirective ?? commodity.flatMap { commodityDirectiveMarks[$0] } ?? defaultCommodityMark
     }
 
     /// Records where a posting line's amount field began and ended.

@@ -128,6 +128,30 @@ import Testing
         #expect(try Self.quantities(in: text) == [1000, -1000, 1, -1])
     }
 
+    /// A bare number is in no commodity, however `Amount` later names it, so
+    /// a `commodity` directive says nothing about how one is read, not even
+    /// a directive for the `USD` a bare number is read as. hledger reads one
+    /// by `decimal-mark` and `D` alone, and `D` may state its sample bare.
+    /// The harness cannot pin this until #39, since hledger names the
+    /// commodity differently.
+    @Test
+    func `a bare number is read by decimal-mark and D alone`() throws {
+        let text = """
+        commodity 1.000,00 USD
+
+        2024-01-01 the USD directive does not reach a bare number
+            expenses:rent    1.000
+            assets:bank     -1.000
+
+        D 1.000,00
+
+        2024-01-02 a bare D sample does
+            expenses:rent    1.000
+            assets:bank     -1.000
+        """
+        #expect(try Self.quantities(in: text) == [1, -1, 1000, -1000])
+    }
+
     /// Where the directives disagree, hledger's order holds: `decimal-mark`
     /// outranks a `commodity` directive, which outranks `D`, whichever came
     /// first.

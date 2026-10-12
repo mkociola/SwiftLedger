@@ -156,17 +156,19 @@ extension JournalParser {
     ) throws -> ShapedAmount {
         let end = str.firstIndex { !Self.opensNumber($0) } ?? str.endIndex
         let remainder = String(str[end...]).trimmingCharacters(in: .whitespacesAndNewlines)
-        let commodity = remainder.isEmpty ? "USD" : remainder
         guard !Self.cutsNumberShort(remainder),
               !Self.commodityCarriesDigit(remainder),
-              let number = Self.scanNumber(String(str[..<end]), declaredMark: style.declaredDecimalMark(for: commodity))
+              let number = Self.scanNumber(
+                  String(str[..<end]),
+                  declaredMark: style.declaredDecimalMark(for: remainder.isEmpty ? nil : remainder),
+              )
         else {
             throw LedgerError.invalidAmount(raw)
         }
         return ShapedAmount(
             amount: Amount(
                 quantity: sign * number.magnitude,
-                commodity: commodity,
+                commodity: remainder.isEmpty ? "USD" : remainder,
                 commodityIsPrefix: false,
             ),
             shape: number.shape,
