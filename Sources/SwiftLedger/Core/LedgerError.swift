@@ -66,10 +66,10 @@ public enum LedgerError: Error, Sendable, Equatable {
     /// anywhere else on a line is not a line ending, and the file refuses to
     /// load with this same error naming the field it landed in, rather than
     /// being mended into text nobody wrote. Everything else that reaches here
-    /// is a transaction or a directive built in code: a caller who forgot to
-    /// strip the newlines out of pasted input hears about it from the entry
-    /// it typed, instead of from a file that quietly stopped saying what it
-    /// used to.
+    /// is a transaction or a directive built in code, or decoded from JSON
+    /// SwiftLedger did not write: a caller who forgot to strip the newlines
+    /// out of pasted input hears about it from the entry it typed, instead of
+    /// from a file that quietly stopped saying what it used to.
     case lineBreakInField(String)
 
     /// A field a journal writes bare into a position the header or posting

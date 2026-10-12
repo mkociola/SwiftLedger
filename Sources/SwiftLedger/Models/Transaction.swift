@@ -190,19 +190,24 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         case id, date, auxDate, status, code, description, postings, comment, leadingComments
     }
 
-    /// Decodes a transaction, treating a missing `leadingComments` key as no
-    /// comments so that JSON written before the key existed still decodes.
+    /// Decodes a transaction through `init`, so that a document SwiftLedger
+    /// did not write is held to the rules a transaction built in code is held
+    /// to, and refused with the same `LedgerError`. A missing
+    /// `leadingComments` key is no comments, so that JSON written before the
+    /// key existed still decodes.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        date = try container.decode(JournalDate.self, forKey: .date)
-        auxDate = try container.decodeIfPresent(JournalDate.self, forKey: .auxDate)
-        status = try container.decode(ClearingStatus.self, forKey: .status)
-        code = try container.decodeIfPresent(String.self, forKey: .code)
-        description = try container.decode(String.self, forKey: .description)
-        postings = try container.decode([Posting].self, forKey: .postings)
-        comment = try container.decodeIfPresent(String.self, forKey: .comment)
-        leadingComments = try container.decodeIfPresent([String].self, forKey: .leadingComments) ?? []
+        try self.init(
+            id: container.decode(UUID.self, forKey: .id),
+            date: container.decode(JournalDate.self, forKey: .date),
+            auxDate: container.decodeIfPresent(JournalDate.self, forKey: .auxDate),
+            status: container.decode(ClearingStatus.self, forKey: .status),
+            code: container.decodeIfPresent(String.self, forKey: .code),
+            description: container.decode(String.self, forKey: .description),
+            postings: container.decode([Posting].self, forKey: .postings),
+            comment: container.decodeIfPresent(String.self, forKey: .comment),
+            leadingComments: container.decodeIfPresent([String].self, forKey: .leadingComments) ?? [],
+        )
     }
 
     // MARK: - Equality

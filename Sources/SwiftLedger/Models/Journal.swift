@@ -25,6 +25,17 @@ public struct AccountDirective: Sendable, Codable, Hashable {
         self.type = type
         self.comment = comment
     }
+
+    /// Decodes a directive through `init`, so that a document SwiftLedger did
+    /// not write is held to the same rule and refused with the same error.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            name: container.decode(String.self, forKey: .name),
+            type: container.decodeIfPresent(AccountType.self, forKey: .type),
+            comment: container.decodeIfPresent(String.self, forKey: .comment),
+        )
+    }
 }
 
 /// A top-level item stored in an ordered journal AST.
