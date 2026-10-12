@@ -110,7 +110,7 @@ struct JournalStyleCollector {
     }
 
     /// Records the style a directive states for a commodity, written the way
-    /// ledger writes one — as a sample amount: `D $1,000.00`. `isDefault` is
+    /// ledger writes one, as a sample amount: `D $1,000.00`. `isDefault` is
     /// true for a `D` directive, which names the file's default commodity as
     /// well as a style.
     ///
@@ -126,6 +126,11 @@ struct JournalStyleCollector {
             groupsThousands: shape.usesSeparator,
             decimalMark: mark,
         )
+        // A sample that names no mark leaves the reading marks as they were:
+        // a mark-less `commodity €1000` after `commodity €1.000,00` would
+        // otherwise take the comma away again. hledger refuses such a sample
+        // outright.
+        guard let mark else { return }
         if isDefault {
             defaultCommodityMark = mark
         } else {

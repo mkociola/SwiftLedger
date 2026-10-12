@@ -226,6 +226,22 @@ import Testing
         #expect(reparsed.postings.map(\.amount.quantity) == [Decimal(string: "12.5"), Decimal(string: "-12.5")])
     }
 
+    /// A sample that names no mark declares nothing about the marks, so it
+    /// cannot take away what an earlier directive declared: `€1.000` is still
+    /// a thousand below both lines. hledger refuses the mark-less sample.
+    @Test
+    func `a sample without a mark leaves an earlier declaration standing`() throws {
+        let text = """
+        commodity €1.000,00
+        commodity €1000
+
+        2024-01-01 rent
+            expenses:rent    €1.000
+            assets:bank     €-1.000
+        """
+        #expect(try Self.quantities(in: text) == [1000, -1000])
+    }
+
     /// A directive's own sample is read with the marks declared above it, so
     /// `D €1.000` under `decimal-mark ,` states a grouped whole number rather
     /// than one euro to three places.
