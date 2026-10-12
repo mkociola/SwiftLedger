@@ -4537,6 +4537,65 @@ private func renaming(
     }
 }
 
+// MARK: - Decoding runs the checks init runs
+
+/// Decodes the JSON of a transaction `init` accepted, after `edit` has put a
+/// value in it that `init` would not, for a test that the decoder refuses
+/// the same values by the same errors. Only JSON SwiftLedger did not write
+/// can carry such a value, which is why the document is edited rather than
+/// built.
+private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Void) throws -> Transaction {
+    let encoded = try JSONEncoder().encode(makeTx(date: makeDate(2024, 1, 1)))
+    var object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    try edit(&object)
+    return try JSONDecoder().decode(Transaction.self, from: JSONSerialization.data(withJSONObject: object))
+}
+
+@Suite("decoding runs the checks init runs") struct DecodedInvariantTests {
+    /// A description with a break in it is the header `#20` taught `init` to
+    /// refuse, and a decoder that skips `init` would hand the serializer one
+    /// anyway.
+    @Test
+    func `a decoded transaction refuses a line break in its description`() {
+        #expect(throws: LedgerError.lineBreakInField("description")) {
+            try decodeTransaction { $0["description"] = "Multi\nline" }
+        }
+    }
+
+    @Test
+    func `a decoded transaction refuses postings that do not balance`() {
+        #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: 50)) {
+            try decodeTransaction { object in
+                object["postings"] = try Array(#require(object["postings"] as? [Any]).dropLast())
+            }
+        }
+    }
+
+    @Test
+    func `a decoded transaction refuses a real posting named like a virtual one`() {
+        #expect(throws: LedgerError.unwritableAccountName("(old)")) {
+            try decodeTransaction { object in
+                var postings = try #require(object["postings"] as? [[String: Any]])
+                postings[0]["accountName"] = "(old)"
+                object["postings"] = postings
+            }
+        }
+    }
+
+    /// The directive's decoder was synthesised, so it never reached `init`
+    /// either, and a decoded name or comment could hold the break `init`
+    /// refuses.
+    @Test(arguments: ["name", "comment"])
+    func `a decoded account directive refuses a line break in its name or comment`(field: String) {
+        let json = field == "name"
+            ? #"{"name":"Multi\nline"}"#
+            : #"{"name":"Assets:Cash","comment":"Multi\nline"}"#
+        #expect(throws: LedgerError.lineBreakInField(field)) {
+            try JSONDecoder().decode(AccountDirective.self, from: Data(json.utf8))
+        }
+    }
+}
+
 // MARK: - PlainTextJournalStore
 
 @Suite("PlainTextJournalStore") struct StoreTests {
