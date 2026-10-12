@@ -276,12 +276,13 @@ writes each of them back verbatim, so none of them may hold `\n` or `\r`.
 `Transaction.init` throws `LedgerError.lineBreakInField` naming the field the
 break is in (`"description"`, `"postings[1].accountName"`, and so on), and
 `AccountDirective.init` does the same for the name and the comment of an
-`account` line. The parser takes the line ending off a transaction's lines and
-off an `account` line before it reads a field out of them, so a file with Unix
-or with Windows endings never produces one of these. A `\r` stranded anywhere
-else on a line is not a line ending: the file refuses to load with the same
-error naming the field it landed in, rather than being mended into text nobody
-wrote.
+`account` line. A top-level `JournalItem.comment` has no initialiser to refuse
+in, so the serializer writes every line of one as a comment instead. The
+parser takes the line ending off a transaction's lines and off an `account`
+line before it reads a field out of them, so a file with Unix or with Windows
+endings never produces one of these. A `\r` stranded anywhere else on a line
+is not a line ending: the file refuses to load with the same error naming the
+field it landed in, rather than being mended into text nobody wrote.
 
 **Read back as written:** each of those fields is also written bare into a
 position the parser reads by rule, so a value that looks like the syntax

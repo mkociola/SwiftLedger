@@ -3038,6 +3038,20 @@ private extension LedgerError {
         #expect(try JournalParser().parse(text).items == [.comment("; reviewed"), .comment("; already marked")])
     }
 
+    /// A break inside the text would put the rest on a line of its own, where
+    /// a dated line is an entry nobody wrote. `JournalItem.comment` has no
+    /// initialiser to refuse the value in, so every line of it is kept a
+    /// comment instead.
+    @Test
+    func `a comment built in code with a line break stays a comment on every line`() throws {
+        let journal = Journal(items: [.comment("note\n2024-01-02 Injected via comment")])
+        let text = JournalSerializer().serialize(journal)
+        #expect(text == "; note\n; 2024-01-02 Injected via comment")
+        #expect(try JournalParser().parse(text).items == [
+            .comment("; note"), .comment("; 2024-01-02 Injected via comment"),
+        ])
+    }
+
     @Test
     func `a journal with every comment form round-trips byte-for-byte`() throws {
         let text = """

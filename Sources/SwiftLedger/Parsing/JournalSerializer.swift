@@ -56,7 +56,14 @@ public struct JournalSerializer {
             case .blank:
                 lines.append("")
             case let .comment(text):
-                lines.append(isCommentLine(text) ? text : "; \(text)")
+                // A break inside the text would put the rest on a line of its
+                // own, where a dated line is an entry nobody wrote, so every
+                // line of it is kept a comment. Split on `\n` alone, as the
+                // parser splits a file: the `\r` of a Windows ending belongs
+                // to the line the parser read and goes back with it.
+                for line in text.components(separatedBy: "\n") {
+                    lines.append(isCommentLine(line) ? line : "; \(line)")
+                }
             case let .directive(raw):
                 lines.append(raw)
             case let .accountDirective(directive):
@@ -84,7 +91,8 @@ public struct JournalSerializer {
     ///
     /// Text that does not — a programmatically supplied `.comment("reviewed")`,
     /// say — is given a `; ` marker, so serialising never emits a line the
-    /// parser would read back as something other than a comment.
+    /// parser would read back as something other than a comment. A comment
+    /// holding a line break is asked line by line, for the same reason.
     private func isCommentLine(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard let first = trimmed.first else { return false }
