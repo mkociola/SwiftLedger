@@ -268,6 +268,23 @@ import Testing
         #expect(ledger.balance(for: "Assets:PettyCash").allSatisfy { $0.quantity == 0 })
     }
 
+    /// `€1.000` is the one shape a number cannot settle, and the directive
+    /// above the entry is what settles it: a thousand euros, as hledger reads
+    /// it, where the parser used to read one. The directive line is kept
+    /// verbatim with the rest, and the file still goes back byte for byte.
+    @Test
+    func `the example's commodity directive settles a whole thousand`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let invoice = try #require(
+            journal.transactions.first { $0.description == "Freelance invoice paid in euros" },
+        )
+        #expect(invoice.postings.map(\.amount) == [
+            Amount(quantity: 1000, commodity: "€", commodityIsPrefix: true),
+            Amount(quantity: -1000, commodity: "€", commodityIsPrefix: true),
+        ])
+        #expect(journal.directives.contains("commodity €1.000,00"))
+    }
+
     /// The comment block in the example parks a rent entry that must not be
     /// booked. If it were, rent would be three months rather than two and the
     /// block's lines would not come back as the directives the round-trip
@@ -277,6 +294,7 @@ import Testing
         let journal = try JournalParser().parse(Self.exampleText)
         #expect(!journal.transactions.contains { $0.description == "Rent for March" })
         #expect(journal.directives == [
+            "commodity €1.000,00",
             "comment",
             "Draft of the March rent, not yet due. Everything in here is text.",
             "2024-03-01 * Rent for March",
