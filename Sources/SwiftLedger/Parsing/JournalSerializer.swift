@@ -56,14 +56,10 @@ public struct JournalSerializer {
             case .blank:
                 lines.append("")
             case let .comment(text):
-                // A break inside the text would put the rest on a line of its
-                // own, where a dated line is an entry nobody wrote, so every
-                // line of it is kept a comment. Split on `\n` alone, as the
-                // parser splits a file: the `\r` of a Windows ending belongs
-                // to the line the parser read and goes back with it.
-                for line in text.components(separatedBy: "\n") {
-                    lines.append(isCommentLine(line) ? line : "; \(line)")
-                }
+                // Line by line, so a break inside the text cannot put a dated
+                // line where the next parse books it. Split on `\n` alone, as
+                // the parser does: a Windows `\r` belongs to its line.
+                lines.append(contentsOf: text.components(separatedBy: "\n").map { isCommentLine($0) ? $0 : "; \($0)" })
             case let .directive(raw):
                 lines.append(raw)
             case let .accountDirective(directive):
