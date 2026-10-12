@@ -4563,6 +4563,14 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
     }
 
     @Test
+    func `a decoded transaction refuses a code the header grammar would read as syntax`() {
+        let error = #expect(throws: LedgerError.self) {
+            try decodeTransaction { $0["code"] = "12)" }
+        }
+        #expect(syntaxField(of: error) == "code")
+    }
+
+    @Test
     func `a decoded transaction refuses postings that do not balance`() {
         #expect(throws: LedgerError.unbalancedTransaction(commodity: "USD", imbalance: 50)) {
             try decodeTransaction { object in
