@@ -61,10 +61,11 @@ public struct JournalSerializer {
                 lines.append("")
             case let .comment(text):
                 // Line by line, so a break inside the text cannot put a dated
-                // line where the next parse books it. Split as the parser
-                // splits a file, so a Windows break in the text leaves no
-                // `\r` on a line for the journal's own ending to follow.
-                let commentLines = JournalParser.lines(of: text).lines
+                // line where the next parse books it. A Windows break in
+                // the text is a break like any other, so it leaves no `\r` on
+                // a line for the journal's own ending to follow. A `\r` that
+                // ends the text broke nothing and is written as it came.
+                let commentLines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
                 lines.append(contentsOf: commentLines.map { isCommentLine($0) ? $0 : "; \($0)" })
             case let .directive(raw):
                 lines.append(raw)

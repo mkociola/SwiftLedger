@@ -173,4 +173,15 @@ private func shape(of journal: Journal) -> [JournalItem] {
         let journal = Journal(items: [.comment("first\r\nsecond"), .blank], lineEnding: ending)
         #expect(JournalSerializer().serialize(journal) == "; first\(ending.rawValue); second\(ending.rawValue)")
     }
+
+    /// A file converted twice ends its lines `\r\r\n`. One `\r` is the line
+    /// ending and comes off; the other is a stray, kept on the line it stands
+    /// on and written back with it, on a comment as on a directive.
+    @Test
+    func `a stray carriage return in front of a line ending is written back`() throws {
+        let text = "; converted twice\r\r\ninclude other.journal\r\r\n"
+        let journal = try JournalParser().parse(text)
+        #expect(journal.items == [.comment("; converted twice\r"), .directive("include other.journal\r"), .blank])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
 }
