@@ -165,6 +165,14 @@ Supported:
   keyword lines included, is kept verbatim as a `JournalItem.directive` and
   none of it is interpreted, so a transaction written inside a block is text
   rather than data
+- Line endings: Unix (`\n`) and Windows (`\r\n`). The ending is layout, so it
+  is kept once for the file (`Journal.lineEnding`) rather than on every line,
+  and a save puts it back on every line, the lines of an entry you rebuilt
+  included. A file that mixes the two is read as the one most of its lines
+  use and saved in that one throughout, which is what an editor does with
+  such a file and is the one case where a save changes lines nobody edited;
+  an even split is saved with Unix endings. Classic Mac files, ended by `\r`
+  alone, do not load
 
 ### Unsupported directives
 
@@ -278,11 +286,11 @@ break is in (`"description"`, `"postings[1].accountName"`, and so on), and
 `AccountDirective.init` does the same for the name and the comment of an
 `account` line. A top-level `JournalItem.comment` has no initialiser to refuse
 in, so the serializer writes every line of one as a comment instead. The
-parser takes the line ending off a transaction's lines and off an `account`
-line before it reads a field out of them, so a file with Unix or with Windows
-endings never produces one of these. A `\r` stranded anywhere else on a line
-is not a line ending: the file refuses to load with the same error naming the
-field it landed in, rather than being mended into text nobody wrote.
+parser takes the line ending off every line before it reads anything out of
+it, so a file with Unix or with Windows endings never produces one of these.
+A `\r` stranded anywhere else on a line is not a line ending: the file refuses
+to load with the same error naming the field it landed in, rather than being
+mended into text nobody wrote.
 
 **Read back as written:** each of those fields is also written bare into a
 position the parser reads by rule, so a value that looks like the syntax
