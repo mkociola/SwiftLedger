@@ -31,7 +31,6 @@ import Testing
         "apply-account",
         "balance-assertion-fails",
         "date-formats",
-        "decimal-mark-directive",
         "default-commodity",
         "description-comment",
         "include",

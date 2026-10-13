@@ -30,10 +30,13 @@ import Foundation
 ///   and one mark with nothing but zeros in front of it divides whatever
 ///   follows, since there is nothing there to group, so `€0,750` is three
 ///   quarters. One mark with exactly three digits after it is the one shape
-///   the number cannot settle, and it keeps the reading this library and
-///   ledger-cli have always had: `1,000` is a thousand and `1.000` is one,
-///   where hledger would read `1,000` as one. A `commodity` or `D` directive
-///   is read for the display style it states, never for this.
+///   the number cannot settle. A `commodity`, `D` or `decimal-mark` directive
+///   above it settles it, as hledger reads them: from the line it stands on,
+///   every such amount in the commodity it declares (every commodity, for
+///   `decimal-mark` and for `D`) is read with the declared decimal mark, so
+///   `€1.000` under `commodity €1.000,00` is a thousand. Without one it keeps
+///   the reading this library and ledger-cli have always had: `1,000` is a
+///   thousand and `1.000` is one, where hledger would read `1,000` as one.
 /// - A posting amount may be followed by a price (`@` per unit, `@@` total)
 ///   and/or a balance assertion (`=`), in that order, each written in either
 ///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
@@ -172,10 +175,11 @@ public struct JournalParser {
             // Anything else — an unsupported directive (`include`, `P`, `commodity`,
             // `alias`, `D`, `year`, an indented sub-directive) or malformed content.
             // Kept verbatim so serialising never rewrites what we cannot interpret.
-            // A `D` or `commodity` line is read for the display style it states
-            // and kept verbatim all the same: learning from a line is not the
-            // same as modelling it, and this one still goes back byte for byte.
-            declareFormat(from: line, into: &style)
+            // A `D`, `commodity` or `decimal-mark` line is read for what it
+            // declares and kept verbatim all the same: learning from a line is
+            // not the same as modelling it, and this one still goes back byte
+            // for byte.
+            declareFormat(from: contentOf(line: line), into: &style)
             items.append(.directive(line))
             index += 1
         }

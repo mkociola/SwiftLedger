@@ -23,10 +23,12 @@ struct NumberShape {
     ///
     /// `nil` when the number wrote no such mark, and `nil` again when its one
     /// mark was the shape no number can settle on its own, a mark with exactly
-    /// three digits after it. `1,000` and `1.000` still get the value the
-    /// scanner has always given them, but they are made to abstain on the
-    /// question of which convention the file follows: one `€12,50` says more
-    /// about that than a page of `€1.000` does.
+    /// three digits after it, and no directive above it settled it either.
+    /// `1,000` and `1.000` still get the value the scanner has always given
+    /// them, but they are made to abstain on the question of which convention
+    /// the file follows: one `€12,50` says more about that than a page of
+    /// `€1.000` does. Settled by a directive, the same number says what it was
+    /// read as, and votes.
     var decimalMark: Character?
     /// The character that separated the digit groups, on the same terms: `.`
     /// in `1.000,00`, `,` in `1,000.00`, `nil` in `1.000`.

@@ -48,7 +48,16 @@ extension JournalParser {
     /// posting's amount no longer arrives that way: `contentOf(line:)` takes
     /// the ending off a transaction's lines before any field is read out of
     /// them.
-    func parseShapedAmount(_ raw: String, lineNumber _: Int) throws -> ShapedAmount {
+    ///
+    /// `style` is what the file has declared above this amount, which is the
+    /// only thing that can settle a number the text alone cannot (see
+    /// `scanNumber`). An amount read on its own, as `parseAmount` reads one,
+    /// has no file above it and gets the tie-break.
+    func parseShapedAmount(
+        _ raw: String,
+        lineNumber _: Int,
+        in style: JournalStyleCollector = JournalStyleCollector(),
+    ) throws -> ShapedAmount {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw LedgerError.invalidAmount(raw) }
 
@@ -67,9 +76,9 @@ extension JournalParser {
 
         guard let first = str.first else { throw LedgerError.invalidAmount(raw) }
         if Self.opensNumber(first) {
-            return try parseSuffixCommodityAmount(str, sign: sign, raw: raw)
+            return try parseSuffixCommodityAmount(str, sign: sign, raw: raw, in: style)
         }
-        return try parsePrefixCommodityAmount(str, sign: sign, raw: raw)
+        return try parsePrefixCommodityAmount(str, sign: sign, raw: raw, in: style)
     }
 
     /// `$100`, `$-50`, `€1.000,00`: the commodity runs up to the first
@@ -91,7 +100,12 @@ extension JournalParser {
     /// so in `--5` or `+-5` the second stands where the commodity would, and
     /// read on it made five of a commodity called nothing. hledger refuses
     /// these and still reads a sign on each side of a commodity, `-$-5`.
-    private func parsePrefixCommodityAmount(_ str: String, sign: Decimal, raw: String) throws -> ShapedAmount {
+    private func parsePrefixCommodityAmount(
+        _ str: String,
+        sign: Decimal,
+        raw: String,
+        in style: JournalStyleCollector,
+    ) throws -> ShapedAmount {
         let commodityEnd = str.firstIndex(where: Self.opensSignedNumber) ?? str.endIndex
         let commodity = str[..<commodityEnd].trimmingCharacters(in: .whitespaces)
         guard !commodity.isEmpty else { throw LedgerError.invalidAmount(raw) }
@@ -104,7 +118,10 @@ extension JournalParser {
             numberText = String(numberText.dropFirst())
         }
 
-        guard let number = Self.scanNumber(numberText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+        guard let number = Self.scanNumber(
+            numberText.trimmingCharacters(in: .whitespacesAndNewlines),
+            declaredMark: style.declaredDecimalMark(for: commodity),
+        ) else {
             throw LedgerError.invalidAmount(raw)
         }
         return ShapedAmount(
@@ -131,12 +148,20 @@ extension JournalParser {
     /// empty leaves the `USD` a bare number has always been read as; hledger
     /// reads it as an amount in no commodity at all, and that is a separate
     /// question from this one.
-    private func parseSuffixCommodityAmount(_ str: String, sign: Decimal, raw: String) throws -> ShapedAmount {
+    private func parseSuffixCommodityAmount(
+        _ str: String,
+        sign: Decimal,
+        raw: String,
+        in style: JournalStyleCollector,
+    ) throws -> ShapedAmount {
         let end = str.firstIndex { !Self.opensNumber($0) } ?? str.endIndex
         let remainder = String(str[end...]).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !Self.cutsNumberShort(remainder),
               !Self.commodityCarriesDigit(remainder),
-              let number = Self.scanNumber(String(str[..<end]))
+              let number = Self.scanNumber(
+                  String(str[..<end]),
+                  declaredMark: style.declaredDecimalMark(for: remainder.isEmpty ? nil : remainder),
+              )
         else {
             throw LedgerError.invalidAmount(raw)
         }
@@ -195,7 +220,7 @@ extension JournalParser {
     /// of the number rather than assumed.
     ///
     /// The rules are hledger's, with the tie-break ledger-cli and SwiftLedger
-    /// have always used:
+    /// have always used where the file declares nothing:
     ///
     /// - two different marks: the last one divides the fraction and the other
     ///   groups, so `1,000.00` and `1.000,00` are both one thousand and
@@ -207,24 +232,27 @@ extension JournalParser {
     ///   follows, because there is nothing there to group, so `0,500` is half
     ///   a unit and `€0,750` three quarters of one;
     /// - one mark with exactly three digits after it: nothing in the number
-    ///   says which it is, and the reading kept here is the one this library
-    ///   and ledger-cli have always had, `,` groups and `.` divides, so
-    ///   `1,000` is a thousand and `1.000` is one. hledger reads `1,000` as
-    ///   one instead, unless a directive declares the commodity;
+    ///   says which it is. `declaredMark` is what the file's `commodity`, `D`
+    ///   or `decimal-mark` directives above it say the decimal mark is
+    ///   (`JournalStyleCollector.declaredDecimalMark(for:)`), and settles it
+    ///   as hledger settles it, so `€1.000` under `commodity €1.000,00` is a
+    ///   thousand. Without one, the reading kept is the one this library and
+    ///   ledger-cli have always had, `,` groups and `.` divides, so `1,000` is
+    ///   a thousand and `1.000` is one; hledger reads `1,000` as one instead;
     /// - one mark with any other count of digits after it, none included: it
     ///   divides, so `12,50` is 12.5, `1,0000` is 1 and `5,` is 5.
     ///
     /// Group widths are not policed beyond being non-empty, which is hledger's
     /// reading: Indian grouping (`1,00,000`) is a hundred thousand there and
     /// here, while ledger-cli insists on groups of three and refuses it.
-    private static func scanNumber(_ text: String) -> ScannedNumber? {
+    private static func scanNumber(_ text: String, declaredMark: Character?) -> ScannedNumber? {
         let characters = Array(text)
         guard !characters.isEmpty,
               characters.allSatisfy(opensNumber),
               characters.contains(where: \.isASCIIDigit) else { return nil }
 
         let marks = characters.indices.filter { !characters[$0].isASCIIDigit }
-        let reading = markReading(in: characters, marks: marks)
+        let reading = markReading(in: characters, marks: marks, declaredMark: declaredMark)
         let groups = marks.filter { $0 != reading.decimal }
         guard groupsAreWellPlaced(groups, in: characters) else { return nil }
         return number(from: characters, decimal: reading.decimal, groups: groups, isSettled: reading.isSettled)
@@ -235,28 +263,40 @@ extension JournalParser {
         /// Which mark divides the fraction, as an index into the number, or
         /// `nil` when every mark groups and the number has no fraction at all.
         var decimal: Int?
-        /// Whether the number itself settled that, rather than the tie-break
-        /// settling it for the number. A reading is made either way, since a
-        /// value has to come out; only what the number is allowed to say about
-        /// the file's convention turns on this.
+        /// Whether the number itself or a directive settled that, rather than
+        /// the tie-break settling it for the number. A reading is made either
+        /// way, since a value has to come out; only what the number is allowed
+        /// to say about the file's convention turns on this.
         var isSettled: Bool
     }
 
     /// Tells the marks of a number apart.
-    private static func markReading(in characters: [Character], marks: [Int]) -> MarkReading {
+    private static func markReading(in characters: [Character], marks: [Int], declaredMark: Character?) -> MarkReading {
         guard let last = marks.last else { return MarkReading(decimal: nil, isSettled: true) }
         if Set(marks.map { characters[$0] }).count > 1 { return MarkReading(decimal: last, isSettled: true) }
         if marks.count > 1 { return MarkReading(decimal: nil, isSettled: true) }
         // Nothing groups a zero, so a lone mark with only zeros in front of it
         // divides however many digits follow it: `0,500` is half a unit. An
-        // empty integer part is not that case, and `,000` stays a group mark
-        // with nothing on its left, which is no number at all.
+        // empty integer part is not that case, and with no directive to say
+        // what the mark is, `,000` stays a group mark with nothing on its left,
+        // which is no number at all.
         let integerPart = characters[..<last]
         if !integerPart.isEmpty, integerPart.allSatisfy({ $0 == "0" }) {
             return MarkReading(decimal: last, isSettled: true)
         }
         guard characters.count - last - 1 == 3 else { return MarkReading(decimal: last, isSettled: true) }
-        return MarkReading(decimal: characters[last] == "." ? last : nil, isSettled: false)
+        // The one shape the number cannot settle. Without a directive it gets
+        // the tie-break, and abstains from the vote on the file's marks.
+        guard let declaredMark else {
+            return MarkReading(decimal: characters[last] == "." ? last : nil, isSettled: false)
+        }
+        // A directive settles it. A mark with nothing in front of it divides
+        // under either directive, since there is nothing there to group:
+        // `€.500` under `decimal-mark ,` is half a euro, here and in hledger,
+        // where read as a group mark it was no number at all and the file
+        // stopped loading.
+        let divides = integerPart.isEmpty || characters[last] == declaredMark
+        return MarkReading(decimal: divides ? last : nil, isSettled: true)
     }
 
     /// Whether every group mark is the same character, written between two
@@ -305,81 +345,6 @@ extension JournalParser {
                 groupMark: isSettled ? groups.first.map { characters[$0] } : nil,
             ),
         )
-    }
-
-    // MARK: - Amount, price and balance assertion
-
-    /// The parts a posting's amount field can carry: the amount itself, an
-    /// optional price after `@` / `@@`, and an optional balance assertion
-    /// after `=`.
-    ///
-    /// Each part is raw source text, trimmed, for `parseAmount` to interpret.
-    /// `amount` is empty when the posting elides it and writes only an
-    /// assertion, as `Assets:Cash    = $500.00` does.
-    struct AmountField {
-        var amount: String
-        var price: String?
-        var priceIsTotal: Bool
-        var assertion: String?
-    }
-
-    /// Splits everything written after the account name on a posting line into
-    /// its amount, price and balance-assertion parts.
-    ///
-    /// ledger and hledger write these in one order — `AMOUNT [@|@@ PRICE]
-    /// [= ASSERTION]` — so a single left-to-right scan for the first `@` or `=`
-    /// finds where the amount stops. A field carrying neither operator comes
-    /// back as the amount alone and takes exactly the path it always took;
-    /// splitting only ever changes what happens to a line that would otherwise
-    /// have had `@ $150.00` swallowed into its commodity name.
-    ///
-    /// Spacing around the operators is free-form in the source and is not
-    /// recorded here: `10 AAPL@$150.00` and `10 AAPL @ $150.00` split alike,
-    /// and a posting the serializer has to format is spaced canonically.
-    func splitAmountField(_ field: String) -> AmountField {
-        guard let operatorIndex = field.firstIndex(where: { $0 == "@" || $0 == "=" }) else {
-            return AmountField(amount: trimmedField(field), price: nil, priceIsTotal: false, assertion: nil)
-        }
-        let amount = trimmedField(field[..<operatorIndex])
-        let rest = field[operatorIndex...]
-        if rest.first == "=" {
-            return AmountField(amount: amount, price: nil, priceIsTotal: false, assertion: assertionText(rest))
-        }
-
-        var price = rest.dropFirst()
-        let isTotal = price.first == "@"
-        if isTotal { price = price.dropFirst() }
-        guard let assertionIndex = price.firstIndex(of: "=") else {
-            return AmountField(
-                amount: amount,
-                price: trimmedField(price),
-                priceIsTotal: isTotal,
-                assertion: nil,
-            )
-        }
-        return AmountField(
-            amount: amount,
-            price: trimmedField(price[..<assertionIndex]),
-            priceIsTotal: isTotal,
-            assertion: assertionText(price[assertionIndex...]),
-        )
-    }
-
-    /// The amount text of a balance assertion whose leading `=` is still attached.
-    ///
-    /// hledger spells a second, stronger form `==` — an assertion over every
-    /// commodity in the account rather than this posting's alone. Both are read
-    /// as assertions here: the distinction is not modelled, but reading either
-    /// operator as part of the commodity name is what made the file refuse to
-    /// load, and that is the failure worth removing first.
-    private func assertionText(_ text: Substring) -> String {
-        var rest = text.dropFirst()
-        if rest.first == "=" { rest = rest.dropFirst() }
-        return trimmedField(rest)
-    }
-
-    private func trimmedField(_ text: some StringProtocol) -> String {
-        String(text).trimmingCharacters(in: .whitespaces)
     }
 }
 

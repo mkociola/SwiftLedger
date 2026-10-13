@@ -3,25 +3,38 @@
 import Foundation
 
 extension JournalParser {
-    /// Reads the display style a `D` or `commodity` directive states, if the
-    /// line is one.
+    /// Reads what a `D`, `commodity` or `decimal-mark` directive states, if
+    /// the line is one: the display style a sample amount shows, and the
+    /// decimal mark an amount below the line is read with where the number
+    /// itself cannot say (`JournalStyleCollector.declaredDecimalMark(for:)`).
     ///
     /// ledger and hledger both spell a style as a sample amount, in three
     /// places: `D $1,000.00`, the one-line `commodity $1,000.00`, and the
     /// indented `format $1,000.00` inside a `commodity` block. An indented line
     /// can only reach here from such a block — the ones inside a transaction
     /// are consumed with it — so no block tracking is needed to tell them
-    /// apart.
+    /// apart. The sample is itself read under whatever the file has declared
+    /// above it, as hledger reads it, so `commodity €1.000` below
+    /// `decimal-mark ,` states a grouped whole number. hledger's
+    /// `decimal-mark .` or `decimal-mark ,` states no style and names no
+    /// commodity; it says how every amount below it is read.
     ///
-    /// Anything that does not parse as an amount is left alone. A directive
-    /// SwiftLedger misreads here costs nothing but the guess: the line itself
-    /// is still written back verbatim.
+    /// Anything that does not parse as an amount, or as one of the two marks,
+    /// is left alone. A directive SwiftLedger misreads here costs nothing but
+    /// the guess: the line itself is still written back verbatim.
     func declareFormat(from line: String, into style: inout JournalStyleCollector) {
         let isIndented = line.first == " " || line.first == "\t"
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        let keyword = ["D ", "commodity ", "format "].first { trimmed.hasPrefix($0) }
+        // The keyword ends at a space or a tab, as it does in hledger, where
+        // `decimal-mark\t,` declares the comma as much as `decimal-mark ,`
+        // does. Matched on the space alone, a tab dropped the whole line
+        // without a word, and from this version that silence changes what the
+        // amounts below it are worth.
+        let keyword = ["D", "commodity", "format", "decimal-mark"].first {
+            trimmed.hasPrefix($0) && trimmed.dropFirst($0.count).first?.isWhitespace == true
+        }
         guard let keyword else { return }
-        guard keyword != "format " || isIndented else { return }
+        guard keyword != "format" || isIndented else { return }
 
         // A directive may carry a comment of its own, and `D $1,000.00 ; house
         // style` states a style all the same, so the sample is what precedes
@@ -29,11 +42,16 @@ extension JournalParser {
         // declaration, silently, since a directive that does not parse is left
         // alone by design.
         let (sample, _) = splitPostingComment(String(trimmed.dropFirst(keyword.count)))
+        guard let sample else { return }
+        if keyword == "decimal-mark" {
+            if sample == "." || sample == ",", let mark = sample.first { style.declareDecimalMark(mark) }
+            return
+        }
         // `commodity $` names a commodity without stating a style; only the
         // sample-amount forms say anything to record.
-        guard let sample, sample.contains(where: \.isNumber),
-              let parsed = try? parseShapedAmount(sample, lineNumber: 0) else { return }
-        style.declare(parsed.shape, commodity: parsed.amount.commodity)
+        guard sample.contains(where: \.isNumber),
+              let parsed = try? parseShapedAmount(sample, lineNumber: 0, in: style) else { return }
+        style.declare(parsed.shape, commodity: parsed.amount.commodity, isDefault: keyword == "D")
     }
 
     /// The column `line`'s amount field starts at: past the account token,

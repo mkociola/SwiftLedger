@@ -1,7 +1,8 @@
 import Foundation
 
 /// Watches how a journal is written, so that the serializer can write a
-/// rebuilt transaction the same way.
+/// rebuilt transaction the same way, and keeps what its directives declare, so
+/// that the parser can read the one number shape that cannot read itself.
 ///
 /// Two things, both lost by the time parsing is done. The parser feeds it the
 /// raw text of every amount it reads — posting amounts, `@` prices and `= `
@@ -36,12 +37,16 @@ struct JournalStyleCollector {
     private struct DeclaredStyle {
         var fractionDigits: Int
         var groupsThousands: Bool
-        /// `nil` when the sample could not say which of its marks was which.
-        var decimalMark: Character?
     }
 
     /// Styles a `D` or `commodity` directive states outright.
     private var declared: [String: DeclaredStyle] = [:]
+    /// The decimal mark each kind of directive has declared for reading, as of
+    /// the line the parser is on. See `declaredDecimalMark(for:)` for how the
+    /// three rank.
+    private var decimalMarkDirective: Character?
+    private var commodityDirectiveMarks: [String: Character] = [:]
+    private var defaultCommodityMark: Character?
     /// The column each posting's amount field began at, and each one ended at,
     /// with how often — the two conventions, counted against each other.
     private var amountStarts: [Int: Int] = [:]
@@ -103,18 +108,57 @@ struct JournalStyleCollector {
     }
 
     /// Records the style a directive states for a commodity, written the way
-    /// ledger writes one — as a sample amount: `D $1,000.00`.
+    /// ledger writes one, as a sample amount: `D $1,000.00`. `isDefault` is
+    /// true for a `D` directive, which names the file's default commodity as
+    /// well as a style.
     ///
     /// A declaration says nothing about where a minus sign goes, so that stays
     /// with whatever the file's own amounts show. A sample that cannot say
     /// which of its marks was which, as `D 1.000 EUR` cannot, says nothing
-    /// about the marks either and leaves them to the amounts in the same way.
-    mutating func declare(_ shape: NumberShape, commodity: String) {
+    /// about the marks either and leaves them to the amounts in the same way,
+    /// for writing and for reading both.
+    mutating func declare(_ shape: NumberShape, commodity: String, isDefault: Bool) {
+        let mark = Self.decimalMark(of: shape)
         declared[commodity] = DeclaredStyle(
             fractionDigits: shape.fractionDigits,
             groupsThousands: shape.usesSeparator,
-            decimalMark: Self.decimalMark(of: shape),
         )
+        // A sample that names no mark leaves the reading marks as they were:
+        // a mark-less `commodity €1000` after `commodity €1.000,00` would
+        // otherwise take the comma away again. hledger refuses such a sample
+        // outright.
+        guard let mark else { return }
+        if isDefault {
+            defaultCommodityMark = mark
+        } else {
+            commodityDirectiveMarks[commodity] = mark
+        }
+    }
+
+    /// Records a `decimal-mark` directive.
+    mutating func declareDecimalMark(_ mark: Character) {
+        decimalMarkDirective = mark
+    }
+
+    /// The decimal mark the file has declared for an amount in `commodity` by
+    /// this point in it, or `nil` when no directive has spoken.
+    ///
+    /// This is what settles a number whose one mark has exactly three digits
+    /// after it, the one shape that cannot settle itself; see
+    /// `JournalParser.scanNumber`. Three directives can speak, and hledger
+    /// ranks them rather than taking the latest: `decimal-mark` outranks a
+    /// `commodity` directive, which outranks `D`, whichever order they were
+    /// written in. Within a level the latest line counts, so a second
+    /// `decimal-mark` replaces the first and a second `D` names a new default
+    /// commodity, taking the old one's mark with it. `decimal-mark` names no
+    /// commodity and reaches all of them, and so does `D`: hledger reads every
+    /// commodity without a declaration of its own by the default commodity's
+    /// marks. A bare number, `nil` here, is in no commodity however `Amount`
+    /// later names it, so no `commodity` directive reaches it, not even one
+    /// for the `USD` the parser reads it as; hledger reads it by the other
+    /// two alone.
+    func declaredDecimalMark(for commodity: String?) -> Character? {
+        decimalMarkDirective ?? commodity.flatMap { commodityDirectiveMarks[$0] } ?? defaultCommodityMark
     }
 
     /// Records where a posting line's amount field began and ended.
@@ -204,7 +248,13 @@ struct JournalStyleCollector {
                 // Ties, and files with no negative prefixed amount at all, keep
                 // the placement SwiftLedger has always written.
                 signPrecedesCommodity: (signFirst[commodity] ?? 0) >= (signAfterCommodity[commodity] ?? 0),
-                decimalMark: Self.mostCommonMark(decimalMarks[commodity] ?? [:]),
+                // A declared reading mark outranks the vote. Every amount
+                // below the directive is read by it, so a rebuilt amount
+                // written with the other mark reads back wrong: in a file of
+                // `€1000` under `decimal-mark ,`, nothing votes, and an
+                // eighth written `€1.125` came back as eleven hundred odd.
+                decimalMark: declaredDecimalMark(for: commodity)
+                    ?? Self.mostCommonMark(decimalMarks[commodity] ?? [:]),
                 // A tie goes behind the number, where `Amount.init` puts a
                 // commodity it is told nothing about, and a commodity written
                 // on neither side has shown none. The space has to win
@@ -228,9 +278,10 @@ struct JournalStyleCollector {
             // never lower it.
             merged.maxFractionDigits = max(merged.maxFractionDigits, stated.fractionDigits)
             merged.groupsThousands = stated.groupsThousands
-            // A declaration whose sample could not name a mark overrules
-            // nothing here, and the amounts keep the vote.
-            merged.decimalMark = stated.decimalMark ?? merged.decimalMark
+            // The mark is the one the amounts below the directives are read
+            // by, as above; a declaration whose sample could not name a mark
+            // overrules nothing here, and the amounts keep the vote.
+            merged.decimalMark = declaredDecimalMark(for: commodity) ?? merged.decimalMark
             result[commodity] = merged
         }
         return result
