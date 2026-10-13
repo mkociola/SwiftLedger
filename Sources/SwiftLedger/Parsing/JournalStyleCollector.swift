@@ -79,8 +79,9 @@ struct JournalStyleCollector {
             }
         }
         // One amount, one vote on the marks, however many of them it wrote:
-        // `1.000,00` shows both and still counts once.
-        if let mark = Self.decimalMark(of: shape) {
+        // `1.000,00` shows both and still counts once. An amount the
+        // tie-break read abstains: see `NumberShape.isSettled`.
+        if shape.isSettled, let mark = Self.decimalMark(of: shape) {
             decimalMarks[commodity, default: [:]][mark, default: 0] += 1
         }
         if amount.commodityIsPrefix {
@@ -113,10 +114,11 @@ struct JournalStyleCollector {
     /// well as a style.
     ///
     /// A declaration says nothing about where a minus sign goes, so that stays
-    /// with whatever the file's own amounts show. A sample that cannot say
-    /// which of its marks was which, as `D 1.000 EUR` cannot, says nothing
-    /// about the marks either and leaves them to the amounts in the same way,
-    /// for writing and for reading both.
+    /// with whatever the file's own amounts show. A sample with one mark is
+    /// read as any amount is, by the tie-break where nothing is declared
+    /// above it, and declares the mark it was read with, for writing and for
+    /// reading both: `D 1.000 EUR` declares the point, as it does in hledger,
+    /// so `12,50 EUR` below it is twelve hundred and fifty in both tools.
     mutating func declare(_ shape: NumberShape, commodity: String, isDefault: Bool) {
         let mark = Self.decimalMark(of: shape)
         declared[commodity] = DeclaredStyle(
@@ -143,9 +145,9 @@ struct JournalStyleCollector {
     /// The decimal mark the file has declared for an amount in `commodity` by
     /// this point in it, or `nil` when no directive has spoken.
     ///
-    /// This is what settles a number whose one mark has exactly three digits
-    /// after it, the one shape that cannot settle itself; see
-    /// `JournalParser.scanNumber`. Three directives can speak, and hledger
+    /// This is what every lone mark below the directive is read against: the
+    /// declared mark divides, and any other mark groups whatever follows it;
+    /// see `JournalParser.scanNumber`. Three directives can speak, and hledger
     /// ranks them rather than taking the latest: `decimal-mark` outranks a
     /// `commodity` directive, which outranks `D`, whichever order they were
     /// written in. Within a level the latest line counts, so a second
@@ -316,14 +318,12 @@ struct JournalStyleCollector {
         separated > 0 && separated >= unseparated
     }
 
-    /// The decimal mark one written number is evidence for: the mark that
+    /// The decimal mark one written number was read with: the mark that
     /// divided its own fraction, or failing that the counterpart of the mark
     /// it grouped with, since a number grouping with `.` divides with `,`.
-    ///
-    /// `nil` is an abstention rather than a vote for the default: a number
-    /// whose one mark had exactly three digits after it was read by the
-    /// tie-break rather than by anything it said, and the file's real evidence
-    /// should not be outvoted by numbers that had nothing to say.
+    /// `nil` for a number that wrote no mark at all. Whether the reading was
+    /// the number's own or the tie-break's is `NumberShape.isSettled`'s to
+    /// say, and only `observe` asks.
     private static func decimalMark(of shape: NumberShape) -> Character? {
         shape.decimalMark ?? shape.groupMark.map(counterpart)
     }

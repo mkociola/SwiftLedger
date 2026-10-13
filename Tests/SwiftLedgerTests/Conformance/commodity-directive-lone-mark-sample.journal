@@ -1,0 +1,10 @@
+commodity 1.000 EUR
+D $1,000.00
+
+2024-01-01 A commodity sample with one mark declares the mark it was read with
+    Expenses:Rent    12,50 EUR
+    Assets:Checking
+
+2024-01-02 So does a D sample
+    Expenses:Food    $1,50
+    Assets:Checking

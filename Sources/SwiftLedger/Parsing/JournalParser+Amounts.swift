@@ -228,19 +228,25 @@ extension JournalParser {
     /// - one mark written more than once: all of them group and there is no
     ///   fraction, so `1.000.000` is a million and `1,00,000` is a hundred
     ///   thousand;
-    /// - one mark with nothing but zeros in front of it: it divides, whatever
-    ///   follows, because there is nothing there to group, so `0,500` is half
-    ///   a unit and `€0,750` three quarters of one;
-    /// - one mark with exactly three digits after it: nothing in the number
-    ///   says which it is. `declaredMark` is what the file's `commodity`, `D`
-    ///   or `decimal-mark` directives above it say the decimal mark is
-    ///   (`JournalStyleCollector.declaredDecimalMark(for:)`), and settles it
-    ///   as hledger settles it, so `€1.000` under `commodity €1.000,00` is a
-    ///   thousand. Without one, the reading kept is the one this library and
-    ///   ledger-cli have always had, `,` groups and `.` divides, so `1,000` is
-    ///   a thousand and `1.000` is one; hledger reads `1,000` as one instead;
-    /// - one mark with any other count of digits after it, none included: it
-    ///   divides, so `12,50` is 12.5, `1,0000` is 1 and `5,` is 5.
+    /// - one mark, and a directive above the number: `declaredMark` is what
+    ///   the file's `commodity`, `D` or `decimal-mark` directives say the
+    ///   decimal mark is (`JournalStyleCollector.declaredDecimalMark(for:)`).
+    ///   The mark divides when it is that one and groups otherwise, whatever
+    ///   follows it, so `€1.000` under `commodity €1.000,00` is a thousand
+    ///   and `€12.50` under `decimal-mark ,` is twelve hundred and fifty. A
+    ///   mark with nothing on one side of it divides either way, since there
+    ///   is nothing there to group;
+    /// - one mark and no directive, with nothing but zeros in front of it: it
+    ///   divides, whatever follows, because there is nothing there to group,
+    ///   so `0,500` is half a unit and `€0,750` three quarters of one;
+    /// - one mark and no directive, with exactly three digits after it:
+    ///   nothing in the number says which it is, and the reading kept is the
+    ///   one this library and ledger-cli have always had, `,` groups and `.`
+    ///   divides, so `1,000` is a thousand and `1.000` is one; hledger reads
+    ///   `1,000` as one instead;
+    /// - one mark and no directive, with any other count of digits after it,
+    ///   none included: it divides, so `12,50` is 12.5, `1,0000` is 1 and
+    ///   `5,` is 5.
     ///
     /// Group widths are not policed beyond being non-empty, which is hledger's
     /// reading: Indian grouping (`1,00,000`) is a hundred thousand there and
@@ -275,28 +281,31 @@ extension JournalParser {
         guard let last = marks.last else { return MarkReading(decimal: nil, isSettled: true) }
         if Set(marks.map { characters[$0] }).count > 1 { return MarkReading(decimal: last, isSettled: true) }
         if marks.count > 1 { return MarkReading(decimal: nil, isSettled: true) }
+        let integerPart = characters[..<last]
+        // A directive settles a lone mark outright, as hledger reads it: the
+        // declared mark divides, and any other mark groups whatever follows
+        // it, so `€12.50` under `decimal-mark ,` is twelve hundred and fifty.
+        // A mark with nothing on one side of it divides under either
+        // directive, since there is nothing there to group: `€.500` under
+        // `decimal-mark ,` is half a euro and `€5.` is five, here and in
+        // hledger, where read as a group mark either was no number at all
+        // and the file stopped loading.
+        if let declaredMark {
+            let divides = integerPart.isEmpty || last == characters.count - 1 || characters[last] == declaredMark
+            return MarkReading(decimal: divides ? last : nil, isSettled: true)
+        }
         // Nothing groups a zero, so a lone mark with only zeros in front of it
         // divides however many digits follow it: `0,500` is half a unit. An
         // empty integer part is not that case, and with no directive to say
         // what the mark is, `,000` stays a group mark with nothing on its left,
         // which is no number at all.
-        let integerPart = characters[..<last]
         if !integerPart.isEmpty, integerPart.allSatisfy({ $0 == "0" }) {
             return MarkReading(decimal: last, isSettled: true)
         }
         guard characters.count - last - 1 == 3 else { return MarkReading(decimal: last, isSettled: true) }
-        // The one shape the number cannot settle. Without a directive it gets
-        // the tie-break, and abstains from the vote on the file's marks.
-        guard let declaredMark else {
-            return MarkReading(decimal: characters[last] == "." ? last : nil, isSettled: false)
-        }
-        // A directive settles it. A mark with nothing in front of it divides
-        // under either directive, since there is nothing there to group:
-        // `€.500` under `decimal-mark ,` is half a euro, here and in hledger,
-        // where read as a group mark it was no number at all and the file
-        // stopped loading.
-        let divides = integerPart.isEmpty || characters[last] == declaredMark
-        return MarkReading(decimal: divides ? last : nil, isSettled: true)
+        // The one shape the number cannot settle on its own. It gets the
+        // tie-break, and abstains from the vote on the file's marks.
+        return MarkReading(decimal: characters[last] == "." ? last : nil, isSettled: false)
     }
 
     /// Whether every group mark is the same character, written between two
@@ -320,9 +329,9 @@ extension JournalParser {
     /// is, so nothing but digits follows it.
     ///
     /// The marks go into the shape as the characters the number actually
-    /// wrote, and an unsettled reading reports neither. See `NumberShape` for
-    /// why a number that cannot say which convention it follows is kept from
-    /// saying it anyway.
+    /// wrote, read the way they were read, and `isSettled` says whether that
+    /// reading was the number's own or the tie-break's. See `NumberShape` for
+    /// what turns on it.
     private static func number(
         from characters: [Character],
         decimal: Int?,
@@ -341,8 +350,9 @@ extension JournalParser {
                 fractionDigits: fractionDigits.count,
                 usesSeparator: !groups.isEmpty,
                 canShowGrouping: integerDigits.count > 3,
-                decimalMark: isSettled ? decimal.map { characters[$0] } : nil,
-                groupMark: isSettled ? groups.first.map { characters[$0] } : nil,
+                decimalMark: decimal.map { characters[$0] },
+                groupMark: groups.first.map { characters[$0] },
+                isSettled: isSettled,
             ),
         )
     }

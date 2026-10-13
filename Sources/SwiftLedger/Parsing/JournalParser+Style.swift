@@ -5,8 +5,8 @@ import Foundation
 extension JournalParser {
     /// Reads what a `D`, `commodity` or `decimal-mark` directive states, if
     /// the line is one: the display style a sample amount shows, and the
-    /// decimal mark an amount below the line is read with where the number
-    /// itself cannot say (`JournalStyleCollector.declaredDecimalMark(for:)`).
+    /// decimal mark every lone mark below the line is read against
+    /// (`JournalStyleCollector.declaredDecimalMark(for:)`).
     ///
     /// ledger and hledger both spell a style as a sample amount, in three
     /// places: `D $1,000.00`, the one-line `commodity $1,000.00`, and the

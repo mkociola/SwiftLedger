@@ -3912,8 +3912,11 @@ private func renaming(
     }
 
     /// A declaration is the user stating their house style, so it settles the
-    /// marks the way it settles the digit count, against whatever the amounts
-    /// happen to show.
+    /// marks the way it settles the digit count, and the amounts below it are
+    /// read by it rather than against it: `12.50 EUR` under a comma
+    /// declaration is twelve hundred and fifty, as hledger reads it. A
+    /// rebuilt entry writes that figure in the declared style, where it reads
+    /// back as the same figure.
     @Test(arguments: [
         "D 1.000,00 EUR",
         "commodity 1.000,00 EUR",
@@ -3928,17 +3931,23 @@ private func renaming(
             assets:bank      -12.50 EUR
         """)
         #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
+        #expect(journal.transactions.first?.postings.map(\.amount.quantity) == [1250, -1250])
 
         try renaming(#require(journal.transactions.first), to: "lunch (revised)", in: &journal)
         let written = JournalSerializer().serialize(journal)
-        #expect(written.contains("12,50 EUR"))
+        #expect(written.contains("1.250,00 EUR"))
         #expect(!written.contains("12.50 EUR"))
+        #expect(try #require(JournalParser().parse(written).transactions.first)
+            .postings.map(\.amount.quantity) == [1250, -1250])
     }
 
-    /// A declaration whose own sample cannot tell its marks apart declares a
-    /// digit count and nothing else, and the amounts settle the rest.
+    /// A declaration whose sample has one mark declares the mark the sample
+    /// was read with, the point for `D 1.000 EUR`, along with its three
+    /// places. The amounts below it are read by that point, so `12,50 EUR`
+    /// is twelve hundred and fifty, and a rebuilt entry writes it to the
+    /// declared three places, where it reads back as the same figure.
     @Test
-    func `a declaration that shows no mark leaves the marks to the amounts`() throws {
+    func `a declaration with a lone mark declares the mark its sample was read with`() throws {
         var journal = try JournalParser().parse("""
         D 1.000 EUR
 
@@ -3946,16 +3955,14 @@ private func renaming(
             expenses:food     12,50 EUR
             assets:bank      -12,50 EUR
         """)
-        #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ".")
+        #expect(journal.transactions.first?.postings.map(\.amount.quantity) == [1250, -1250])
 
-        // Three places because the declaration says three, a comma because the
-        // postings say comma, and a fourth place because the reader cannot
-        // settle `12,500` and would hand back twelve thousand five hundred.
         try renaming(#require(journal.transactions.first), to: "lunch (revised)", in: &journal)
         let written = JournalSerializer().serialize(journal)
-        #expect(written.contains("12,5000 EUR"))
+        #expect(written.contains("1250.000 EUR"))
         #expect(try #require(JournalParser().parse(written).transactions.last)
-            .postings.map(\.amount.quantity) == [Decimal(string: "12.5"), Decimal(string: "-12.5")])
+            .postings.map(\.amount.quantity) == [1250, -1250])
     }
 
     @Test

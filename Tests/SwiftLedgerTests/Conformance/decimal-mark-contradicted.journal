@@ -1,0 +1,23 @@
+decimal-mark ,
+
+2024-01-01 A point under a comma declaration groups, whatever follows it
+    Expenses:Rent    €12.50
+    Assets:Checking
+
+2024-01-02 One digit after it still groups
+    Expenses:Rent    €12.5
+    Assets:Checking
+
+2024-01-03 A zero in front of it does not make it divide
+    Expenses:Food    €0.5
+    Assets:Checking
+
+2024-01-04 A trailing mark divides, since nothing follows it to group
+    Expenses:Rent    €5.
+    Assets:Checking
+
+decimal-mark .
+
+2024-01-05 The same the other way round
+    Expenses:Rent    €0,500
+    Assets:Checking
