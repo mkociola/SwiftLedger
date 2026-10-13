@@ -133,7 +133,7 @@ extension JournalParser {
 
     /// The error for a `D` line with no sample amount after the `D`.
     private static func unreadableDefault(_ directive: String) -> LedgerError {
-        .unreadableDirective(directive, reason: "'D' takes a space and a sample amount, such as 'D $1,000.00'")
+        .unreadableDirective(directive, reason: "'D' takes a sample amount, such as 'D $1,000.00'")
     }
 
     /// The column `line`'s amount field starts at: past the account token,
