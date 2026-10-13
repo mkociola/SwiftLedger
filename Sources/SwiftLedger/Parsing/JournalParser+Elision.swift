@@ -15,10 +15,10 @@ extension JournalParser {
     /// single amount: the standard opening-balances entry writes a dollar leg
     /// and a pound leg and lets one `equity:opening balances` line absorb both.
     /// Since `Posting` carries one amount, such a line expands here into one
-    /// posting per commodity with something left to absorb, in the order the
-    /// commodities first appear, sitting where the elided line was. That is
-    /// what ledger and hledger infer, and it is how hledger prints the entry
-    /// back.
+    /// posting per commodity with something left to absorb, sorted by
+    /// commodity symbol, sitting where the elided line was. That is what
+    /// ledger and hledger infer, and it is the order hledger prints the entry
+    /// back in.
     ///
     /// A parenthesised posting takes part in no balance, so there is nothing to
     /// infer its amount from and any number of them may elide one: each reads
@@ -60,7 +60,10 @@ extension JournalParser {
 
     /// What the one posting of a group that elided its amount takes: minus the
     /// sum of what the rest of its own group wrote, one amount per commodity
-    /// that does not already net to zero, in order of first appearance. A
+    /// that does not already net to zero, sorted by symbol. The sort compares
+    /// Unicode code points, as hledger does, rather than following a locale,
+    /// so `EUR` comes before `eur` and both before `£` and `€`; the order the
+    /// entry wrote them in plays no part. A
     /// priced posting contributes what it cost, not what it moved, so that a
     /// share purchase can balance an elided cash leg. A group in which nobody
     /// wrote an amount leaves zero to absorb, in the first commodity the entry
@@ -87,7 +90,8 @@ extension JournalParser {
             sums[amount.commodity]?.quantity += amount.quantity
         }
 
-        let remainders = order.compactMap { commodity -> Amount? in
+        let sorted = order.sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) }
+        let remainders = sorted.compactMap { commodity -> Amount? in
             guard let sum = sums[commodity], sum.quantity != .zero else { return nil }
             return Amount(
                 quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix,
