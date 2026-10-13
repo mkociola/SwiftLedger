@@ -122,10 +122,12 @@ extension JournalParser {
         return (date, rest)
     }
 
-    /// Splits the inline comment off a transaction header or an `account`
-    /// directive: two or more spaces, then `;`.
+    /// Splits the inline comment off an `account` directive: two or more
+    /// spaces, then `;`.
     ///
-    /// A posting line goes through `splitPostingComment` instead, which takes
+    /// A transaction header opens its comment at the first `;` past the code,
+    /// as hledger reads it, and `parseHeader` splits it there itself. A
+    /// posting line goes through `splitPostingComment` instead, which takes
     /// a `;` after one space as well. The two-space rule is there to end an
     /// account name, and past the name a posting line is an amount field,
     /// where ledger and hledger open a comment at the first `;` however few

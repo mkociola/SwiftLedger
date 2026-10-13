@@ -379,4 +379,15 @@ extension ExampleJournalTests {
         #expect(journal.transactions.first { $0.description == "Car wash" }?.postings.count == 2)
         #expect(journal.items[index + 1] == .directive("    "))
     }
+
+    /// The parking entry writes its comment after one space, and a `;` in its
+    /// code. The description stops at the first `;` past the code, as hledger
+    /// reads it, so the note is the entry's comment and not part of the payee.
+    @Test
+    func `the example reads a comment after one space on the entry line`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let parking = try #require(journal.transactions.first { $0.code == "P;7" })
+        #expect(parking.description == "Parking")
+        #expect(parking.comment == "paid at the machine")
+    }
 }
