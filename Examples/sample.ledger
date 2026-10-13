@@ -203,8 +203,10 @@ commodity €1.000,00
 
 ; ── An amount written against the declaration ──────────────────────────────
 ; From the directive above on, every lone mark in a euro amount is read by it
-; rather than by the number: the comma divides, and a point groups whatever
-; follows it, as hledger reads them. So €45.00 below is forty-five hundred
+; rather than by the number: the comma divides, and a point between digits
+; groups whatever follows it, as hledger reads them; only a point with nothing
+; on one side of it, as in €5. or €.50, still divides, since there is nothing
+; there to group. So €45.00 below is forty-five hundred
 ; euros, not forty-five. An amount written that way is most likely a slip,
 ; and reading it as hledger does means SwiftLedger reports the figure hledger
 ; reports rather than one a hundred times smaller, with nothing in the file
