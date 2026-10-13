@@ -13,11 +13,12 @@ import Foundation
 /// line is a common way to keep a note in a journal.
 ///
 /// A transaction also has to fit back on the page it came from: a journal
-/// writes the description, the code, an inline comment, every account name
-/// and each full-line comment in `leadingComments` and
-/// `Posting.trailingComments` on one line apiece, so none of them may hold a
-/// line break. `LedgerError.lineBreakInField` names the field that does, an
-/// index into those arrays included, and it is the first thing `init` checks.
+/// writes the description, the code, an inline comment, every account name,
+/// every commodity a posting line carries and each full-line comment in
+/// `leadingComments` and `Posting.trailingComments` on one line apiece, so
+/// none of them may hold a line break. `LedgerError.lineBreakInField` names
+/// the field that does, an index into those arrays included, and it is the
+/// first thing `init` checks.
 /// Each of those values is also written bare into a position the header or
 /// posting grammar reads by rule, so a value that looks like the syntax around
 /// it, a code holding `)`, a description opening `*` with no status written in
@@ -107,8 +108,9 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     ///
     /// - Throws: `LedgerError.lineBreakInField` if a field a journal writes
     ///   on one line contains a line break: the description, the code, an
-    ///   inline comment, an account name, or one of the full-line comments in
-    ///   `leadingComments` or `Posting.trailingComments`,
+    ///   inline comment, an account name, the commodity of a posting's
+    ///   amount, price or balance assertion, or one of the full-line comments
+    ///   in `leadingComments` or `Posting.trailingComments`,
     ///   `LedgerError.syntaxInField` if the header or posting grammar would
     ///   read a field back as something other than the field, by the rules
     ///   `validateHeaderSyntax` and `validatePostingSyntax` state,
@@ -257,8 +259,10 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     /// Refuses a field a journal cannot write on one line.
     ///
     /// A journal writes the description, the code, each comment and every
-    /// account name on a line of its own, and `JournalSerializer` writes each
-    /// of them verbatim, so a break inside one puts the rest of the value on a
+    /// account name on a line of its own, and every commodity a posting line
+    /// carries (its amount's, its price's and its balance assertion's) on the
+    /// line of the posting, and `JournalSerializer` writes each of them
+    /// verbatim, so a break inside one puts the rest of the value on a
     /// line by itself, where the next parse reads it as something else: a
     /// directive under the header, a lone elided posting in the body. A dated
     /// line with no postings being a valid entry, nothing downstream objects,
@@ -293,6 +297,11 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         }
         for (index, posting) in postings.enumerated() {
             try requireOneLine(posting.accountName, at: "postings[\(index)].accountName")
+            try requireOneLine(posting.amount.commodity, at: "postings[\(index)].amount.commodity")
+            try requireOneLine(posting.price?.amount.commodity, at: "postings[\(index)].price.amount.commodity")
+            try requireOneLine(
+                posting.balanceAssertion?.commodity, at: "postings[\(index)].balanceAssertion.commodity",
+            )
             try requireOneLine(posting.comment, at: "postings[\(index)].comment")
             for (commentIndex, text) in posting.trailingComments.enumerated() {
                 try requireOneLine(text, at: "postings[\(index)].trailingComments[\(commentIndex)]")
