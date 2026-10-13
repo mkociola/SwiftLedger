@@ -83,7 +83,11 @@ import Foundation
 ///   left to absorb, where the elided line was. An elided parenthesised
 ///   posting has no group to balance against and reads as zero, which is
 ///   hledger's reading; ledger-cli would hand it the real remainder instead.
-/// - Blank lines and full-line comments are preserved in the AST.
+/// - Blank lines and full-line comments are preserved in the AST. A line
+///   holding nothing but spaces or tabs is blank wherever a blank line
+///   matters, so it ends the entry above it, and is kept verbatim as a
+///   `.directive`, because `.blank` has nowhere to keep the whitespace and
+///   the line has to go back as it came.
 /// - Every parsed transaction keeps its own source lines verbatim
 ///   (`Transaction.sourceText`), so serialising a journal nobody edited
 ///   reproduces the file byte for byte.
@@ -133,9 +137,10 @@ public struct JournalParser {
             let raw = lines[index]
             let line = raw
 
-            // Blank line
+            // Blank line. One holding spaces or tabs reads as blank too, and
+            // is kept as it came so that it is written back as it came.
             if line.trimmingCharacters(in: .whitespaces).isEmpty {
-                items.append(.blank)
+                items.append(line.isEmpty ? .blank : .directive(line))
                 index += 1
                 continue
             }

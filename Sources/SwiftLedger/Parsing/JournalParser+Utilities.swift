@@ -78,15 +78,14 @@ extension JournalParser {
     /// The block runs to the first `end comment` or `end test` at column 0, or
     /// to the end of the file when nothing closes it, as in ledger and
     /// hledger. Its lines are kept verbatim as directives so the file goes
-    /// back byte for byte; a whitespace-only line among them becomes `.blank`,
-    /// exactly as it would at the top level, and writes back the same either
-    /// way.
+    /// back byte for byte, a whitespace-only line among them included; only
+    /// an empty line becomes `.blank`, exactly as it would at the top level.
     func parseCommentBlock(lines: [String], from start: Int) -> [JournalItem] {
         var items: [JournalItem] = [.directive(lines[start])]
         var index = start + 1
         while index < lines.count {
             let line = lines[index]
-            items.append(line.trimmingCharacters(in: .whitespaces).isEmpty ? .blank : .directive(line))
+            items.append(line.isEmpty ? .blank : .directive(line))
             index += 1
             if isCommentBlockEnd(line) { break }
         }
