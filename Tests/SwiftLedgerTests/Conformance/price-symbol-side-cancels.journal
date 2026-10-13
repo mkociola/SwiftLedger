@@ -1,0 +1,14 @@
+; A price is the same price wherever its symbol is written, so a per-unit
+; pair that differs only in that still cancels and leaves the exchange.
+2024-01-07 Wash and exchange
+    Assets:Brokerage   10 AAPL @ $150
+    Assets:Custody    -10 AAPL @ 150 $
+    Assets:Euros      100 EUR
+    Assets:Dollars   -110 USD
+
+; The same holds for a total price.
+2024-01-08 Wash at a total and exchange
+    Assets:Brokerage   10 AAPL @@ $1500
+    Assets:Custody    -10 AAPL @@ 1500 $
+    Assets:Euros      100 EUR
+    Assets:Dollars   -110 USD

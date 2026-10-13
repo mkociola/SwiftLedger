@@ -94,7 +94,7 @@ enum TransactionBalancing {
         // Step 2: the amounts as written, keyed by commodity and price. A
         // priced sum goes only when it is exactly zero; an unpriced one goes
         // when rounding calls it zero.
-        let left = sums(group.map { (Key(commodity: $0.amount.commodity, price: $0.price), $0.amount) })
+        let left = sums(group.map { (Key($0), $0.amount) })
             .filter { entry in
                 guard entry.key.price != nil else { return !isZero(entry.amount, places: places) }
                 return entry.amount.quantity != Decimal.zero
@@ -117,6 +117,21 @@ enum TransactionBalancing {
     private struct Key: Hashable {
         var commodity: String
         var price: PostingPrice?
+
+        /// Keys `posting` on its price's kind, quantity and commodity. The
+        /// side the price's symbol is written on is spelling and is left
+        /// out, so `10 AAPL @ $150` and `-10 AAPL @ 150 $` sum to zero, as
+        /// they do in hledger 1.52.4.
+        init(_ posting: Posting) {
+            commodity = posting.amount.commodity
+            price = posting.price.map { price in
+                let amount = Amount(quantity: price.amount.quantity, commodity: price.amount.commodity)
+                return switch price {
+                case .perUnit: .perUnit(amount)
+                case .total: .total(amount)
+                }
+            }
+        }
     }
 
     /// Sums amounts per key, in order of first appearance. Each sum keeps the

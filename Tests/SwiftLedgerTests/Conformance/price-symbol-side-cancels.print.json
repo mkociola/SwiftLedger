@@ -1,0 +1,170 @@
+[
+  {
+    "date": "2024-01-07",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Wash and exchange",
+    "postings": [
+      {
+        "account": "Assets:Brokerage",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "AAPL",
+            "mantissa": 10,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "$",
+              "mantissa": 150,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Custody",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "AAPL",
+            "mantissa": -10,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "$",
+              "mantissa": 150,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Euros",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": 110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Dollars",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-08",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Wash at a total and exchange",
+    "postings": [
+      {
+        "account": "Assets:Brokerage",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "AAPL",
+            "mantissa": 10,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "$",
+              "mantissa": 1500,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Custody",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "AAPL",
+            "mantissa": -10,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "$",
+              "mantissa": -1500,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Euros",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": 110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Dollars",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]
