@@ -127,6 +127,8 @@ public struct JournalParser {
     /// Parses `text` and returns a `Journal`.
     public func parse(_ text: String) throws -> Journal {
         let (lines, lineEnding) = Self.lines(of: text)
+        // On the scalars, since `"\r\n"` is one `Character` and not `"\n"`.
+        let endsInNewline = text.unicodeScalars.last == "\n"
         var items: [JournalItem] = []
         // Watches how the file writes each commodity, so that a transaction
         // the caller later rebuilds is written the same way.
@@ -149,7 +151,7 @@ public struct JournalParser {
             // it is interpreted, not even the display style a commented-out `D`
             // line would otherwise teach the style collector.
             if isCommentBlockStart(line) {
-                let block = parseCommentBlock(lines: lines, from: index)
+                let block = try parseCommentBlock(lines: lines, from: index, fileEndsInNewline: endsInNewline)
                 items.append(contentsOf: block)
                 index += block.count // one item per line consumed
                 continue

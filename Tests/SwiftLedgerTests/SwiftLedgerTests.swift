@@ -2445,6 +2445,8 @@ private extension LedgerError {
         #expect(JournalSerializer().serialize(journal) == text)
     }
 
+    /// The file ends in a newline, which hledger requires after the last
+    /// line of a block (issue #66), and that newline reads as a blank line.
     @Test
     func `an unterminated block runs to the end of the file`() throws {
         let text = """
@@ -2453,10 +2455,10 @@ private extension LedgerError {
         2024-01-02 swallowed
             a  $1
             b  $-1
-        """
+        """ + "\n"
         let journal = try JournalParser().parse(text)
         #expect(journal.transactions.isEmpty)
-        #expect(journal.directives == text.components(separatedBy: "\n"))
+        #expect(journal.directives == text.components(separatedBy: "\n").dropLast())
         #expect(JournalSerializer().serialize(journal) == text)
     }
 
@@ -2485,10 +2487,10 @@ private extension LedgerError {
         2024-01-02 parked
             a  $1
             b  $-1
-        """
+        """ + "\n"
         let journal = try JournalParser().parse(text)
         #expect(journal.transactions.isEmpty)
-        #expect(journal.directives == text.components(separatedBy: "\n"))
+        #expect(journal.directives == text.components(separatedBy: "\n").dropLast())
         #expect(JournalSerializer().serialize(journal) == text)
     }
 
@@ -2619,10 +2621,10 @@ private extension LedgerError {
         2024-01-02 not a transaction
             a  $1
             b  $-1
-        """
+        """ + "\n"
         let blocked = try JournalParser().parse(indentedEnd)
         #expect(blocked.transactions.isEmpty)
-        #expect(blocked.directives == indentedEnd.components(separatedBy: "\n"))
+        #expect(blocked.directives == indentedEnd.components(separatedBy: "\n").dropLast())
     }
 
     @Test
@@ -2733,6 +2735,7 @@ private extension LedgerError {
         2026-01-02 Parked
             Expenses:Food    $5.00
             Assets:Checking  $-5.00
+
         """.replacingOccurrences(of: "\n", with: "\r\n")
         let journal = try JournalParser().parse(text)
         #expect(journal.transactions.map(\.description) == ["Opening"])
@@ -5064,9 +5067,10 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
         Assets:Checking  $-5.00
     """
 
-    /// A journal that ends inside the block `opener` opens.
+    /// A journal that ends inside the block `opener` opens, with the final
+    /// newline hledger requires after a block's last line (issue #66).
     private static func journalEndingInBlock(_ opener: String = "comment") -> String {
-        "\(opening)\n\(opener)\n\(parkedEntry)"
+        "\(opening)\n\(opener)\n\(parkedEntry)\n"
     }
 
     private static func meal(_ description: String, day: Int, costing quantity: Decimal) throws -> JournalItem {
@@ -5117,6 +5121,7 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
         2026-01-02 Parked
             Expenses:Food    $5.00
             Assets:Checking  $-5.00
+
         """)
     }
 
@@ -5139,7 +5144,7 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
     /// here ends inside one and the item goes where it always went.
     @Test(arguments: ["end comment", "end test"])
     func `an item appended after a closed block is the last item`(closer: String) throws {
-        var journal = try JournalParser().parse("\(Self.journalEndingInBlock())\n\(closer)")
+        var journal = try JournalParser().parse("\(Self.journalEndingInBlock())\(closer)\n")
         let lunch = try Self.lunch()
         journal.append(lunch)
 
@@ -5157,6 +5162,7 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
         notes
         comment more notes
         \(Self.parkedEntry)
+
         """)
         let lunch = try Self.lunch()
         journal.append(lunch)
@@ -5181,7 +5187,7 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
 
         let written = JournalSerializer().serialize(journal)
         #expect(try JournalParser().parse(written).transactions.map(\.description) == ["Opening", "Lunch", "Dinner"])
-        #expect(written.hasSuffix("    Assets:Checking    $-35.00\ncomment\n\(Self.parkedEntry)"))
+        #expect(written.hasSuffix("    Assets:Checking    $-35.00\ncomment\n\(Self.parkedEntry)\n"))
     }
 
     /// `append` adds the item and nothing beside it, so an undo is exact. A
@@ -5202,7 +5208,7 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
     /// The lines of a block are items like any other, so they have to go at
     /// the end even while the block they belong to is still open. Stepping
     /// them over it would turn the block inside out and book what it parked.
-    @Test(arguments: ["\nend comment\n\n2026-01-05 Rent\n    Expenses:Rent    $40.00\n    Assets:Checking", ""])
+    @Test(arguments: ["end comment\n\n2026-01-05 Rent\n    Expenses:Rent    $40.00\n    Assets:Checking", ""])
     func `a journal copied one item at a time keeps its block comments`(rest: String) throws {
         let text = Self.journalEndingInBlock() + rest
         var copy = Journal()

@@ -80,7 +80,14 @@ extension JournalParser {
     /// hledger. Its lines are kept verbatim as directives so the file goes
     /// back byte for byte, a whitespace-only line among them included; only
     /// an empty line becomes `.blank`, exactly as it would at the top level.
-    func parseCommentBlock(lines: [String], from start: Int) -> [JournalItem] {
+    ///
+    /// hledger wants a newline after every line of a block, the closing
+    /// keyword included, and refuses a file whose last line belongs to one and
+    /// has none, so this refuses it too, at that line (issue #66). Whether the
+    /// file ends in a newline is asked of the text rather than of `lines`: a
+    /// stray `\r` at the very end is an empty last line there, and still no
+    /// newline to hledger.
+    func parseCommentBlock(lines: [String], from start: Int, fileEndsInNewline: Bool) throws -> [JournalItem] {
         var items: [JournalItem] = [.directive(lines[start])]
         var index = start + 1
         while index < lines.count {
@@ -88,6 +95,12 @@ extension JournalParser {
             items.append(line.isEmpty ? .blank : .directive(line))
             index += 1
             if isCommentBlockEnd(line) { break }
+        }
+        if start + items.count == lines.count, !fileEndsInNewline {
+            throw LedgerError.parseError(
+                line: lines.count,
+                message: "The file ends on a line of a block comment with no newline after it",
+            )
         }
         return items
     }
