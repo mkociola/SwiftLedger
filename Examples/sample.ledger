@@ -243,3 +243,15 @@ end comment
 
 % Lines starting with % or | are full-line comments too, as in ledger
 | and hledger. So is a line starting with *, the org-mode heading.
+
+; ── A comment after one space on the entry line ─────────────────────────────
+; On the line that opens an entry, the description ends at the first `;`,
+; however few spaces come before it, and the rest of the line is the entry's
+; comment, as hledger reads it. So the payee below is "Parking", and the note
+; is kept beside it rather than in it. A `;` inside the (code) belongs to the
+; code, which is read first. On a posting line two spaces still end the
+; account name.
+
+2024-03-18 (P;7) Parking ; paid at the machine
+    Expenses:Car            $4.00
+    Assets:Checking
