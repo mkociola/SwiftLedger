@@ -124,7 +124,8 @@ extension Transaction {
     /// in front of it, and the name and the comment are both trimmed. A name
     /// holding that marker comes back cut at it, with the rest as the
     /// comment; a name holding any other run of two spaces or tabs is one
-    /// hledger stops reading at, and then refuses the line over; and an empty
+    /// hledger stops reading at, and then refuses the line over, and the one
+    /// check on a run refuses both, since the marker opens with one; and an empty
     /// name leaves `account` alone on the line, which the parser keeps as a
     /// line it does not model. The comment runs to the end of the line, so
     /// only its ends matter. Each of these would otherwise come back as a
@@ -137,7 +138,6 @@ extension Transaction {
     static func validateAccountDirectiveSyntax(name: String, comment: String?) throws {
         try requireTrimmed(name, at: "name")
         try require(!name.isEmpty, at: "name", rule: "an account name may not be empty")
-        try requireNoCommentMarker(name, at: "name")
         try require(
             !containsWhitespaceRun(name), at: "name",
             rule: "two spaces or tabs in a row end an account name",
