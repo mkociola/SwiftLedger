@@ -624,12 +624,11 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
     /// a code runs to the first `)`; with no code in front of it a
     /// description opening `(`…`)` is a code; with no status or code a
     /// leading `*` or `!` is the status; with nothing at all in front of it a
-    /// leading `=` introduces a secondary date; and two spaces then `;` open
-    /// the comment wherever they fall. A description or comment the parser
+    /// leading `=` introduces a secondary date; and a `;` past the code opens
+    /// the comment. A description or comment the parser
     /// would trim is refused too, so what is stored is what a reload returns.
     @Test(arguments: [
         (HeaderFields(code: "a)b", description: "Lunch"), "code"),
-        (HeaderFields(code: "a  ;b", description: "Lunch"), "code"),
         (HeaderFields(description: "(note) lunch"), "description"),
         (HeaderFields(status: .cleared, description: "(note) lunch"), "description"),
         (HeaderFields(description: "* Lunch"), "description"),
@@ -696,8 +695,6 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         HeaderFields(code: "CHQ", description: "= Lunch"),
         HeaderFields(auxDate: makeDate(2024, 1, 2), description: "= Lunch"),
         HeaderFields(description: "(note lunch"),
-        HeaderFields(description: "Lunch ; one space is not a comment"),
-        HeaderFields(description: "Lunch\t; nor is one tab"),
         HeaderFields(code: " CHQ ", description: "Lunch"),
         HeaderFields(code: "", description: "Lunch"),
         HeaderFields(description: ""),

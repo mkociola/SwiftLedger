@@ -8,11 +8,12 @@ extension Transaction {
     ///
     /// `JournalSerializer` writes the header as `DATE[=AUX] [*|!] [(CODE)]
     /// DESCRIPTION[  ; COMMENT]`, each field verbatim, and `JournalParser`
-    /// reads it back by position: the inline comment opens at the first `;`
-    /// with two spaces or tabs in front of it, wherever on the line that is;
-    /// `=` straight after the date opens a secondary date; `*` or `!` where
-    /// the status would be is the status; `(` where the code would be opens a
-    /// code that runs to the first `)`; the rest, trimmed, is the description.
+    /// reads it back by position, as hledger does: `=` straight after the
+    /// date opens a secondary date; `*` or `!` where the status would be is
+    /// the status; `(` where the code would be opens a code that runs to the
+    /// first `)`, wherever on the line that is; past the code, the first `;`
+    /// opens the inline comment, however few spaces precede it; the rest,
+    /// trimmed, is the description.
     /// A value that looks like the syntax in front of it is read as that
     /// syntax, and the entry comes back as a different entry, with nothing
     /// downstream to object, or the file SwiftLedger itself has just written
@@ -28,8 +29,10 @@ extension Transaction {
     /// does not trim a code, so a code may keep its spaces.
     ///
     /// The parser cannot hand `init` one of these: a code it read stopped at
-    /// the first `)`, a marker it read went into the status or the date, and
-    /// every field it read was trimmed.
+    /// the first `)`, a description it read stopped at the first `;`, a
+    /// marker it read went into the status or the date, and every field it
+    /// read was trimmed. A code may hold a `;`, since it is read before the
+    /// comment is looked for.
     static func validateHeaderSyntax(
         auxDate: JournalDate?,
         status: ClearingStatus,
@@ -39,16 +42,16 @@ extension Transaction {
     ) throws {
         try requireTrimmed(description, at: "description")
         try requireTrimmed(comment, at: "comment")
-        try requireNoCommentMarker(description, at: "description")
+        try require(!description.contains(";"), at: "description", rule: "';' opens the inline comment")
         if let code {
-            try requireNoCommentMarker(code, at: "code")
             try require(!code.contains(")"), at: "code", rule: "a code runs to the first ')'")
             return
         }
         try require(
-            !(description.hasPrefix("(") && description.contains(")")), at: "description",
-            rule: "with no code in front of it, a description may not open with '(' and go on to a ')', "
-                + "which is how a code is written",
+            !(description.hasPrefix("(") && (description.contains(")") || comment?.contains(")") == true)),
+            at: "description",
+            rule: "with no code in front of it, a description may not open with '(' when a ')' follows "
+                + "on the line, which is how a code is written",
         )
         guard status == .unmarked else { return }
         try require(
@@ -116,12 +119,10 @@ extension Transaction {
     }
 
     /// Every way two spaces or tabs can stand side by side. A run of two or
-    /// more holds one of these, and a run followed by `;` ends in one of
-    /// `commentOpeners`. Both lists are built once: plain substring searches
-    /// rather than a regex, and no string built per call, because this runs
-    /// on every posting of every entry a file parses.
+    /// more holds one of these. The list is built once: plain substring
+    /// searches rather than a regex, and no string built per call, because
+    /// this runs on every posting of every entry a file parses.
     private static let whitespacePairs = ["  ", " \t", "\t ", "\t\t"]
-    private static let commentOpeners = whitespacePairs.map { $0 + ";" }
 
     /// Whether `value` holds two spaces or tabs in a row, which is what ends
     /// an account name.
@@ -153,16 +154,6 @@ extension Transaction {
         try require(
             !trimmed.contains(first) && !trimmed.contains(last), at: field(),
             rule: "the parser trims whitespace from either end, so the value may carry none",
-        )
-    }
-
-    /// Refuses a value holding the two spaces or tabs and `;` that open the
-    /// inline comment, which the parser looks for across the whole header
-    /// line before it reads anything else out of it.
-    private static func requireNoCommentMarker(_ value: String, at field: @autoclosure () -> String) throws {
-        try require(
-            !commentOpeners.contains { value.contains($0) }, at: field(),
-            rule: "two spaces or tabs followed by ';' open the inline comment",
         )
     }
 }

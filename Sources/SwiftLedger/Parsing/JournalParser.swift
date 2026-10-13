@@ -306,10 +306,6 @@ public struct JournalParser {
     ) throws -> ParsedHeader {
         var rest = line
 
-        // Extract inline comment
-        let (mainPart, comment) = splitInlineComment(rest)
-        rest = mainPart.trimmingCharacters(in: .init(charactersIn: " \t"))
-
         // DATE
         let (date, afterDate) = try consumeDate(rest, lineNumber: lineNumber)
         rest = afterDate.trimmingCharacters(in: .whitespaces)
@@ -342,6 +338,15 @@ public struct JournalParser {
             }
         }
 
+        // The description runs to the first `;`, however few spaces precede
+        // it, as hledger reads it. The code is read first, so a `;` inside
+        // its parentheses stays in the code.
+        var comment: String?
+        if let semicolon = rest.firstIndex(of: ";") {
+            comment = rest[rest.index(after: semicolon)...].trimmingCharacters(in: .whitespaces)
+            rest = String(rest[..<semicolon])
+        }
+
         let description = rest.trimmingCharacters(in: .whitespaces)
         return ParsedHeader(
             date: date,
@@ -349,7 +354,7 @@ public struct JournalParser {
             status: txStatus,
             code: code,
             description: description,
-            comment: comment?.trimmingCharacters(in: .whitespaces),
+            comment: comment,
         )
     }
 }

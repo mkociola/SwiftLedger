@@ -1,0 +1,15 @@
+2024-01-01 No space before the semicolon;paid early
+    Expenses:Rent    $1.00
+    Assets:Checking
+
+2024-01-02 * (CHQ;1) A semicolon inside the code ; and one after it
+    Expenses:Rent    $2.00
+    Assets:Checking
+
+2024-01-03 ! ;nothing but a comment after the status
+    Expenses:Rent    $3.00
+    Assets:Checking
+
+2024-01-04 (CHQ ; 2)Code then comment;tag:value
+    Expenses:Rent    $4.00
+    Assets:Checking

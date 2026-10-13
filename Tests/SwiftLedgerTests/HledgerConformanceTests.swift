@@ -35,7 +35,6 @@ import Testing
         "balance-assertion-fails",
         "date-formats",
         "default-commodity",
-        "description-comment",
         "include",
         "posting-date-tag",
         "posting-status-tabs",
