@@ -625,8 +625,8 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
     /// description opening `(`…`)` is a code; with no status or code a
     /// leading `*` or `!` is the status; with nothing at all in front of it a
     /// leading `=` introduces a secondary date; and a `;` past the code opens
-    /// the comment. A description or comment the parser
-    /// would trim is refused too, so what is stored is what a reload returns.
+    /// the comment. A description or comment the parser would trim is
+    /// refused too, so what is stored is what a reload returns.
     @Test(arguments: [
         (HeaderFields(code: "a)b", description: "Lunch"), "code"),
         (HeaderFields(description: "(note) lunch"), "description"),
