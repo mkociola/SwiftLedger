@@ -363,6 +363,20 @@ extension ExampleJournalTests {
         #expect(JournalSerializer().serialize(windows) == twin)
     }
 
+    /// The total price keeps the minus it is written with, so the euros cost
+    /// -$110.00 and the positive cash leg is what balances them.
+    @Test
+    func `the example weighs a negative total price with its own sign`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let entry = try #require(
+            journal.transactions.first { $0.description == "Euros booked against a negative total" },
+        )
+        #expect(entry.postings.map(\.balancingAmount) == [
+            Amount(quantity: -110, commodity: "$", commodityIsPrefix: true),
+            Amount(quantity: 110, commodity: "$", commodityIsPrefix: true),
+        ])
+    }
+
     /// The line under the car wash holds four spaces. It ended the entry, and
     /// it is the next item with its spaces on it, which is what lets the file
     /// go back byte for byte.
