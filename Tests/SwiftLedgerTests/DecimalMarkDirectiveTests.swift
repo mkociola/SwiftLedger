@@ -12,7 +12,7 @@ import Testing
 /// had, which `AmountValidationTests` pins.
 @Suite("decimal mark directives") struct DecimalMarkDirectiveTests {
     /// Every posting amount in the file, in order.
-    private static func quantities(in text: String) throws -> [Decimal] {
+    static func quantities(in text: String) throws -> [Decimal] {
         try JournalParser().parse(text).transactions.flatMap { $0.postings.map(\.amount.quantity) }
     }
 

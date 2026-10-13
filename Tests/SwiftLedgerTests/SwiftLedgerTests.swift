@@ -3912,8 +3912,11 @@ private func renaming(
     }
 
     /// A declaration is the user stating their house style, so it settles the
-    /// marks the way it settles the digit count, against whatever the amounts
-    /// happen to show.
+    /// marks the way it settles the digit count, and the amounts below it are
+    /// read by it rather than against it: `12.50 EUR` under a comma
+    /// declaration is twelve hundred and fifty, as hledger reads it. A
+    /// rebuilt entry writes that figure in the declared style, where it reads
+    /// back as the same figure.
     @Test(arguments: [
         "D 1.000,00 EUR",
         "commodity 1.000,00 EUR",
@@ -3928,11 +3931,14 @@ private func renaming(
             assets:bank      -12.50 EUR
         """)
         #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
+        #expect(journal.transactions.first?.postings.map(\.amount.quantity) == [1250, -1250])
 
         try renaming(#require(journal.transactions.first), to: "lunch (revised)", in: &journal)
         let written = JournalSerializer().serialize(journal)
-        #expect(written.contains("12,50 EUR"))
+        #expect(written.contains("1.250,00 EUR"))
         #expect(!written.contains("12.50 EUR"))
+        #expect(try #require(JournalParser().parse(written).transactions.first)
+            .postings.map(\.amount.quantity) == [1250, -1250])
     }
 
     /// A declaration whose own sample cannot tell its marks apart declares a

@@ -143,9 +143,9 @@ struct JournalStyleCollector {
     /// The decimal mark the file has declared for an amount in `commodity` by
     /// this point in it, or `nil` when no directive has spoken.
     ///
-    /// This is what settles a number whose one mark has exactly three digits
-    /// after it, the one shape that cannot settle itself; see
-    /// `JournalParser.scanNumber`. Three directives can speak, and hledger
+    /// This is what every lone mark below the directive is read against: the
+    /// declared mark divides, and any other mark groups whatever follows it;
+    /// see `JournalParser.scanNumber`. Three directives can speak, and hledger
     /// ranks them rather than taking the latest: `decimal-mark` outranks a
     /// `commodity` directive, which outranks `D`, whichever order they were
     /// written in. Within a level the latest line counts, so a second
