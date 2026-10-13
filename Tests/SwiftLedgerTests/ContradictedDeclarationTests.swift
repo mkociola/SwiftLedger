@@ -31,6 +31,24 @@ import Testing
         let text = "\(row.directive)\n\n2024-01-01 rent\n    expenses:rent    \(row.amount)\n    assets:bank"
         #expect(try DecimalMarkDirectiveTests.quantities(in: text) == [row.quantity, -row.quantity])
     }
+
+    /// A sample with one mark is read like any other amount, by the tie-break
+    /// where nothing is declared above it, and declares the mark it was read
+    /// with: `D 1.000 EUR` is one euro to three places and declares the
+    /// point, so `12,50 EUR` below it is twelve hundred and fifty, as hledger
+    /// reads it. It used to declare the three places and no mark at all.
+    @Test(arguments: ["D 1.000 EUR", "commodity 1.000 EUR"])
+    func `a lone-mark sample declares the mark it was read with`(directive: String) throws {
+        let journal = try JournalParser().parse("""
+        \(directive)
+
+        2024-01-01 rent
+            expenses:rent    12,50 EUR
+            assets:bank     -12,50 EUR
+        """)
+        #expect(journal.transactions.first?.postings.map(\.amount.quantity) == [1250, -1250])
+        #expect(journal.commodityFormats["EUR"]?.decimalMark == ".")
+    }
 }
 
 /// One amount written against the declaration above it, and the figure

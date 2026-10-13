@@ -18,19 +18,21 @@ struct NumberShape {
     /// Whether the integer part is long enough for a group mark to have been
     /// visible at all.
     var canShowGrouping: Bool
-    /// The character that divided the fraction: `,` in `1.000,00`, `.` in
-    /// `1,000.00`.
-    ///
-    /// `nil` when the number wrote no such mark, and `nil` again when its one
-    /// mark was the shape no number can settle on its own, a mark with exactly
-    /// three digits after it, and no directive above it settled it either.
-    /// `1,000` and `1.000` still get the value the scanner has always given
-    /// them, but they are made to abstain on the question of which convention
-    /// the file follows: one `€12,50` says more about that than a page of
-    /// `€1.000` does. Settled by a directive, the same number says what it was
-    /// read as, and votes.
+    /// The character that divided the fraction, as the number was read: `,`
+    /// in `1.000,00`, `.` in `1,000.00`, `nil` when it wrote no such mark.
     var decimalMark: Character?
     /// The character that separated the digit groups, on the same terms: `.`
     /// in `1.000,00`, `,` in `1,000.00`, `nil` in `1.000`.
     var groupMark: Character?
+    /// Whether the number itself or a directive above it settled which mark
+    /// was which, rather than the tie-break settling it for the number.
+    ///
+    /// False for the one shape no number can settle on its own, a mark with
+    /// exactly three digits after it, when no directive above it settled it
+    /// either. `1,000` and `1.000` still get the value the scanner has always
+    /// given them, and the marks above say what that reading was, but the
+    /// collector makes them abstain on the question of which convention the
+    /// file follows: one `€12,50` says more about that than a page of `€1.000`
+    /// does. Settled by a directive, the same number votes.
+    var isSettled: Bool
 }

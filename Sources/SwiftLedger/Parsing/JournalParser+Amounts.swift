@@ -329,9 +329,9 @@ extension JournalParser {
     /// is, so nothing but digits follows it.
     ///
     /// The marks go into the shape as the characters the number actually
-    /// wrote, and an unsettled reading reports neither. See `NumberShape` for
-    /// why a number that cannot say which convention it follows is kept from
-    /// saying it anyway.
+    /// wrote, read the way they were read, and `isSettled` says whether that
+    /// reading was the number's own or the tie-break's. See `NumberShape` for
+    /// what turns on it.
     private static func number(
         from characters: [Character],
         decimal: Int?,
@@ -350,8 +350,9 @@ extension JournalParser {
                 fractionDigits: fractionDigits.count,
                 usesSeparator: !groups.isEmpty,
                 canShowGrouping: integerDigits.count > 3,
-                decimalMark: isSettled ? decimal.map { characters[$0] } : nil,
-                groupMark: isSettled ? groups.first.map { characters[$0] } : nil,
+                decimalMark: decimal.map { characters[$0] },
+                groupMark: groups.first.map { characters[$0] },
+                isSettled: isSettled,
             ),
         )
     }
