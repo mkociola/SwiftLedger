@@ -31,12 +31,10 @@ extension JournalParser {
     }
 
     /// The header line as an error names the entry it belongs to: what the
-    /// file says, with the line ending and any trailing spaces taken off.
+    /// file says, with any trailing spaces taken off.
     ///
     /// Nothing else is changed. Someone searching their journal for the entry
-    /// an error names has to find it spelled the way they wrote it, and the
-    /// `\r` of a Windows ending is not a character anybody can type into a
-    /// search field.
+    /// an error names has to find it spelled the way they wrote it.
     static func entryHeader(_ line: String) -> String {
         var header = line
         while let last = header.last, last.isWhitespace {

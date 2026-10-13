@@ -39,16 +39,6 @@ extension JournalParser {
     /// and `$1x2y` as 1, and a journal of such amounts balanced and reported
     /// figures nobody had written (issue #18).
     ///
-    /// The trimming here and below takes newlines as well as spaces, for the
-    /// sample amount of a top-level `D` or `commodity` directive. `parse`
-    /// splits a file on `\n` and hands `declareFormat` the line raw, so in a
-    /// journal with Windows line endings that sample arrives with the `\r`
-    /// that closed its line, and a scanner accepting nothing but digits and
-    /// marks would refuse it and drop the declaration without a word. A
-    /// posting's amount no longer arrives that way: `contentOf(line:)` takes
-    /// the ending off a transaction's lines before any field is read out of
-    /// them.
-    ///
     /// `style` is what the file has declared above this amount, which is the
     /// only thing that can settle a number the text alone cannot (see
     /// `scanNumber`). An amount read on its own, as `parseAmount` reads one,
@@ -58,7 +48,7 @@ extension JournalParser {
         lineNumber _: Int,
         in style: JournalStyleCollector = JournalStyleCollector(),
     ) throws -> ShapedAmount {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { throw LedgerError.invalidAmount(raw) }
 
         var str = trimmed
@@ -72,7 +62,7 @@ extension JournalParser {
         // A space after the sign is layout too. Left on, it sent `- 100` down
         // the prefix path as a commodity made of that space, where `-100` is
         // a bare number.
-        str = str.trimmingCharacters(in: .whitespacesAndNewlines)
+        str = str.trimmingCharacters(in: .whitespaces)
 
         guard let first = str.first else { throw LedgerError.invalidAmount(raw) }
         if Self.opensNumber(first) {
@@ -119,7 +109,7 @@ extension JournalParser {
         }
 
         guard let number = Self.scanNumber(
-            numberText.trimmingCharacters(in: .whitespacesAndNewlines),
+            numberText.trimmingCharacters(in: .whitespaces),
             declaredMark: style.declaredDecimalMark(for: commodity),
         ) else {
             throw LedgerError.invalidAmount(raw)
@@ -155,7 +145,7 @@ extension JournalParser {
         in style: JournalStyleCollector,
     ) throws -> ShapedAmount {
         let end = str.firstIndex { !Self.opensNumber($0) } ?? str.endIndex
-        let remainder = String(str[end...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let remainder = String(str[end...]).trimmingCharacters(in: .whitespaces)
         guard !Self.cutsNumberShort(remainder),
               !Self.commodityCarriesDigit(remainder),
               let number = Self.scanNumber(

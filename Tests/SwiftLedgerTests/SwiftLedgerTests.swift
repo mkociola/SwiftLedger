@@ -2689,11 +2689,11 @@ private extension LedgerError {
     }
 }
 
-/// The same blocks in a journal saved on Windows. `parse` splits on `\n`
-/// alone, so the keyword lines arrive as `comment\r` and `end comment\r`, and
-/// that `\r` is the line ending rather than a character standing after the
-/// keyword. Read as one, it made the opening line an ordinary directive and
-/// booked the entry parked under it, which is issue #48.
+/// The same blocks in a journal saved on Windows. Split on `\n` alone, the
+/// keyword lines read `comment\r` and `end comment\r`, and that `\r` is the
+/// line ending rather than a character standing after the keyword. Read as
+/// one, it made the opening line an ordinary directive and booked the entry
+/// parked under it, which is issue #48.
 @Suite("comment blocks with windows line endings") struct CommentBlockLineEndingTests {
     /// The entry after the block is there for the closing line: left
     /// unrecognised, it would let the block run on and swallow it.

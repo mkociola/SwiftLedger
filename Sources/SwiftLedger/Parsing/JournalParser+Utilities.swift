@@ -60,15 +60,12 @@ extension JournalParser {
     /// spaces or tabs aside) or followed by whitespace and anything at all.
     /// The whitespace is what keeps `comments` from reading as `comment`.
     ///
-    /// The `\r` a Windows line ending leaves on the line is taken off before
-    /// any of that is asked. `parse` splits on `\n` alone, so a bare keyword
-    /// in a CRLF journal arrives as `comment\r`, and a `\r` is neither the end
-    /// of the line nor a space: read as it came, the keyword would open no
-    /// block and the entries parked under it would be booked, which is issue
-    /// #48. The line is only read this way, never changed: `parseCommentBlock`
-    /// stores it as it came, so the file still goes back byte for byte.
+    /// The line is one `parse` has taken the line ending off. With the `\r`
+    /// of a Windows ending still on it, a bare keyword would read `comment\r`,
+    /// and a `\r` is neither the end of the line nor a space: the keyword
+    /// would open no block and the entries parked under it would be booked,
+    /// which is issue #48.
     private func startsWithKeyword(_ line: String, keyword: String) -> Bool {
-        let line = contentOf(line: line)
         guard line.hasPrefix(keyword) else { return false }
         let rest = line.dropFirst(keyword.count)
         guard let next = rest.first else { return true }
@@ -94,32 +91,6 @@ extension JournalParser {
             if isCommentBlockEnd(line) { break }
         }
         return items
-    }
-
-    /// `line` with the `\r` a Windows line ending leaves on it taken off.
-    ///
-    /// `parse` splits the file on `\n` alone, so in a CRLF journal every line
-    /// arrives with the other half of its ending still attached, and any field
-    /// that runs to the end of its line would carry the `\r` into the
-    /// transaction: a description of `"Rent\r"`, an elided posting to
-    /// `"Assets:Checking\r"` that names no account any other entry names.
-    /// `Transaction.init` refuses a field with a line break in it, so the
-    /// stripping and that refusal have to arrive together.
-    ///
-    /// Only the last scalar, only when it is a `\r`, and only once. A `\r`
-    /// anywhere else on the line is not a line ending, and the field it lands
-    /// in really is one a journal cannot write, so it goes on to be refused by
-    /// name. The raw lines are what `sourceText` is built from either way, so
-    /// an entry nobody edits still goes back byte for byte.
-    ///
-    /// It also puts the amount column the style collector learns back where
-    /// the file draws it: the field it measures used to be one character wider
-    /// than it looked whenever an amount ended a CRLF line.
-    func contentOf(line: String) -> String {
-        guard line.unicodeScalars.last == "\r" else { return line }
-        var scalars = line.unicodeScalars
-        scalars.removeLast()
-        return String(scalars)
     }
 
     /// Whether an indented line inside a transaction is a full-line comment

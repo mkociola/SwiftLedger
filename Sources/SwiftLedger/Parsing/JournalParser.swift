@@ -183,7 +183,7 @@ public struct JournalParser {
             // declares and kept verbatim all the same: learning from a line is
             // not the same as modelling it, and this one still goes back byte
             // for byte.
-            declareFormat(from: contentOf(line: line), into: &style)
+            declareFormat(from: line, into: &style)
             items.append(.directive(line))
             index += 1
         }
@@ -205,19 +205,16 @@ public struct JournalParser {
     /// Returns `nil` when the line is not an `account` directive, or names no
     /// account at all.
     ///
-    /// The line ending comes off first, as it does for a transaction's lines:
-    /// in a CRLF file the `\r` would otherwise land in the name, or in the
-    /// comment when there is one, and `Ledger.accounts` would list the
-    /// declared account twice, the second time with nothing posted to it. A
-    /// directive is written back from the model rather than from its line, so
-    /// inside a CRLF file that one line goes back with a Unix ending until #35
-    /// teaches the serializer the file's own. A `\r` anywhere else on the line
-    /// is not a line ending, and the name or comment it lands in is one no
-    /// journal can write, so `AccountDirective.init` refuses it and the file
-    /// does not load, as it does not for a transaction's field.
+    /// The line arrives without its line ending, as every line does. Left on
+    /// in a CRLF file, the `\r` would land in the name, or in the comment when
+    /// there is one, and `Ledger.accounts` would list the declared account
+    /// twice, the second time with nothing posted to it. A `\r` anywhere else
+    /// on the line is not a line ending, and the name or comment it lands in
+    /// is one no journal can write, so `AccountDirective.init` refuses it and
+    /// the file does not load, as it does not for a transaction's field.
     private func parseAccountDirective(_ trimmed: String) throws -> AccountDirective? {
         guard trimmed.lowercased().hasPrefix("account ") else { return nil }
-        let (mainPart, comment) = splitInlineComment(contentOf(line: trimmed))
+        let (mainPart, comment) = splitInlineComment(trimmed)
         let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return nil }
         return try AccountDirective(
@@ -242,7 +239,7 @@ public struct JournalParser {
         from start: Int,
         into style: inout JournalStyleCollector,
     ) throws -> (Transaction, Int) {
-        let headerLine = contentOf(line: lines[start])
+        let headerLine = lines[start]
         let lineNumber = start + 1 // 1-based for errors
         let entry = Self.entryHeader(headerLine)
 
@@ -256,7 +253,7 @@ public struct JournalParser {
         var leadingComments: [String] = []
         var index = start + 1
         while index < lines.count {
-            let currentLine = contentOf(line: lines[index])
+            let currentLine = lines[index]
             if currentLine.isEmpty || currentLine.trimmingCharacters(in: .whitespaces).isEmpty {
                 break // blank line ends the transaction
             }
