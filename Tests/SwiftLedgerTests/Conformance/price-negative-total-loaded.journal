@@ -1,0 +1,11 @@
+2026-10-10 A negative total price on a positive amount
+    Assets:Euros       100.00 EUR @@ -110.00 USD
+    Assets:Checking    110.00 USD
+
+2026-10-11 A negative total price on a negative amount, cash leg inferred
+    Assets:Euros       -100.00 EUR @@ -110.00 USD
+    Assets:Checking
+
+2026-10-12 A negative total price on a zero amount, cash leg inferred
+    Assets:Euros       0 EUR @@ -110.00 USD
+    Assets:Checking

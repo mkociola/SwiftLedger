@@ -1,0 +1,134 @@
+[
+  {
+    "date": "2026-10-10",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "A negative total price on a positive amount",
+    "postings": [
+      {
+        "account": "Assets:Euros",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 10000,
+            "places": 2,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": -110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": 11000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2026-10-11",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "A negative total price on a negative amount, cash leg inferred",
+    "postings": [
+      {
+        "account": "Assets:Euros",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -10000,
+            "places": 2,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": 110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2026-10-12",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "A negative total price on a zero amount, cash leg inferred",
+    "postings": [
+      {
+        "account": "Assets:Euros",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 0,
+            "places": 0,
+            "cost": {
+              "total": true,
+              "commodity": "USD",
+              "mantissa": -110,
+              "places": 0
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": 110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

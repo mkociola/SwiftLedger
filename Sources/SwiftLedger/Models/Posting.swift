@@ -35,13 +35,16 @@ public enum PostingPrice: Sendable, Codable, Hashable {
     /// A per-unit price multiplies. A total price is the whole cost already, so
     /// it only takes its sign from `quantity`: selling ten shares
     /// (`-10 AAPL @@ $1,500.00`) costs `-$1,500.00`, not `$1,500.00`, even
-    /// though the line writes the total unsigned.
+    /// though the line writes the total unsigned. A sign written on the total
+    /// is kept and the quantity's applied on top of it, as hledger does, so
+    /// `100 EUR @@ -110 USD` costs `-110 USD`; a zero quantity leaves the
+    /// total as written.
     public func cost(of quantity: Decimal) -> Amount {
         let priced = amount
         let value: Decimal =
             switch self {
             case .perUnit: quantity * priced.quantity
-            case .total: quantity < 0 ? -abs(priced.quantity) : abs(priced.quantity)
+            case .total: quantity < 0 ? -priced.quantity : priced.quantity
             }
         return Amount(
             quantity: value,
