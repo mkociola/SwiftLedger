@@ -1,16 +1,6 @@
-# The point of this journal is its CRLF line endings. Without -text a checkout
-# that normalises line endings would hand the test an LF file, and it would
-# pass without testing anything.
-Tests/SwiftLedgerTests/Conformance/comment-block-crlf.journal -text
-
-# This one mixes CRLF and LF lines on purpose and ends in a lone CR.
-Tests/SwiftLedgerTests/Conformance/mixed-line-endings.journal -text
-
-# A carriage return in the middle of a line is the point of this one.
-Tests/SwiftLedgerTests/Conformance/amount-stray-cr.journal -text
-
-# CRLF on every line again, this time in a journal with account directives.
-Tests/SwiftLedgerTests/Conformance/account-directive-crlf.journal -text
-
-# A carriage return in the middle of an account name is the point of this one.
-Tests/SwiftLedgerTests/Conformance/account-directive-stray-cr.journal -text
+# Every fixture here is generated from its journal's exact bytes, and in some
+# journals a carriage return is the point of the test. Without -text a checkout
+# or a commit that normalises line endings would hand the test an LF file, and
+# it would pass without testing anything. The pattern covers every journal so
+# that a new one cannot be left out.
+Tests/SwiftLedgerTests/Conformance/*.journal -text
