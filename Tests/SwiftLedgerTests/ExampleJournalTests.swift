@@ -7,8 +7,9 @@ import Testing
 /// what it demonstrates has to be true.
 @Suite("example journal") struct ExampleJournalTests {
     /// The example file, read from the repository rather than bundled, so
-    /// that editing it is enough to test it.
-    private static var exampleText: String {
+    /// that editing it is enough to test it. Internal rather than private so
+    /// that the example tests kept in files of their own can read it.
+    static var exampleText: String {
         get throws {
             let url = URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent() // SwiftLedgerTests

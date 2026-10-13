@@ -126,6 +126,15 @@ account Expenses:Utilities
     [Assets:Checking:Available]         $60.00
     (Reserve:Capital)                   $250.00
 
+; ── A total price with a sign of its own ────────────────────────────────────
+; A sign written on a total price is kept, and the sign of the amount it
+; prices is applied on top of it, as hledger weighs it: €100,00 @@ -$110.00
+; costs -$110.00, so the $110.00 below balances it and -$110.00 would not.
+
+2024-03-02 Euros booked against a negative total
+    Assets:EuroAccount     €100,00 @@ -$110.00
+    Assets:Checking        $110.00
+
 ; ── Several commodities ─────────────────────────────────────────────────────
 ; Each commodity balances on its own, and one elided posting absorbs the
 ; remainder of every commodity in the entry, which is how ledger and hledger
