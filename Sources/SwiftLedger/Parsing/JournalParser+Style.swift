@@ -52,22 +52,51 @@ extension JournalParser {
     /// `decimal-mark .` or `decimal-mark ,` states no style and names no
     /// commodity; it says how every amount below it is read.
     ///
-    /// Anything that does not parse as an amount, or as one of the two marks,
-    /// is left alone. A directive SwiftLedger misreads here costs nothing but
-    /// the guess: the line itself is still written back verbatim.
-    func declareFormat(from line: String, into style: inout JournalStyleCollector) {
+    /// A line hledger refuses to read is refused here too, with
+    /// `LedgerError.unreadableDirective`: a `decimal-mark` that names neither
+    /// mark, a `D` with no number in its sample, a `D` or `commodity` with
+    /// nothing after it. Kept verbatim, such a line declared nothing, and the
+    /// amounts below it were read by another mark than the author wrote it
+    /// for, without a word. A sample that has a number and still does not
+    /// parse is left alone, as before: hledger reads some of those, and a
+    /// file it loads is not refused on a guess.
+    func declareFormat(from line: String, into style: inout JournalStyleCollector) throws {
         let isIndented = line.first == " " || line.first == "\t"
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         // The keyword ends at a space or a tab, as it does in hledger, where
         // `decimal-mark\t,` declares the comma as much as `decimal-mark ,`
         // does. Matched on the space alone, a tab dropped the whole line
         // without a word, and from this version that silence changes what the
-        // amounts below it are worth.
+        // amounts below it are worth. A keyword alone on its line is the
+        // directive with nothing after it, which is refused below.
         let keyword = ["D", "commodity", "format", "decimal-mark"].first {
-            trimmed.hasPrefix($0) && trimmed.dropFirst($0.count).first?.isWhitespace == true
+            trimmed.hasPrefix($0) && trimmed.dropFirst($0.count).first?.isWhitespace != false
         }
+        // Only a line at the margin is refused. An indented one is a
+        // subdirective of the block above it, and hledger skips one it does
+        // not know under a `commodity` or an `account` block, so it is read
+        // for what it declares, as before, and refused for nothing.
+        let refuses = !isIndented
+        // hledger reads every line opening with `D` as a `D` directive, so
+        // `Decimal-Mark ,` is a `D` with no gap after it, and hledger stops
+        // there. Kept as a directive nobody reads, it declared no comma.
+        if keyword == nil, refuses, trimmed.first == "D" { throw Self.unreadableDefault(trimmed) }
         guard let keyword else { return }
         guard keyword != "format" || isIndented else { return }
+        let argument = trimmed.dropFirst(keyword.count)
+
+        if keyword == "decimal-mark" {
+            // hledger reads the first character past the gap and nothing
+            // after it, so `decimal-mark , as at the bank` declares the comma
+            // and `decimal-mark ; comma` declares nothing and is refused.
+            let mark = argument.first { !$0.isWhitespace }
+            if let mark, mark == "." || mark == "," {
+                style.declareDecimalMark(mark)
+            } else if refuses {
+                throw LedgerError.unreadableDirective(trimmed, reason: "the mark must be '.' or ','")
+            }
+            return
+        }
 
         // A directive may carry a comment of its own, and `D $1,000.00 ; house
         // style` states a style all the same, so the sample is what precedes
@@ -80,17 +109,31 @@ extension JournalParser {
         // twice and ending its lines `\r\r\n`. The line is kept with it, but
         // a declaration lost to it would change what the amounts below are
         // worth without a word, where hledger reads straight past it.
-        let (field, _) = splitPostingComment(String(trimmed.dropFirst(keyword.count)))
-        guard let sample = field?.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
-        if keyword == "decimal-mark" {
-            if sample == "." || sample == ",", let mark = sample.first { style.declareDecimalMark(mark) }
-            return
-        }
+        let (field, _) = splitPostingComment(String(argument))
+        let sample = field?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         // `commodity $` names a commodity without stating a style; only the
         // sample-amount forms say anything to record.
-        guard sample.contains(where: \.isNumber),
-              let parsed = try? parseShapedAmount(sample, lineNumber: 0, in: style) else { return }
+        guard sample.contains(where: \.isNumber) else {
+            if refuses, let error = Self.unreadable(keyword, sample: sample, directive: trimmed) { throw error }
+            return
+        }
+        guard let parsed = try? parseShapedAmount(sample, lineNumber: 0, in: style) else { return }
         style.declare(parsed.shape, commodity: parsed.amount.commodity, isDefault: keyword == "D")
+    }
+
+    /// Why hledger refuses a `D` or `commodity` line whose sample holds no
+    /// number, or `nil` when it reads the line. `commodity $` names a
+    /// commodity, a form a `D` does not have, and a `commodity` with nothing
+    /// after it names nothing at all.
+    private static func unreadable(_ keyword: String, sample: String, directive: String) -> LedgerError? {
+        if keyword == "D" { return unreadableDefault(directive) }
+        guard sample.isEmpty else { return nil }
+        return .unreadableDirective(directive, reason: "it names no commodity and no sample amount")
+    }
+
+    /// The error for a `D` line with no sample amount after the `D`.
+    private static func unreadableDefault(_ directive: String) -> LedgerError {
+        .unreadableDirective(directive, reason: "'D' takes a space and a sample amount, such as 'D $1,000.00'")
     }
 
     /// The column `line`'s amount field starts at: past the account token,

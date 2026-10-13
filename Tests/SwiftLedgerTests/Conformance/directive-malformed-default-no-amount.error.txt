@@ -1,0 +1,6 @@
+hledger: Error: directive-malformed-default-no-amount.journal:1:6:
+  |
+1 | D xyz
+  |      ^
+unexpected newline
+expecting '+', '-', or number
