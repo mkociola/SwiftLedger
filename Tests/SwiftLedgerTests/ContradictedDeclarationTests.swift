@@ -9,25 +9,19 @@ import Testing
 /// this suite covers amounts written against what the file declares, and the
 /// directive whose own sample has one mark.
 @Suite("amounts written against a declaration") struct ContradictedDeclarationTests {
-    /// The same for a mark with nothing after it: `€5.` under `decimal-mark ,`
-    /// is five, here and in hledger, rather than a group mark with nothing to
-    /// its right, which would be no number at all.
-    @Test(arguments: [("decimal-mark ,", "€5."), ("decimal-mark .", "EUR 5,")])
-    func `a trailing mark divides under either declaration`(directive: String, amount: String) throws {
-        let text = "\(directive)\n\n2024-01-01 rent\n    expenses:rent    \(amount)\n    assets:bank"
-        #expect(try DecimalMarkDirectiveTests.quantities(in: text) == [5, -5])
-    }
-
     /// Under a declaration, hledger reads a lone mark by the directive rather
     /// than by the number: the declared mark divides, and any other mark
     /// groups whatever digits sit after it, so `€12.50` under `decimal-mark ,`
     /// is twelve hundred and fifty. The two rules a number settles itself by
     /// where nothing is declared, that a mark with anything but three digits
     /// after it divides and that nothing groups a zero, are not consulted
-    /// under one. Such an amount is most likely a typo, and reading it as the
+    /// under one. A mark with nothing after it divides under either
+    /// declaration, since there is nothing to its right to group, and read as
+    /// a group mark it would have been no number at all. An amount written
+    /// against the declaration is most likely a typo, and reading it as the
     /// number says loads a figure a hundred times apart from hledger's.
     @Test(arguments: contradictedAmounts)
-    func `a lone mark that is not the declared mark groups whatever follows it`(row: ContradictedAmount) throws {
+    func `a lone mark under a declaration is read by the directive`(row: ContradictedAmount) throws {
         let text = "\(row.directive)\n\n2024-01-01 rent\n    expenses:rent    \(row.amount)\n    assets:bank"
         #expect(try DecimalMarkDirectiveTests.quantities(in: text) == [row.quantity, -row.quantity])
     }
@@ -51,7 +45,7 @@ import Testing
     }
 }
 
-/// One amount written against the declaration above it, and the figure
+/// One amount with a lone mark under the declaration above it, and the figure
 /// hledger 1.52.4 reads it as.
 struct ContradictedAmount {
     var directive: String
@@ -67,4 +61,6 @@ let contradictedAmounts: [ContradictedAmount] = [
     ContradictedAmount(directive: "decimal-mark .", amount: "€0,500", quantity: 500),
     ContradictedAmount(directive: "commodity $1,000.00", amount: "$1,50", quantity: 150),
     ContradictedAmount(directive: "D €1.000,00", amount: "$12.50", quantity: 1250),
+    ContradictedAmount(directive: "decimal-mark ,", amount: "€5.", quantity: 5),
+    ContradictedAmount(directive: "decimal-mark .", amount: "EUR 5,", quantity: 5),
 ]
