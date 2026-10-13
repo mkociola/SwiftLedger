@@ -52,4 +52,21 @@ import Testing
         #expect(journal.transactions.first?.description == "Rent")
         #expect(JournalSerializer().serialize(journal) == text)
     }
+
+    /// Taking out the entry that followed a closed block leaves the block's
+    /// closing line last. Written back with nothing after it, the file is one
+    /// hledger refuses and the next load refuses too.
+    @Test(arguments: ["\n", "\r\n"])
+    func `removing the entry after a closed block leaves a file that loads`(ending: String) throws {
+        let tea = "2026-01-03 Tea\n    Expenses:Food  $2\n    Assets:Checking"
+        let text = (Self.rent + "comment\nnotes\nend comment\n" + tea).replacingOccurrences(of: "\n", with: ending)
+        var journal = try JournalParser().parse(text)
+        let removed = try #require(journal.transactions.last)
+        let didRemove = journal.remove(.transaction(removed))
+        #expect(didRemove)
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.hasSuffix("end comment\(ending)"))
+        #expect(try JournalParser().parse(written).transactions.map(\.description) == ["Rent"])
+    }
 }
