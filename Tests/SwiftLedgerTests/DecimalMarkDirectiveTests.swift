@@ -43,10 +43,11 @@ import Testing
     /// Each way a file states a commodity's style settles the shape, and
     /// settles it both ways round: under a comma declaration `€1,000` is one
     /// euro to three places, as it is in hledger. A tab after the keyword is
-    /// the space hledger allows there, not a line to drop.
+    /// the space hledger allows there, not a line to drop, and the `\r` a
+    /// CRLF file leaves on the line is not part of the sample.
     @Test(arguments: [
         "D €1.000,00", "D\t€1.000,00", "commodity €1.000,00", "commodity €\n    format €1.000,00",
-        "decimal-mark ,", "decimal-mark\t,",
+        "decimal-mark ,", "decimal-mark\t,", "decimal-mark ,\r", "commodity €1.000,00\r",
     ])
     func `a declared decimal mark settles a lone mark before three digits`(directive: String) throws {
         let text = """
@@ -253,23 +254,28 @@ import Testing
     /// A declared mark is also the mark a rebuilt amount is written with,
     /// even when no amount in the file voted for it: in a file of `€1000`
     /// under `decimal-mark ,`, an eighth written `€1.125` would be read back
-    /// as eleven hundred and twenty-five, here and in hledger.
-    @Test
-    func `a rebuilt amount is written with the declared mark when nothing voted`() throws {
+    /// as eleven hundred and twenty-five, here and in hledger. A `D` directive
+    /// reaches a commodity without a declaration of its own the same way,
+    /// since its amounts are read by the `D` mark too: `$1.125` under
+    /// `D €1.000,00` is the same eleven hundred odd in both tools.
+    @Test(arguments: [("decimal-mark ,", "€"), ("D €1.000,00", "$")])
+    func `a rebuilt amount is written with the declared mark when nothing voted`(
+        directive: String, symbol: String,
+    ) throws {
         var journal = try JournalParser().parse("""
-        decimal-mark ,
+        \(directive)
 
         2024-01-01 rent
-            expenses:rent    €1000
-            assets:bank     €-1000
+            expenses:rent    \(symbol)1000
+            assets:bank     \(symbol)-1000
         """)
         let rent = try #require(journal.transactions.first)
         let eighth = try #require(Decimal(string: "1.125"))
-        let euros = { Amount(quantity: $0, commodity: "€", commodityIsPrefix: true) }
+        let money = { Amount(quantity: $0, commodity: symbol, commodityIsPrefix: true) }
         let rebuilt = try Transaction(
             id: rent.id, date: rent.date, description: rent.description, postings: [
-                Posting(accountName: "expenses:rent", amount: euros(eighth)),
-                Posting(accountName: "assets:bank", amount: euros(-eighth)),
+                Posting(accountName: "expenses:rent", amount: money(eighth)),
+                Posting(accountName: "assets:bank", amount: money(-eighth)),
             ],
         )
         let replaced = journal.replace(.transaction(rent), with: .transaction(rebuilt))
@@ -279,7 +285,7 @@ import Testing
         // The fourth digit is the padding `CommodityFormat.readsAsGrouped`
         // adds against the tie-break. The directive makes it unnecessary, and
         // it is harmless; what this pins is the mark.
-        #expect(written.contains("€1,1250"))
+        #expect(written.contains("\(symbol)1,1250"))
         let reparsed = try #require(JournalParser().parse(written).transactions.first)
         #expect(reparsed.postings.map(\.amount.quantity) == [eighth, -eighth])
     }
