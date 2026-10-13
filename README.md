@@ -170,9 +170,9 @@ Supported:
   and a save puts it back on every line, the lines of an entry you rebuilt
   included. A file that mixes the two is read as the one most of its lines
   use and saved in that one throughout, which is what an editor does with
-  such a file and is the one case where a save changes lines nobody edited;
-  an even split is saved with Unix endings. Classic Mac files, ended by `\r`
-  alone, do not load
+  such a file: the lines that ended the other way come back changed although
+  nobody edited them. An even split is saved with Unix endings. Classic Mac
+  files, ended by `\r` alone, do not load
 
 ### Unsupported directives
 

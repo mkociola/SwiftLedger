@@ -1,8 +1,8 @@
 /// How a journal ends its lines.
 ///
 /// The raw value is the ending itself, as it is written to the file. A file
-/// carries one or the other on every line, and which one it carries says
-/// nothing about what the journal records, so it is layout in the same sense
+/// ends its lines with one or the other, and which one it uses says nothing
+/// about what the journal records, so it is layout in the same sense
 /// as the posting indent and the amount margin. `JournalParser` learns it
 /// and `JournalSerializer` writes it back: an entry rebuilt in a journal
 /// kept on Windows would otherwise be the only lines in the file ending in a
