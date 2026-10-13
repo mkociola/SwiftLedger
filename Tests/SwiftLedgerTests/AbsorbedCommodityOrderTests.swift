@@ -70,8 +70,6 @@ import Testing
         let checking = JournalSerializer().serialize(journal)
             .components(separatedBy: "\n")
             .filter { $0.contains("Assets:Checking") }
-        #expect(checking.count == 2)
-        #expect(checking.first?.contains("$") == true)
-        #expect(checking.last?.contains("€") == true)
+        #expect(checking == ["    Assets:Checking    -$20.00", "    Assets:Checking    -€10.00"])
     }
 }
