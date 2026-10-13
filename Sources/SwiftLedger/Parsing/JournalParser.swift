@@ -98,8 +98,9 @@ import Foundation
 ///   (`Journal.lineEnding`) and written back by `JournalSerializer`, so the
 ///   file still goes back byte for byte. A file that mixes the two endings is
 ///   read as the one most of its lines use and written back in that one
-///   throughout. A `\r` anywhere but the end of a line is not a line ending,
-///   which leaves classic Mac files, ended by `\r` alone, unsupported.
+///   throughout. A `\r` anywhere but the end of a line is not a line ending:
+///   in a field or behind an amount it refuses the file, where hledger reads
+///   past it, and classic Mac files, ended by `\r` alone, are unsupported.
 /// - Indented full-line comments inside a transaction are commentary, not
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.

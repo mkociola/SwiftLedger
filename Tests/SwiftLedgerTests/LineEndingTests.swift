@@ -198,4 +198,15 @@ private func shape(of journal: Journal) -> [JournalItem] {
         #expect(journal.directives == ["\(directive)\r"])
         #expect(JournalSerializer().serialize(journal) == text)
     }
+
+    /// A `\r` anywhere but the end of its line ends nothing, and the file
+    /// refuses to load wherever it lands, an amount included. hledger reads
+    /// past this one, which is a divergence kept by choice
+    /// (`amount-stray-cr` in `HledgerConformanceTests.knownDivergences`).
+    @Test
+    func `a carriage return after an amount refuses to load`() throws {
+        let text = "2026-03-01 Lunch\r\n    Expenses:Food  $5\r  ; note\r\n    Assets:Checking\r\n"
+        let error = try #require(throws: LedgerError.self) { try JournalParser().parse(text) }
+        #expect(error == .inJournal(line: 2, entry: "2026-03-01 Lunch", underlying: .invalidAmount("$5\r")))
+    }
 }

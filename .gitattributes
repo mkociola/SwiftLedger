@@ -5,3 +5,6 @@ Tests/SwiftLedgerTests/Conformance/comment-block-crlf.journal -text
 
 # This one mixes CRLF and LF lines on purpose and ends in a lone CR.
 Tests/SwiftLedgerTests/Conformance/mixed-line-endings.journal -text
+
+# A carriage return in the middle of a line is the point of this one.
+Tests/SwiftLedgerTests/Conformance/amount-stray-cr.journal -text

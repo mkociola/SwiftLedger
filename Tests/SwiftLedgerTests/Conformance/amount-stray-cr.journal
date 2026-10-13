@@ -1,0 +1,5 @@
+; A carriage return in the middle of a line, behind the amount. hledger reads
+; past it. SwiftLedger takes only the one that ends a line for a line ending.
+2024-01-01 Lunch
+    Expenses:Food  $5.00  ; note
+    Assets:Checking

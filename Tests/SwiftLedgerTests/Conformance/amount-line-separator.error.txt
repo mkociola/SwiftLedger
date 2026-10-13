@@ -1,0 +1,6 @@
+hledger: Error: amount-line-separator.journal:4:25:
+  |
+4 |     Expenses:Food  $5.00 
+  |                         ^
+unexpected ' '
+expecting '.', ';', '=', digit, end of input, exponent, ledger-style lot cost, ledger-style lot date, ledger-style lot note, newline, space, transaction price, or valuation expression
