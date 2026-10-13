@@ -8,3 +8,9 @@ Tests/SwiftLedgerTests/Conformance/mixed-line-endings.journal -text
 
 # A carriage return in the middle of a line is the point of this one.
 Tests/SwiftLedgerTests/Conformance/amount-stray-cr.journal -text
+
+# CRLF on every line again, this time in a journal with account directives.
+Tests/SwiftLedgerTests/Conformance/account-directive-crlf.journal -text
+
+# A carriage return in the middle of an account name is the point of this one.
+Tests/SwiftLedgerTests/Conformance/account-directive-stray-cr.journal -text
