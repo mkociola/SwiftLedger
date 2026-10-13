@@ -80,18 +80,13 @@ extension JournalParser {
         }
         guard let first = written.first else { return try [zeroAmount(matching: transaction)] }
 
-        var order: [String] = []
         var sums: [String: (quantity: Decimal, isPrefix: Bool)] = [:]
         for amount in written {
-            if sums[amount.commodity] == nil {
-                order.append(amount.commodity)
-                sums[amount.commodity] = (.zero, amount.commodityIsPrefix)
-            }
-            sums[amount.commodity]?.quantity += amount.quantity
+            sums[amount.commodity, default: (.zero, amount.commodityIsPrefix)].quantity += amount.quantity
         }
 
-        let sorted = order.sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) }
-        let remainders = sorted.compactMap { commodity -> Amount? in
+        let symbols = sums.keys.sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) }
+        let remainders = symbols.compactMap { commodity -> Amount? in
             guard let sum = sums[commodity], sum.quantity != .zero else { return nil }
             return Amount(
                 quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix,
