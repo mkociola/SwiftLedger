@@ -1,0 +1,5 @@
+hledger: Error: directive-malformed-mark-capitalised.journal:1:2:
+  |
+1 | Decimal-Mark ,
+  |  ^
+unexpected 'e'

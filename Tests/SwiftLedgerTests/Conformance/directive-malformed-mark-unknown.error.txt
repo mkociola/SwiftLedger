@@ -1,0 +1,5 @@
+hledger: Error: directive-malformed-mark-unknown.journal:1:14:
+  |
+1 | decimal-mark x
+  |              ^
+unexpected 'x'

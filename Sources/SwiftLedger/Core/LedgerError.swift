@@ -29,6 +29,16 @@ public enum LedgerError: Error, Sendable, Equatable {
     /// spanning several commodities is not this error: it absorbs the
     /// remainder of each one.
     case cannotResolveElision
+    /// A `decimal-mark`, `D` or `commodity` line whose argument cannot be
+    /// read: a mark other than `.` or `,`, a `D` sample with no number in
+    /// it, a keyword with nothing after it. The first associated value is the
+    /// directive as the file writes it; `reason` says in words what it
+    /// lacks.
+    ///
+    /// Kept verbatim, such a line declares nothing, and the amounts below it
+    /// are read by another mark than the author meant without a word. hledger
+    /// refuses the file at the line, and so does the parser.
+    case unreadableDirective(String, reason: String)
 
     // MARK: - Transaction
 
@@ -108,6 +118,8 @@ extension LedgerError: LocalizedError {
             "A transaction may have at most one posting with an elided amount"
         case .cannotResolveElision:
             "Cannot resolve elided amount: no explicit amount to balance it against"
+        case let .unreadableDirective(directive, reason):
+            "Directive '\(directive)' cannot be read: \(reason)"
         case let .unbalancedTransaction(commodity, imbalance):
             "Transaction is unbalanced in \(commodity): off by \(imbalance)"
         case let .unbalancedBracketedPostings(commodity, imbalance):
