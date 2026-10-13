@@ -74,8 +74,14 @@ extension JournalParser {
         // the `;`. Handing the comment to the amount parser loses the whole
         // declaration, silently, since a directive that does not parse is left
         // alone by design.
-        let (sample, _) = splitPostingComment(String(trimmed.dropFirst(keyword.count)))
-        guard let sample else { return }
+        //
+        // A `\r` left behind the sample is taken off it as well. The line
+        // ending is gone by now, so this one is a stray, in a file converted
+        // twice and ending its lines `\r\r\n`. The line is kept with it, but
+        // a declaration lost to it would change what the amounts below are
+        // worth without a word, where hledger reads straight past it.
+        let (field, _) = splitPostingComment(String(trimmed.dropFirst(keyword.count)))
+        guard let sample = field?.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
         if keyword == "decimal-mark" {
             if sample == "." || sample == ",", let mark = sample.first { style.declareDecimalMark(mark) }
             return

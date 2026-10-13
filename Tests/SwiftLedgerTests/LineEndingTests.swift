@@ -184,4 +184,18 @@ private func shape(of journal: Journal) -> [JournalItem] {
         #expect(journal.items == [.comment("; converted twice\r"), .directive("include other.journal\r"), .blank])
         #expect(JournalSerializer().serialize(journal) == text)
     }
+
+    /// A style directive on such a line is still read for what it declares,
+    /// as hledger reads it: dropped without a word, it would leave the amounts
+    /// below to the tie-break, and `€1.000` would be one euro rather than a
+    /// thousand.
+    @Test(arguments: ["commodity €1.000,00", "D €1.000,00", "decimal-mark ,"])
+    func `a directive with a stray carriage return still declares its style`(directive: String) throws {
+        let text = ["\(directive)\r", "", "2026-03-01 Opening", "    assets:bank  €1.000", "    equity:opening", ""]
+            .joined(separator: "\r\n")
+        let journal = try JournalParser().parse(text)
+        #expect(journal.transactions.first?.postings.first?.amount.quantity == 1000)
+        #expect(journal.directives == ["\(directive)\r"])
+        #expect(JournalSerializer().serialize(journal) == text)
+    }
 }
