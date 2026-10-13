@@ -283,6 +283,22 @@ import Testing
         ])
     }
 
+    /// Under the directive, a lone mark that is not the declared comma groups
+    /// whatever follows it, as hledger reads it: the tyres cost forty-five
+    /// hundred euros rather than forty-five, and the amount reads that way
+    /// with the point kept as written.
+    @Test
+    func `the example reads an amount written against its directive as hledger does`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let tyres = try #require(
+            journal.transactions.first { $0.description == "Winter tyres, typed with the wrong mark" },
+        )
+        #expect(tyres.postings.map(\.amount) == [
+            Amount(quantity: 4500, commodity: "€", commodityIsPrefix: true),
+            Amount(quantity: -4500, commodity: "€", commodityIsPrefix: true),
+        ])
+    }
+
     /// The comment block in the example parks a rent entry that must not be
     /// booked. If it were, rent would be three months rather than two and the
     /// block's lines would not come back as the directives the round-trip
