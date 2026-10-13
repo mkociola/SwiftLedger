@@ -7,8 +7,9 @@ import Testing
 /// what it demonstrates has to be true.
 @Suite("example journal") struct ExampleJournalTests {
     /// The example file, read from the repository rather than bundled, so
-    /// that editing it is enough to test it.
-    private static var exampleText: String {
+    /// that editing it is enough to test it. Internal rather than private so
+    /// that the example tests kept in files of their own can read it.
+    static var exampleText: String {
         get throws {
             let url = URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent() // SwiftLedgerTests
@@ -361,20 +362,6 @@ extension ExampleJournalTests {
         #expect(windows.lineEnding == .windows)
 
         #expect(JournalSerializer().serialize(windows) == twin)
-    }
-
-    /// The total price keeps the minus it is written with, so the euros cost
-    /// -$110.00 and the positive cash leg is what balances them.
-    @Test
-    func `the example weighs a negative total price with its own sign`() throws {
-        let journal = try JournalParser().parse(Self.exampleText)
-        let entry = try #require(
-            journal.transactions.first { $0.description == "Euros booked against a negative total" },
-        )
-        #expect(entry.postings.map(\.balancingAmount) == [
-            Amount(quantity: -110, commodity: "$", commodityIsPrefix: true),
-            Amount(quantity: 110, commodity: "$", commodityIsPrefix: true),
-        ])
     }
 
     /// The line under the car wash holds four spaces. It ended the entry, and
