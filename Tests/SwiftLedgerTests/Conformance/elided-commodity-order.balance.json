@@ -1,0 +1,72 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -2400,
+        "places": 2
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": -3000,
+        "places": 2
+      },
+      {
+        "commodity": "Zl",
+        "mantissa": -300,
+        "places": 2
+      },
+      {
+        "commodity": "eur",
+        "mantissa": -200,
+        "places": 2
+      },
+      {
+        "commodity": "£",
+        "mantissa": -100,
+        "places": 2
+      },
+      {
+        "commodity": "€",
+        "mantissa": -1000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Rent",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 2400,
+        "places": 2
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 3000,
+        "places": 2
+      },
+      {
+        "commodity": "Zl",
+        "mantissa": 300,
+        "places": 2
+      },
+      {
+        "commodity": "eur",
+        "mantissa": 200,
+        "places": 2
+      },
+      {
+        "commodity": "£",
+        "mantissa": 100,
+        "places": 2
+      },
+      {
+        "commodity": "€",
+        "mantissa": 1000,
+        "places": 2
+      }
+    ]
+  }
+]

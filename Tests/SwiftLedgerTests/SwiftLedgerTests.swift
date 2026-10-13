@@ -1859,8 +1859,8 @@ private extension LedgerError {
 @Suite("multi-commodity elision") struct MultiCommodityElisionTests {
     /// The opening-balances entry every hledger tutorial starts with: two
     /// commodities, one line to absorb both. Since a `Posting` holds a single
-    /// amount, that line resolves into one posting per commodity, in the order
-    /// the entry writes them.
+    /// amount, that line resolves into one posting per commodity, sorted by
+    /// commodity symbol.
     @Test
     func `an elided posting absorbs the remainder of every commodity in the entry`() throws {
         let text = """

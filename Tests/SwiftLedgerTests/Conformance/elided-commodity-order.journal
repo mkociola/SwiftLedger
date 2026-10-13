@@ -1,0 +1,15 @@
+; One elided posting absorbs several commodities written out of sorted order.
+; hledger lists the absorbed amounts sorted by commodity symbol, by code
+; point, whatever order the entry wrote them in.
+2024-01-01 Opening balances
+    Expenses:Rent      €10.00
+    Expenses:Rent      $20.00
+    Expenses:Rent      30.00 EUR
+    Assets:Checking
+
+2024-01-02 Capitals before small letters, ASCII before the pound
+    Expenses:Rent      £1.00
+    Expenses:Rent      2.00 eur
+    Expenses:Rent      3.00 Zl
+    Expenses:Rent      $4.00
+    Assets:Checking
