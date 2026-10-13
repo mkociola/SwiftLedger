@@ -245,6 +245,25 @@ public struct Journal: Sendable, Codable {
     /// list of items. The entry left behind the opening line is then already
     /// text on the next load, and one appended afterwards follows it there.
     private var openBlockCommentIndex: Int? {
+        trailingBlocks.opening
+    }
+
+    /// Whether the journal's last line is a line of a block comment, its
+    /// closing keyword included, rather than a blank one.
+    ///
+    /// hledger refuses a file whose last line is one of these with no newline
+    /// after it, and so does `JournalParser` (issue #66). A parsed journal
+    /// that ended in a newline ends on a blank item instead, but removing the
+    /// entry that followed a closed block leaves the closing line last, so
+    /// `JournalSerializer` asks this and writes the newline the file needs.
+    var endsOnBlockCommentLine: Bool {
+        trailingBlocks.endsOnBlockLine
+    }
+
+    /// Walks the directives and blanks at the end of the journal the way
+    /// `JournalParser` reads them, for `openBlockCommentIndex` and
+    /// `endsOnBlockCommentLine`.
+    private var trailingBlocks: (opening: Int?, endsOnBlockLine: Bool) {
         // ponytail: starts after the last non-block item, which trusts that
         // none sits inside an open block. Scan from index 0, or have the
         // parser record the open block, if `remove`/`replace` on a block's
@@ -257,15 +276,18 @@ public struct Journal: Sendable, Codable {
         }
         let parser = JournalParser()
         var opening: Int?
+        var inBlock = false
         for index in (lastOutside.map { $0 + 1 } ?? items.startIndex) ..< items.endIndex {
             guard case let .directive(text) = items[index] else { continue }
+            inBlock = opening != nil || parser.isCommentBlockStart(text)
             if opening == nil {
                 if parser.isCommentBlockStart(text) { opening = index }
             } else if parser.isCommentBlockEnd(text) {
                 opening = nil
             }
         }
-        return opening
+        guard case .directive = items.last else { return (opening, false) }
+        return (opening, inBlock)
     }
 
     /// Removes the first occurrence of `item` from the journal.

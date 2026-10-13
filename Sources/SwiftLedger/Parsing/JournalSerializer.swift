@@ -84,6 +84,9 @@ public struct JournalSerializer {
                 ))
             }
         }
+        // hledger refuses a file that ends on a block comment's line with no
+        // newline after it (issue #66), and an edit can leave one last.
+        if journal.endsOnBlockCommentLine { lines.append("") }
         return lines.joined(separator: journal.lineEnding.rawValue)
     }
 
