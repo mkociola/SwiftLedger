@@ -1,0 +1,6 @@
+hledger: Error: comment-block-eof-no-newline.journal:8:20:
+  |
+8 |     Assets:Checking
+  |                    ^
+unexpected end of input
+expecting newline
