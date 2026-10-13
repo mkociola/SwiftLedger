@@ -179,7 +179,7 @@ public struct JournalParser {
             // declares and kept verbatim all the same: learning from a line is
             // not the same as modelling it, and this one still goes back byte
             // for byte.
-            declareFormat(from: line, into: &style)
+            declareFormat(from: contentOf(line: line), into: &style)
             items.append(.directive(line))
             index += 1
         }

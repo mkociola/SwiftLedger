@@ -42,9 +42,7 @@ extension JournalParser {
         // declaration, silently, since a directive that does not parse is left
         // alone by design.
         let (sample, _) = splitPostingComment(String(trimmed.dropFirst(keyword.count)))
-        // The newline trim is for the `\r` a CRLF file leaves on the line, as
-        // in `parseShapedAmount`.
-        guard let sample = sample?.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+        guard let sample else { return }
         if keyword == "decimal-mark" {
             if sample == "." || sample == ",", let mark = sample.first { style.declareDecimalMark(mark) }
             return
