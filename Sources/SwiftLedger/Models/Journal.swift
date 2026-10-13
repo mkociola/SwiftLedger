@@ -9,7 +9,11 @@
 /// own, where the next parse reads a dated line as an entry nobody wrote and
 /// anything else as a directive. `init` refuses one with
 /// `LedgerError.lineBreakInField`, naming `"name"` or `"comment"`, by the
-/// same test `Transaction.init` applies to its own fields.
+/// same test `Transaction.init` applies to its own fields. A value the next
+/// parse would read back as other syntax, such as a name holding the two
+/// spaces and `;` that open the comment, is refused too, with
+/// `LedgerError.syntaxInField`, for the reasons
+/// `Transaction.validateAccountDirectiveSyntax` gives.
 public struct AccountDirective: Sendable, Codable, Hashable {
     public let name: String
     public let type: AccountType?
@@ -17,10 +21,13 @@ public struct AccountDirective: Sendable, Codable, Hashable {
     public let comment: String?
 
     /// - Throws: `LedgerError.lineBreakInField` if `name` or `comment` holds
-    ///   `\n` or `\r`.
+    ///   `\n` or `\r`; `LedgerError.syntaxInField` if `name` is empty, has
+    ///   whitespace at either end or holds two spaces or tabs in a row, or if
+    ///   `comment` has whitespace at either end.
     public init(name: String, type: AccountType? = nil, comment: String? = nil) throws {
         try Transaction.requireOneLine(name, at: "name")
         try Transaction.requireOneLine(comment, at: "comment")
+        try Transaction.validateAccountDirectiveSyntax(name: name, comment: comment)
         self.name = name
         self.type = type
         self.comment = comment

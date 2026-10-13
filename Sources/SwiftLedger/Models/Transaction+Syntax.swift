@@ -115,6 +115,36 @@ extension Transaction {
         }
     }
 
+    /// Refuses an `account` directive's name or comment the directive grammar
+    /// would read as something other than the field, by the same reasoning as
+    /// `validateHeaderSyntax`.
+    ///
+    /// A directive is written `account NAME[  ; COMMENT]` and read back by
+    /// position: the comment opens at the first `;` with two spaces or tabs
+    /// in front of it, and the name and the comment are both trimmed. A name
+    /// holding that marker comes back cut at it, with the rest as the
+    /// comment; a name holding any other run of two spaces or tabs is one
+    /// hledger stops reading at, and then refuses the line over, and the one
+    /// check on a run refuses both, since the marker opens with one; and an empty
+    /// name leaves `account` alone on the line, which the parser keeps as a
+    /// line it does not model. The comment runs to the end of the line, so
+    /// only its ends matter. Each of these would otherwise come back as a
+    /// different directive, or as none, and `Journal.accountDirective(named:)`
+    /// would miss the name the caller used.
+    ///
+    /// The parser cannot hand `init` a marker, an empty name or a value it
+    /// would trim. It can hand it a name holding another run, and the file is
+    /// then refused at that line, as hledger refuses it.
+    static func validateAccountDirectiveSyntax(name: String, comment: String?) throws {
+        try requireTrimmed(name, at: "name")
+        try require(!name.isEmpty, at: "name", rule: "an account name may not be empty")
+        try require(
+            !containsWhitespaceRun(name), at: "name",
+            rule: "two spaces or tabs in a row end an account name",
+        )
+        try requireTrimmed(comment, at: "comment")
+    }
+
     /// Every way two spaces or tabs can stand side by side. A run of two or
     /// more holds one of these, and a run followed by `;` ends in one of
     /// `commentOpeners`. Both lists are built once: plain substring searches

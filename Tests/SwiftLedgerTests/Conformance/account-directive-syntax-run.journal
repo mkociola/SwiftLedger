@@ -1,0 +1,7 @@
+; An account directive whose name holds a run of two spaces. The run ends
+; the name, and hledger refuses what follows it on the line.
+account Assets  Checking
+
+2024-01-01 Rent
+    Expenses:Rent  $500
+    Assets:Checking
