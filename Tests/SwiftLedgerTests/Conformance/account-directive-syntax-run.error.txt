@@ -1,0 +1,6 @@
+hledger: Error: account-directive-syntax-run.journal:3:17:
+  |
+3 | account Assets  Checking
+  |                 ^
+unexpected 'C'
+expecting ';', end of input, or newline
