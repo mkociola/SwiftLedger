@@ -87,18 +87,20 @@ import Foundation
 /// - Every parsed transaction keeps its own source lines verbatim
 ///   (`Transaction.sourceText`), so serialising a journal nobody edited
 ///   reproduces the file byte for byte.
-/// - A transaction in a file with Windows line endings is read as though the
-///   file had Unix ones. `parse` splits on `\n` alone, so each line arrives
-///   with the `\r` that closed it, and that `\r` is the line ending rather
-///   than part of the field in front of it: a description, an account name or
-///   a comment that runs to the end of its line comes back without it. The
-///   lines themselves are still kept exactly as they came, so the file goes
-///   back byte for byte. The keyword lines of a block comment are recognised
-///   the same way, so `comment` and `end comment` open and close a block
-///   whichever ending the file has, and are likewise kept as they came.
-///   An `account` line is read the same way, so the name and the comment it
-///   declares come back without the `\r`. Nothing else outside a transaction
-///   is read this way: a blank CRLF line is still the item `.directive("\r")`.
+/// - A file with Windows line endings is read as though it had Unix ones.
+///   `parse` splits on `\n` and takes the `\r` that closed a line off it
+///   before anything reads the line, so that `\r` is the line ending rather
+///   than part of what stands in front of it: a description, an account name
+///   or a comment that runs to the end of its line comes back without it, a
+///   blank line is `.blank`, an `account` line declares the name every
+///   posting uses, and `comment` and `end comment` open and close a block.
+///   Which ending the file uses is layout, kept on the journal
+///   (`Journal.lineEnding`) and written back by `JournalSerializer`, so the
+///   file still goes back byte for byte. A file that mixes the two endings is
+///   read as the one most of its lines use and written back in that one
+///   throughout. A `\r` anywhere but the end of a line is not a line ending:
+///   in a field or behind an amount it refuses the file, where hledger reads
+///   past it, and classic Mac files, ended by `\r` alone, are unsupported.
 /// - Indented full-line comments inside a transaction are commentary, not
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
@@ -120,7 +122,7 @@ public struct JournalParser {
 
     /// Parses `text` and returns a `Journal`.
     public func parse(_ text: String) throws -> Journal {
-        let lines = text.components(separatedBy: "\n")
+        let (lines, lineEnding) = Self.lines(of: text)
         var items: [JournalItem] = []
         // Watches how the file writes each commodity, so that a transaction
         // the caller later rebuilds is written the same way.
@@ -182,7 +184,7 @@ public struct JournalParser {
             // declares and kept verbatim all the same: learning from a line is
             // not the same as modelling it, and this one still goes back byte
             // for byte.
-            declareFormat(from: contentOf(line: line), into: &style)
+            declareFormat(from: line, into: &style)
             items.append(.directive(line))
             index += 1
         }
@@ -192,6 +194,7 @@ public struct JournalParser {
             commodityFormats: style.formats,
             amountAlignment: style.amountAlignment,
             postingIndent: style.postingIndent,
+            lineEnding: lineEnding,
         )
     }
 
@@ -203,19 +206,16 @@ public struct JournalParser {
     /// Returns `nil` when the line is not an `account` directive, or names no
     /// account at all.
     ///
-    /// The line ending comes off first, as it does for a transaction's lines:
-    /// in a CRLF file the `\r` would otherwise land in the name, or in the
-    /// comment when there is one, and `Ledger.accounts` would list the
-    /// declared account twice, the second time with nothing posted to it. A
-    /// directive is written back from the model rather than from its line, so
-    /// inside a CRLF file that one line goes back with a Unix ending until #35
-    /// teaches the serializer the file's own. A `\r` anywhere else on the line
-    /// is not a line ending, and the name or comment it lands in is one no
-    /// journal can write, so `AccountDirective.init` refuses it and the file
-    /// does not load, as it does not for a transaction's field.
+    /// The line arrives without its line ending, as every line does. Left on
+    /// in a CRLF file, the `\r` would land in the name, or in the comment when
+    /// there is one, and `Ledger.accounts` would list the declared account
+    /// twice, the second time with nothing posted to it. A `\r` anywhere else
+    /// on the line is not a line ending, and the name or comment it lands in
+    /// is one no journal can write, so `AccountDirective.init` refuses it and
+    /// the file does not load, as it does not for a transaction's field.
     private func parseAccountDirective(_ trimmed: String) throws -> AccountDirective? {
         guard trimmed.lowercased().hasPrefix("account ") else { return nil }
-        let (mainPart, comment) = splitInlineComment(contentOf(line: trimmed))
+        let (mainPart, comment) = splitInlineComment(trimmed)
         let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return nil }
         return try AccountDirective(
@@ -240,7 +240,7 @@ public struct JournalParser {
         from start: Int,
         into style: inout JournalStyleCollector,
     ) throws -> (Transaction, Int) {
-        let headerLine = contentOf(line: lines[start])
+        let headerLine = lines[start]
         let lineNumber = start + 1 // 1-based for errors
         let entry = Self.entryHeader(headerLine)
 
@@ -254,7 +254,7 @@ public struct JournalParser {
         var leadingComments: [String] = []
         var index = start + 1
         while index < lines.count {
-            let currentLine = contentOf(line: lines[index])
+            let currentLine = lines[index]
             if currentLine.isEmpty || currentLine.trimmingCharacters(in: .whitespaces).isEmpty {
                 break // blank line ends the transaction
             }

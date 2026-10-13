@@ -1,0 +1,5 @@
+; U+2028, the Unicode line separator, behind an amount. It is not a line
+; ending and not a space, so the amount does not parse.
+2024-01-01 Lunch
+    Expenses:Food  $5.00 
+    Assets:Checking

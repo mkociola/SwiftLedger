@@ -24,9 +24,12 @@ import Testing
     /// hledger folds a `\r` stranded inside an `account` line into a space,
     /// where SwiftLedger refuses the file by the rule it applies to a
     /// transaction's fields, since the name is one no journal can write back.
+    /// `amount-stray-cr` is the same choice made for a `\r` stranded behind a
+    /// posting's amount: only the `\r` that ends a line is a line ending.
     static let knownDivergences: Set<String> = [
         "account-directive-stray-cr",
         "alias",
+        "amount-stray-cr",
         "amount-forms",
         "apply-account",
         "balance-assertion-fails",

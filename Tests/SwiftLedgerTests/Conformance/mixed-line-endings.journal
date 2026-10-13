@@ -1,0 +1,12 @@
+; Most lines here end the Windows way and two end the Unix way, and the file
+; stops between the two halves of its last line ending. hledger reads every
+; line without its ending whichever it is.
+account Assets:Checking  ; main
+
+2024-01-01 Lunch
+    Expenses:Food  $5.00
+    Assets:Checking
+
+2024-01-02 Tea
+    Expenses:Food  $2.00
+    Assets:Checking

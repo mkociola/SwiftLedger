@@ -13,6 +13,10 @@ import Foundation
 /// - Lines the parser does not model (`include`, `P`, `commodity`, `alias`,
 ///   `D`, `year`, indented sub-directives, …) are written back verbatim, as
 ///   are the lines of a block comment.
+/// - Every line ends the way the file's lines ended (`Journal.lineEnding`),
+///   the ones written for a rebuilt entry included, so an edit in a journal
+///   kept on Windows does not leave one entry with Unix endings. A journal
+///   built in code is written with Unix endings.
 ///
 /// The rules below describe the formatting applied to a transaction the caller
 /// built or changed — one with no source lines of its own:
@@ -57,9 +61,12 @@ public struct JournalSerializer {
                 lines.append("")
             case let .comment(text):
                 // Line by line, so a break inside the text cannot put a dated
-                // line where the next parse books it. Split on `\n` alone, as
-                // the parser does: a Windows `\r` belongs to its line.
-                lines.append(contentsOf: text.components(separatedBy: "\n").map { isCommentLine($0) ? $0 : "; \($0)" })
+                // line where the next parse books it. A Windows break in
+                // the text is a break like any other, so it leaves no `\r` on
+                // a line for the journal's own ending to follow. A `\r` that
+                // ends the text broke nothing and is written as it came.
+                let commentLines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+                lines.append(contentsOf: commentLines.map { isCommentLine($0) ? $0 : "; \($0)" })
             case let .directive(raw):
                 lines.append(raw)
             case let .accountDirective(directive):
@@ -77,7 +84,7 @@ public struct JournalSerializer {
                 ))
             }
         }
-        return lines.joined(separator: "\n")
+        return lines.joined(separator: journal.lineEnding.rawValue)
     }
 
     // MARK: - Comments
