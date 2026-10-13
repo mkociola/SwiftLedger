@@ -3,6 +3,39 @@
 import Foundation
 
 extension JournalParser {
+    /// Splits `text` into its lines, with the line ending taken off each, and
+    /// says which ending the file uses.
+    ///
+    /// A line ends at `\n`, and the `\r` a Windows ending puts in front of
+    /// that is the other half of the ending rather than the last character of
+    /// the line. Taken off here, before anything reads a line, it reaches no
+    /// field, no directive and no `sourceText`, so a journal kept on Windows
+    /// is read as the same journal kept anywhere else: a blank line is blank,
+    /// an account is declared under the name every posting uses, and a bare
+    /// `comment` opens a block.
+    ///
+    /// Only the last scalar of a line, and only once. A `\r` anywhere else is
+    /// not a line ending, and is left for the field it lands in to refuse by
+    /// name. That is also what becomes of a file with classic Mac endings,
+    /// which holds no `\n` and so is one line.
+    ///
+    /// The ending is the one most lines use. A file that mixes the two is
+    /// written back in that one throughout, which is what an editor does with
+    /// such a file, and an even split reads as Unix, the ending a journal
+    /// that came from no file is written with. What follows the last `\n` is
+    /// not a line anything ended, so it has no say: a `\r` there comes off, as
+    /// it does in hledger, and is not counted.
+    static func lines(of text: String) -> (lines: [String], ending: LineEnding) {
+        var lines = text.components(separatedBy: "\n")
+        let ended = lines.count - 1
+        var endedTheWindowsWay = 0
+        for index in lines.indices where lines[index].unicodeScalars.last == "\r" {
+            lines[index].unicodeScalars.removeLast()
+            if index < ended { endedTheWindowsWay += 1 }
+        }
+        return (lines, endedTheWindowsWay * 2 > ended ? .windows : .unix)
+    }
+
     /// Reads what a `D`, `commodity` or `decimal-mark` directive states, if
     /// the line is one: the display style a sample amount shows, and the
     /// decimal mark every lone mark below the line is read against

@@ -87,18 +87,19 @@ import Foundation
 /// - Every parsed transaction keeps its own source lines verbatim
 ///   (`Transaction.sourceText`), so serialising a journal nobody edited
 ///   reproduces the file byte for byte.
-/// - A transaction in a file with Windows line endings is read as though the
-///   file had Unix ones. `parse` splits on `\n` alone, so each line arrives
-///   with the `\r` that closed it, and that `\r` is the line ending rather
-///   than part of the field in front of it: a description, an account name or
-///   a comment that runs to the end of its line comes back without it. The
-///   lines themselves are still kept exactly as they came, so the file goes
-///   back byte for byte. The keyword lines of a block comment are recognised
-///   the same way, so `comment` and `end comment` open and close a block
-///   whichever ending the file has, and are likewise kept as they came.
-///   An `account` line is read the same way, so the name and the comment it
-///   declares come back without the `\r`. Nothing else outside a transaction
-///   is read this way: a blank CRLF line is still the item `.directive("\r")`.
+/// - A file with Windows line endings is read as though it had Unix ones.
+///   `parse` splits on `\n` and takes the `\r` that closed a line off it
+///   before anything reads the line, so that `\r` is the line ending rather
+///   than part of what stands in front of it: a description, an account name
+///   or a comment that runs to the end of its line comes back without it, a
+///   blank line is `.blank`, an `account` line declares the name every
+///   posting uses, and `comment` and `end comment` open and close a block.
+///   Which ending the file uses is layout, kept on the journal
+///   (`Journal.lineEnding`) and written back by `JournalSerializer`, so the
+///   file still goes back byte for byte. A file that mixes the two endings is
+///   read as the one most of its lines use and written back in that one
+///   throughout. A `\r` anywhere but the end of a line is not a line ending,
+///   which leaves classic Mac files, ended by `\r` alone, unsupported.
 /// - Indented full-line comments inside a transaction are commentary, not
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
@@ -120,7 +121,7 @@ public struct JournalParser {
 
     /// Parses `text` and returns a `Journal`.
     public func parse(_ text: String) throws -> Journal {
-        let lines = text.components(separatedBy: "\n")
+        let (lines, lineEnding) = Self.lines(of: text)
         var items: [JournalItem] = []
         // Watches how the file writes each commodity, so that a transaction
         // the caller later rebuilds is written the same way.
@@ -192,6 +193,7 @@ public struct JournalParser {
             commodityFormats: style.formats,
             amountAlignment: style.amountAlignment,
             postingIndent: style.postingIndent,
+            lineEnding: lineEnding,
         )
     }
 

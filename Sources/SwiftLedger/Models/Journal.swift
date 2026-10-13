@@ -60,6 +60,8 @@ public enum JournalItem: Sendable, Codable, Hashable {
     /// The payload is the source line **verbatim**, including its original
     /// indentation, and is written back byte-for-byte. Content SwiftLedger
     /// cannot interpret is never reinterpreted, commented out, or dropped.
+    /// The line ending is no part of the line: it is kept once for the whole
+    /// file, in `Journal.lineEnding`.
     case directive(String)
     case blank
 }
@@ -106,21 +108,34 @@ public struct Journal: Sendable, Codable {
     /// the one entry the user edited is a change nobody asked for. Not encoded.
     public private(set) var postingIndent: String?
 
+    /// How this file ends its lines, or `.unix` for a journal that came from
+    /// no file.
+    ///
+    /// Recorded and applied for the same reason as `postingIndent`, to every
+    /// line rather than to a rebuilt entry alone: the parser takes the ending
+    /// off each line it reads, so nothing in `items` holds one, and
+    /// `JournalSerializer` puts this one back between them. A file that mixes
+    /// the two endings is read as the one most of its lines use, and is
+    /// written back in that one throughout. Not encoded.
+    public private(set) var lineEnding: LineEnding = .unix
+
     public init(
         items: [JournalItem] = [],
         commodityFormats: [String: CommodityFormat] = [:],
         amountAlignment: AmountAlignment? = nil,
         postingIndent: String? = nil,
+        lineEnding: LineEnding = .unix,
     ) {
         self.items = items
         self.commodityFormats = commodityFormats
         self.amountAlignment = amountAlignment
         self.postingIndent = postingIndent
+        self.lineEnding = lineEnding
     }
 
-    /// The encoded shape of a journal. `commodityFormats`, `amountAlignment`
-    /// and `postingIndent` are deliberately absent: they describe one file's
-    /// layout rather than the events it records.
+    /// The encoded shape of a journal. `commodityFormats`, `amountAlignment`,
+    /// `postingIndent` and `lineEnding` are deliberately absent: they describe
+    /// one file's layout rather than the events it records.
     private enum CodingKeys: String, CodingKey {
         case items
     }

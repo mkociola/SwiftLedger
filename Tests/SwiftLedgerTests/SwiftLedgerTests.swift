@@ -934,13 +934,13 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         }
     }
 
-    /// `parse` splits on `\n` alone, so in a CRLF file the `account` line
-    /// arrives with its `\r`, which used to go into the name, or into the
-    /// comment when there was one: `Ledger.accounts` then listed
+    /// In a CRLF file the `\r` of an `account` line used to go into the name,
+    /// or into the comment when there was one: `Ledger.accounts` then listed
     /// `Assets:Checking\r` beside `Assets:Checking`, with nothing posted to it.
     /// A directive is written back from the model rather than from its line,
-    /// so until #35 teaches the serializer the file's line ending that line
-    /// comes back with a Unix ending.
+    /// so it goes back byte for byte only because the serializer ends every
+    /// line the way the file does. The blank line under the directives is
+    /// `.blank`, where it used to be a directive holding the `\r`.
     @Test
     func `a windows file declares its accounts without the line ending`() throws {
         let text = [
@@ -956,9 +956,9 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         #expect(journal.accountDirectives.map(\.comment) == ["main", nil])
         let accounts = Ledger(journal: journal).accounts.map(\.name)
         #expect(accounts == ["Assets", "Assets:Checking", "Expenses", "Expenses:Food"])
-        withKnownIssue("#35: an account directive in a CRLF file is written back with a Unix ending") {
-            #expect(JournalSerializer().serialize(journal) == text)
-        }
+        #expect(journal.items[2] == .blank)
+        #expect(journal.directives.isEmpty)
+        #expect(JournalSerializer().serialize(journal) == text)
     }
 
     /// A `\r` anywhere but at the end of the line is not a line ending, and
@@ -1492,12 +1492,13 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
         #expect(journal.commodityFormats["EUR"]?.decimalMark == ",")
     }
 
-    /// A journal saved on Windows, read for its amounts. `parse` splits on
-    /// `\n` and `parseTransaction` takes the `\r` off each of a transaction's
-    /// lines, so an amount that ends its line reaches the scanner spelled the
-    /// way the same file with Unix endings spells it. The file loaded before
-    /// any of that existed, and has to go on loading and going back byte for
-    /// byte. What its fields hold is the test below.
+    /// A journal saved on Windows, read for its amounts. `parse` takes the
+    /// `\r` off every line it splits the file into, so an amount that ends
+    /// its line reaches the scanner spelled the way the same file with Unix
+    /// endings spells it, and the line between the entries is `.blank` rather
+    /// than a directive holding the `\r`. The file loaded before any of that
+    /// existed, and has to go on loading and going back byte for byte. What
+    /// its fields hold is the test below.
     @Test
     func `a journal with windows line endings still loads`() throws {
         let text = [
@@ -1513,6 +1514,9 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
         let amounts = journal.transactions.flatMap { $0.postings.map(\.amount) }
         #expect(amounts.map(\.quantity) == [-66, 66, 100, -100])
         #expect(amounts.map(\.commodity) == ["$", "$", "EUR", "EUR"])
+        #expect(journal.items[1] == .blank)
+        #expect(journal.directives.isEmpty)
+        #expect(journal.lineEnding == .windows)
         #expect(JournalSerializer().serialize(journal) == text)
     }
 
