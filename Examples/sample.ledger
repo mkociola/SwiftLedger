@@ -188,11 +188,12 @@ account Expenses:Utilities
 ; ── A directive settles the one shape a number cannot ───────────────────────
 ; €1.000 is a thousand grouped or one euro to three places, and nothing in the
 ; number says which. Without a directive it keeps ledger's reading, one euro.
-; A commodity or D directive states the marks, and from the line it stands on
+; A commodity directive states the marks, and from the line it stands on
 ; every such amount in that commodity is read with the declared decimal mark,
-; so the invoice below is a thousand euros, as hledger reads it. hledger's
-; decimal-mark directive does the same for every commodity at once. The
-; directive line itself is kept verbatim, like every other directive.
+; so the invoice below is a thousand euros, as hledger reads it. A D directive
+; does the same for every commodity without a declaration of its own, and
+; hledger's decimal-mark directive for all of them at once. The directive
+; line itself is kept verbatim, like every other directive.
 
 commodity €1.000,00
 
