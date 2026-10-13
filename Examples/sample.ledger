@@ -217,6 +217,17 @@ commodity €1.000,00
     Expenses:Car           €45.00
     Assets:EuroAccount
 
+; ── A line of nothing but spaces ────────────────────────────────────────────
+; The line under the entry below is not empty: it holds four spaces, which is
+; what an editor that indents for you leaves behind when you press return
+; after the last posting. It ends the entry just as an empty line does, and
+; it is written back with its spaces, so saving the file does not change a
+; line nobody touched.
+
+2024-03-17 Car wash
+    Expenses:Car           $15.00
+    Assets:Checking
+    
 ; ── Comment blocks ──────────────────────────────────────────────────────────
 ; A `comment` line on its own opens a block that runs to `end comment`, or
 ; to the end of the file. Nothing inside it is read: the entry below is

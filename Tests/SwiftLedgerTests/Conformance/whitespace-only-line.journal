@@ -1,0 +1,15 @@
+; A line holding nothing but spaces or a tab ends the entry above it, as an
+; empty line does, and inside a block comment it is text like the rest.
+2024-01-01 Lunch
+    Expenses:Food  $5.00
+    Assets:Checking
+    
+2024-01-02 Tea
+    Expenses:Food  $2.00
+    Assets:Checking
+	
+comment
+2024-01-03 Parked
+  
+    Expenses:Food  $9.00
+end comment

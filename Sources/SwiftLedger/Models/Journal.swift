@@ -52,7 +52,7 @@ public enum JournalItem: Sendable, Codable, Hashable {
     ///
     /// Every line of a block comment lands here too, the `comment` or `test`
     /// line that opens it and the `end comment` or `end test` line that closes
-    /// it included (a whitespace-only line inside one is `.blank`).
+    /// it included (an empty line inside one is `.blank`).
     /// The block's contents are text the file tells the reader to skip, so a
     /// transaction written there arrives as directive lines rather than as a
     /// `.transaction`.
@@ -62,7 +62,13 @@ public enum JournalItem: Sendable, Codable, Hashable {
     /// cannot interpret is never reinterpreted, commented out, or dropped.
     /// The line ending is no part of the line: it is kept once for the whole
     /// file, in `Journal.lineEnding`.
+    ///
+    /// A line holding nothing but spaces or tabs lands here as well, in a
+    /// block or out of one. The parser reads it as a blank line, and it is
+    /// kept here because `.blank` could not write its whitespace back.
     case directive(String)
+    /// An empty line. One holding spaces or tabs is a `.directive`, which
+    /// keeps them.
     case blank
 }
 
@@ -160,7 +166,8 @@ public struct Journal: Sendable, Codable {
     ///
     /// Use this to detect constructs SwiftLedger preserves but does not
     /// interpret — most notably `include`, whose referenced files are neither
-    /// read nor written by `PlainTextJournalStore`.
+    /// read nor written by `PlainTextJournalStore`. A line holding nothing
+    /// but spaces or tabs is listed too, since it is kept the same way.
     public var directives: [String] {
         items.compactMap {
             if case let .directive(text) = $0 { return text }

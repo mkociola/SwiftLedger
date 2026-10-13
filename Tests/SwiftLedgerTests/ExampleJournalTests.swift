@@ -309,6 +309,8 @@ import Testing
         #expect(!journal.transactions.contains { $0.description == "Rent for March" })
         #expect(journal.directives == [
             "commodity €1.000,00",
+            // The line of four spaces under the car wash is kept as it came.
+            "    ",
             "comment",
             "Draft of the March rent, not yet due. Everything in here is text.",
             "2024-03-01 * Rent for March",
@@ -359,5 +361,19 @@ extension ExampleJournalTests {
         #expect(windows.lineEnding == .windows)
 
         #expect(JournalSerializer().serialize(windows) == twin)
+    }
+
+    /// The line under the car wash holds four spaces. It ended the entry, and
+    /// it is the next item with its spaces on it, which is what lets the file
+    /// go back byte for byte.
+    @Test
+    func `the example keeps a whitespace-only line as it came`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let index = try #require(journal.items.firstIndex { item in
+            if case let .transaction(entry) = item { return entry.description == "Car wash" }
+            return false
+        })
+        #expect(journal.transactions.first { $0.description == "Car wash" }?.postings.count == 2)
+        #expect(journal.items[index + 1] == .directive("    "))
     }
 }

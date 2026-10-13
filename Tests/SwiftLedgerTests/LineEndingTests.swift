@@ -128,17 +128,6 @@ private func shape(of journal: Journal) -> [JournalItem] {
         #expect(JournalSerializer().serialize(journal) == text)
     }
 
-    /// A line holding nothing but spaces is blank in a Unix file, and the same
-    /// line is blank in a Windows one: it ends the entry above it and is the
-    /// item `.blank`.
-    @Test
-    func `a whitespace-only line in a windows journal is blank`() throws {
-        let text = ["2026-03-01 Lunch", "    Expenses:Food  $5", "    Assets:Checking", "   ", "; after"]
-            .joined(separator: "\r\n")
-        let journal = try JournalParser().parse(text)
-        #expect(journal.items.dropFirst() == [.blank, .comment("; after")])
-    }
-
     /// Classic Mac endings stay unsupported. With no `\n` anywhere the file is
     /// one line, and the `\r` inside it is a break in the description.
     @Test

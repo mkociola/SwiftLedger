@@ -190,6 +190,12 @@ commodity USD
 journal.directives  // ["include accounts.ledger", "P 2024-01-01 AAPL $185.00", …]
 ```
 
+A line holding nothing but spaces or tabs, which an auto-indenting editor
+leaves behind an entry, is kept the same way. It reads as a blank line, so it
+ends the entry above it, and it is written back with its whitespace, where
+`JournalItem.blank` would write an empty line. `journal.directives` lists it
+with the rest.
+
 > **`include` is preserved, not followed.** `PlainTextJournalStore` reads and
 > writes one file. Transactions in included files are invisible to `Ledger`
 > queries, and the `include` lines themselves survive a save untouched.
