@@ -27,6 +27,20 @@ import Testing
     }
 
     @Test
+    func `a cancelling total-priced pair names the from side too`() {
+        let total = PostingPrice.total(Amount(quantity: 11, commodity: "USD"))
+        let verdict = Transaction.balance(of: [
+            Self.posting(10, "EUR", price: total),
+            Self.posting(-10, "EUR", price: total),
+            Self.posting(-110, "USD"),
+            Self.posting(100, "EUR"),
+        ])
+        #expect(verdict.real == .exchange(
+            from: Amount(quantity: 100, commodity: "EUR"), to: Amount(quantity: -110, commodity: "USD"),
+        ))
+    }
+
+    @Test
     func `an unpriced posting written first still names the from side`() {
         let verdict = Transaction.balance(of: [
             Self.posting(-110, "USD"),
