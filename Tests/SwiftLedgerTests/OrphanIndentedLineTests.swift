@@ -55,6 +55,8 @@ import Testing
         "commodity $\n    format $1,000.00\n    note dollars\n",
         "commodity\t$  ; dollars\n    format $1,000.00\n",
         "commodity \"AAPL 2\"\n    note shares\n",
+        // hledger counts only an ASCII digit as part of a number.
+        "commodity m²\n    note area\n",
         "account Assets:Checking\n    note current account\n    type A\n",
         "account Assets:Checking  ; main\n\tnote current account\n",
         "payee Grocer\n    note corner shop\n",

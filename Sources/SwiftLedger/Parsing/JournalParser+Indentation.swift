@@ -55,9 +55,11 @@ extension JournalParser {
     /// dated entry does. A `commodity` line that states a sample amount is the
     /// one-line form, complete on its line, and hledger refuses an indented
     /// line under it; a digit inside a quoted symbol, `commodity "AAPL 2"`,
-    /// names the commodity and states nothing. A dated header is not in the
-    /// list: `parseTransaction` has taken every line it owns, so the walk up
-    /// reaches one only across the line that ended it.
+    /// names the commodity and states nothing, and so does a digit outside
+    /// ASCII, `commodity m²`, which hledger never reads as part of a number.
+    /// A dated header is not in the list: `parseTransaction` has taken every
+    /// line it owns, so the walk up reaches one only across the line that
+    /// ended it.
     private func ownsIndentedLines(_ line: String, acrossWhitespaceLine: Bool) -> Bool {
         if line.hasPrefix("~") || line.hasPrefix("=") { return !acrossWhitespaceLine }
         guard let keyword = ["account", "commodity", "payee", "tag"].first(where: {
@@ -68,7 +70,7 @@ extension JournalParser {
         var quoted = false
         return !(sample ?? "").contains { char in
             if char == "\"" { quoted.toggle() }
-            return !quoted && char.isNumber
+            return !quoted && ("0" ... "9").contains(char)
         }
     }
 }
