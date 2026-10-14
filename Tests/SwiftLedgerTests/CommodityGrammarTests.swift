@@ -36,16 +36,15 @@ import Testing
         return try? JournalParser().parse(text).transactions.first?.postings.first?.amount
     }
 
-    /// The field a refused transaction names, or `nil` when it builds or is
-    /// refused for anything other than its syntax.
-    static func refusedField(_ build: () throws -> Transaction) -> String? {
+    /// The field a refused transaction names, or `nil` when it builds. Any
+    /// other error is rethrown, so a spelling refused for the wrong reason
+    /// fails the test rather than passing as accepted.
+    static func refusedField(_ build: () throws -> Transaction) throws -> String? {
         do {
             _ = try build()
             return nil
         } catch let LedgerError.syntaxInField(field, _) {
             return field
-        } catch {
-            return nil
         }
     }
 
@@ -53,22 +52,22 @@ import Testing
     /// exactly when the line written for it loads back as the same commodity
     /// on the same side.
     @Test(arguments: spellings, [false, true])
-    func `a commodity is accepted exactly when it reads back as itself`(symbol: String, isPrefix: Bool) {
+    func `a commodity is accepted exactly when it reads back as itself`(symbol: String, isPrefix: Bool) throws {
         let amount = Amount(quantity: 100, commodity: symbol, commodityIsPrefix: isPrefix)
         let back = Self.readBack(amount)
         let readsBack = back?.commodity == symbol && back?.commodityIsPrefix == isPrefix
-        #expect(Self.refusedField { try Self.rent(amount) } == (readsBack ? nil : "postings[0].amount.commodity"))
+        #expect(try Self.refusedField { try Self.rent(amount) } == (readsBack ? nil : "postings[0].amount.commodity"))
     }
 
     @Test(arguments: [false, true])
-    func `the digit from the report is refused on either side`(isPrefix: Bool) {
+    func `the digit from the report is refused on either side`(isPrefix: Bool) throws {
         let amount = Amount(quantity: 100, commodity: "EUR2", commodityIsPrefix: isPrefix)
-        #expect(Self.refusedField { try Self.rent(amount) } == "postings[0].amount.commodity")
+        #expect(try Self.refusedField { try Self.rent(amount) } == "postings[0].amount.commodity")
     }
 
     @Test
-    func `a price commodity is checked by the same rule`() {
-        let field = Self.refusedField {
+    func `a price commodity is checked by the same rule`() throws {
+        let field = try Self.refusedField {
             try Transaction(
                 date: JournalDate(year: 2026, month: 7, day: 1),
                 description: "Exchange",
@@ -86,9 +85,9 @@ import Testing
     }
 
     @Test
-    func `a balance assertion commodity is checked by the same rule`() {
+    func `a balance assertion commodity is checked by the same rule`() throws {
         let dollars = Amount(quantity: 1200, commodity: "$", commodityIsPrefix: true)
-        let field = Self.refusedField {
+        let field = try Self.refusedField {
             try Transaction(
                 date: JournalDate(year: 2026, month: 7, day: 1),
                 description: "Rent",
