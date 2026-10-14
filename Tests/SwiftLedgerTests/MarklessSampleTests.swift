@@ -28,6 +28,8 @@ import Testing
             Refused(head: "commodity $1,000.00\ncommodity $1,000", line: 2),
             Refused(head: "decimal-mark ,\nD €1.000", line: 2),
             Refused(head: "decimal-mark .\ncommodity $1,000", line: 2),
+            Refused(head: "D 1.000,00 EUR\nD 1.000 EUR", line: 2),
+            Refused(head: "commodity €1.000,00\nD €1.000", line: 2),
             Refused(head: "commodity €\n  format €1000", line: 2),
             Refused(head: "commodity €\n  note euro\n  format €1000", line: 3),
         ]
