@@ -166,23 +166,23 @@ import Testing
     /// The cost hledger infers for an exchange, by posting index. SwiftLedger
     /// stores none: it reports the exchange as a verdict. hledger hangs the
     /// cost on the unpriced postings in the first commodity, a total when
-    /// there is one of them and a per-unit rate when there are several, so the
-    /// verdict is rendered the same way and the two readings compared whole.
+    /// that commodity is on one posting and a per-unit rate when it is on
+    /// several, priced ones counted, so the verdict is rendered the same way
+    /// and the two readings compared whole.
     private static func inferredCosts(of postings: [Posting]) -> [Int: PostingPrice] {
         let verdicts = Transaction.balance(of: postings)
         var costs: [Int: PostingPrice] = [:]
         for (kind, verdict) in [(Posting.Kind.real, verdicts.real), (.balancedVirtual, verdicts.bracketed)] {
             guard case let .exchange(from, target) = verdict else { continue }
-            let indices = postings.indices.filter {
-                postings[$0].kind == kind && postings[$0].price == nil
-                    && postings[$0].amount.commodity == from.commodity
+            let inFrom = postings.indices.filter {
+                postings[$0].kind == kind && postings[$0].amount.commodity == from.commodity
             }
-            let quantity = indices.count == 1 ? abs(target.quantity) : abs(target.quantity / from.quantity)
+            let quantity = inFrom.count == 1 ? abs(target.quantity) : abs(target.quantity / from.quantity)
             let cost = Amount(
                 quantity: quantity, commodity: target.commodity, commodityIsPrefix: target.commodityIsPrefix,
             )
-            for index in indices {
-                costs[index] = indices.count == 1 ? .total(cost) : .perUnit(cost)
+            for index in inFrom where postings[index].price == nil {
+                costs[index] = inFrom.count == 1 ? .total(cost) : .perUnit(cost)
             }
         }
         return costs

@@ -1,0 +1,86 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Wash and exchange",
+    "postings": [
+      {
+        "account": "Assets:Euros",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 10,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 11,
+              "places": 1
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Travel",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -10,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 11,
+              "places": 1
+            }
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Dollars",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -110,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Savings",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 100,
+            "places": 0,
+            "cost": {
+              "total": false,
+              "commodity": "USD",
+              "mantissa": 11,
+              "places": 1
+            }
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]
