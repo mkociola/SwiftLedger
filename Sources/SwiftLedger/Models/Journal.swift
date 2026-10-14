@@ -68,9 +68,9 @@ public enum JournalItem: Sendable, Codable, Hashable {
     /// indentation, and is written back byte-for-byte. Content SwiftLedger
     /// cannot interpret is never reinterpreted, commented out, or dropped.
     /// The line ending is no part of the line: it is kept once for the whole
-    /// file, in `Journal.lineEnding`. A value holding a line break is written
-    /// as the lines it holds, and the next parse reads each on its own, so a
-    /// dated one comes back as an entry: `LedgerManager` refuses one.
+    /// file, in `Journal.lineEnding`. A value holding `\n` is written as the
+    /// lines it holds, and the next parse reads each on its own, so a dated
+    /// one comes back as an entry: `LedgerManager` refuses one.
     ///
     /// A line holding nothing but spaces or tabs lands here as well, in a
     /// block or out of one. The parser reads it as a blank line, and it is

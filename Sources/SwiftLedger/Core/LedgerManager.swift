@@ -18,7 +18,7 @@ public final class LedgerManager {
     /// A transaction built in code is refused, with the balance error
     /// `Transaction.init` throws, when the journal would write it with more
     /// digits than it balances at: the file would not load back. See
-    /// `balance(of:)`. A `.directive` holding a line break is refused with
+    /// `balance(of:)`. A `.directive` holding `\n` is refused with
     /// `LedgerError.lineBreakInField("directive")`, for the reason the case
     /// itself gives.
     public func add(_ item: JournalItem) throws {
@@ -77,10 +77,15 @@ public final class LedgerManager {
     /// replayed verbatim and was checked when it was read, so it passes: that
     /// is what lets a removed entry be put back exactly as it was.
     ///
-    /// A `.directive` holding a line break is refused too, for the reason
-    /// `JournalItem.directive` gives (issue #72).
+    /// A `.directive` holding `\n` is refused too, for the reason
+    /// `JournalItem.directive` gives (issue #72). Only `\n`, unlike
+    /// `Transaction.requireOneLine`: the parser keeps a lone `\r` in a
+    /// directive line, as hledger reads past one, so a directive read from the
+    /// file has to go back in.
     private func requireReloadable(_ item: JournalItem) throws {
-        if case let .directive(text) = item { try Transaction.requireOneLine(text, at: "directive") }
+        if case let .directive(text) = item, text.unicodeScalars.contains("\n") {
+            throw LedgerError.lineBreakInField("directive")
+        }
         guard case let .transaction(transaction) = item, transaction.sourceText == nil else { return }
         try Transaction.requireBalanced(transaction.postings, formats: ledger.journal.commodityFormats)
     }

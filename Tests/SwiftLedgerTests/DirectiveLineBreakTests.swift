@@ -5,7 +5,7 @@ import Testing
 /// break is written as two lines, and the next parse books a dated second
 /// line as an entry nobody wrote. `LedgerManager` refuses one before it saves.
 @Suite("directive line break") struct DirectiveLineBreakTests {
-    static let breaks = ["\n", "\r\n", "\r"]
+    static let breaks = ["\n", "\r\n"]
 
     @Test(arguments: DirectiveLineBreakTests.breaks)
     func `add refuses a directive holding a line break and saves nothing`(lineBreak: String) throws {
@@ -29,6 +29,20 @@ import Testing
             try manager.replace(original, with: replacement)
         }
         #expect(try store.load().journal.items == [original])
+    }
+
+    /// The parser keeps a lone `\r` in a directive line, as hledger reads
+    /// past one, so a directive read from the file must go back in: an undo
+    /// is a remove and an add.
+    @Test
+    func `a parsed directive holding a lone carriage return can be removed and added back`() throws {
+        let text = "P 2024-01-01 AAPL\r $185.00\n"
+        let store = try InMemoryLedgerStore(ledger: Ledger(journal: JournalParser().parse(text)))
+        let manager = try LedgerManager(store: store)
+        let item = JournalItem.directive("P 2024-01-01 AAPL\r $185.00")
+        #expect(try manager.remove(item))
+        try manager.add(item)
+        #expect(try store.load().journal.directives == ["P 2024-01-01 AAPL\r $185.00"])
     }
 
     @Test
