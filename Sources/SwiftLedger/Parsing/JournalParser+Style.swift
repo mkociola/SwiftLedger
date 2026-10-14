@@ -55,9 +55,10 @@ extension JournalParser {
     /// A line hledger refuses to read is refused here too, with
     /// `LedgerError.unreadableDirective`: a `decimal-mark` that names neither
     /// mark, a `D` with no number in its sample, a `D` or `commodity` with
-    /// nothing after it. Kept verbatim, such a line declared nothing, and the
-    /// amounts below it were read by another mark than the author wrote it
-    /// for, without a word. A sample that has a number and still does not
+    /// nothing after it, a sample that shows no decimal mark as the lines
+    /// above it read it. Kept, such a line declared no mark, and the amounts
+    /// below it were read by another mark than the author wrote it for,
+    /// without a word. A sample that has a number and still does not
     /// parse is left alone, as before: hledger reads some of those, and a
     /// file it loads is not refused on a guess.
     func declareFormat(from line: String, into style: inout JournalStyleCollector) throws {
@@ -75,7 +76,8 @@ extension JournalParser {
         // Only a line at the margin is refused. An indented one is a
         // subdirective of the block above it, and hledger skips one it does
         // not know under a `commodity` or an `account` block, so it is read
-        // for what it declares, as before, and refused for nothing.
+        // for what it declares, as before, and refused for nothing but a
+        // `format` sample with no decimal mark, which hledger does read.
         let refuses = !isIndented
         // hledger reads every line opening with `D` as a `D` directive, so
         // `Decimal-Mark ,` is a `D` with no gap after it, and hledger stops
@@ -118,6 +120,16 @@ extension JournalParser {
             return
         }
         guard let parsed = try? parseShapedAmount(sample, lineNumber: 0, in: style) else { return }
+        // hledger asks every sample for a decimal mark, as the directives
+        // above it read the sample, and stops at one with none: `€1000`, or
+        // `€1.000` under `decimal-mark ,`. A lone mark the tie-break read is
+        // not that case, since hledger reads it as the decimal mark. Indented,
+        // only `format` is asked, as the one line a `commodity` block reads.
+        let shape = parsed.shape
+        if shape.decimalMark == nil, shape.isSettled, refuses || keyword == "format" {
+            let example = "as in '\(keyword) $1000.' or '\(keyword) €1.000,00'"
+            throw LedgerError.unreadableDirective(trimmed, reason: "its sample shows no decimal mark, \(example)")
+        }
         style.declare(parsed.shape, commodity: parsed.amount.commodity, isDefault: keyword == "D")
     }
 

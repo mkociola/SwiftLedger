@@ -35,11 +35,10 @@ import Testing
     }
 
     /// Lines hledger loads stay loadable: a `commodity` line naming a symbol
-    /// declares no style, a sample with no decimal mark is issue #84's to
-    /// settle, and an indented line under a `commodity` block is a
+    /// declares no style, and an indented line under a `commodity` block is a
     /// subdirective hledger skips.
     @Test(arguments: [
-        "commodity xyz", "commodity $", "commodity \"a b\"", "commodity xyz ; c", "commodity €1000",
+        "commodity xyz", "commodity $", "commodity \"a b\"", "commodity xyz ; c",
         "decimal-mark .x", "commodity €\n  D xyz", "commodity €\n  decimal-mark x",
     ])
     func `a directive hledger loads still loads`(directive: String) throws {

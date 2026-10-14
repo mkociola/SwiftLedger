@@ -1,0 +1,6 @@
+commodity €
+  format €1000
+
+2024-01-01 Rent
+    Expenses:Rent     €1000
+    Assets:Checking
