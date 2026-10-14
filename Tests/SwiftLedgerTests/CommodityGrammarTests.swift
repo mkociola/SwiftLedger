@@ -36,38 +36,39 @@ import Testing
         return try? JournalParser().parse(text).transactions.first?.postings.first?.amount
     }
 
+    /// The field a refused transaction names, or `nil` when it builds or is
+    /// refused for anything other than its syntax.
+    static func refusedField(_ build: () throws -> Transaction) -> String? {
+        do {
+            _ = try build()
+            return nil
+        } catch let LedgerError.syntaxInField(field, _) {
+            return field
+        } catch {
+            return nil
+        }
+    }
+
     /// The rule `init` applies is the parser's own: a spelling is accepted
     /// exactly when the line written for it loads back as the same commodity
     /// on the same side.
     @Test(arguments: spellings, [false, true])
-    func `a commodity is accepted exactly when it reads back as itself`(symbol: String, isPrefix: Bool) throws {
+    func `a commodity is accepted exactly when it reads back as itself`(symbol: String, isPrefix: Bool) {
         let amount = Amount(quantity: 100, commodity: symbol, commodityIsPrefix: isPrefix)
         let back = Self.readBack(amount)
         let readsBack = back?.commodity == symbol && back?.commodityIsPrefix == isPrefix
-        if readsBack {
-            #expect(throws: Never.self) { try Self.rent(amount) }
-        } else {
-            let error = try #require(throws: LedgerError.self) { try Self.rent(amount) }
-            guard case let .syntaxInField(path, _) = error else {
-                Issue.record("expected syntaxInField, got \(error)")
-                return
-            }
-            #expect(path == "postings[0].amount.commodity")
-        }
+        #expect(Self.refusedField { try Self.rent(amount) } == (readsBack ? nil : "postings[0].amount.commodity"))
+    }
+
+    @Test(arguments: [false, true])
+    func `the digit from the report is refused on either side`(isPrefix: Bool) {
+        let amount = Amount(quantity: 100, commodity: "EUR2", commodityIsPrefix: isPrefix)
+        #expect(Self.refusedField { try Self.rent(amount) } == "postings[0].amount.commodity")
     }
 
     @Test
-    func `the digit from the report is refused on either side`() {
-        for isPrefix in [false, true] {
-            #expect(throws: LedgerError.self) {
-                try Self.rent(Amount(quantity: 100, commodity: "EUR2", commodityIsPrefix: isPrefix))
-            }
-        }
-    }
-
-    @Test
-    func `a price commodity is checked by the same rule`() throws {
-        let error = try #require(throws: LedgerError.self) {
+    func `a price commodity is checked by the same rule`() {
+        let field = Self.refusedField {
             try Transaction(
                 date: JournalDate(year: 2026, month: 7, day: 1),
                 description: "Exchange",
@@ -81,17 +82,13 @@ import Testing
                 ],
             )
         }
-        guard case let .syntaxInField(path, _) = error else {
-            Issue.record("expected syntaxInField, got \(error)")
-            return
-        }
-        #expect(path == "postings[0].price.amount.commodity")
+        #expect(field == "postings[0].price.amount.commodity")
     }
 
     @Test
-    func `a balance assertion commodity is checked by the same rule`() throws {
+    func `a balance assertion commodity is checked by the same rule`() {
         let dollars = Amount(quantity: 1200, commodity: "$", commodityIsPrefix: true)
-        let error = try #require(throws: LedgerError.self) {
+        let field = Self.refusedField {
             try Transaction(
                 date: JournalDate(year: 2026, month: 7, day: 1),
                 description: "Rent",
@@ -105,11 +102,7 @@ import Testing
                 ],
             )
         }
-        guard case let .syntaxInField(path, _) = error else {
-            Issue.record("expected syntaxInField, got \(error)")
-            return
-        }
-        #expect(path == "postings[1].balanceAssertion.commodity")
+        #expect(field == "postings[1].balanceAssertion.commodity")
     }
 
     /// A bare number has no commodity written, and the parser reads it as
