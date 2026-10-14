@@ -2,10 +2,10 @@ import Foundation
 @testable import SwiftLedger
 import Testing
 
-/// The tests for the example's entries in several commodities. Each section
-/// keeps its tests in a file of its own, so that changes made side by side add
-/// to different files rather than all growing one past the length SwiftLint
-/// allows.
+/// The tests for the example's entries in several commodities. Each topic of
+/// the example keeps its tests in a file of its own, so that changes made side
+/// by side add to different files rather than all growing one past the length
+/// SwiftLint allows.
 extension ExampleJournalTests {
     /// The opening entry for the accounts abroad is the hledger idiom the
     /// parser used to reject: two commodities and one elided line to absorb

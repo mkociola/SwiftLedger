@@ -1,10 +1,10 @@
 @testable import SwiftLedger
 import Testing
 
-/// The tests for the example's line of nothing but spaces. Each section keeps
-/// its tests in a file of its own, so that changes made side by side add to
-/// different files rather than all growing one past the length SwiftLint
-/// allows.
+/// The tests for the example's line of nothing but spaces. Each topic of the
+/// example keeps its tests in a file of its own, so that changes made side by
+/// side add to different files rather than all growing one past the length
+/// SwiftLint allows.
 extension ExampleJournalTests {
     /// The line under the car wash holds four spaces. It ended the entry, and
     /// it is the next item with its spaces on it, which is what lets the file

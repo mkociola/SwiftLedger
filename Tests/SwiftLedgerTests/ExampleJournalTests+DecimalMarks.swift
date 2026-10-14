@@ -3,9 +3,9 @@ import Foundation
 import Testing
 
 /// The tests for the example's decimal marks and its comment after an amount.
-/// Each section keeps its tests in a file of its own, so that changes made side
-/// by side add to different files rather than all growing one past the length
-/// SwiftLint allows.
+/// Each topic of the example keeps its tests in a file of its own, so that
+/// changes made side by side add to different files rather than all growing one
+/// past the length SwiftLint allows.
 extension ExampleJournalTests {
     /// The comma in `€12,50` divides the fraction, so the coffee cost twelve
     /// euros fifty rather than the twelve hundred and fifty the parser used to

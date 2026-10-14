@@ -3,9 +3,9 @@ import Foundation
 import Testing
 
 /// The tests for the example's line endings, which no one section of the file
-/// can show. Each section keeps its tests in a file of its own, so that changes
-/// made side by side add to different files rather than all growing one past
-/// the length SwiftLint allows.
+/// can show. Each topic of the example keeps its tests in a file of its own, so
+/// that changes made side by side add to different files rather than all
+/// growing one past the length SwiftLint allows.
 extension ExampleJournalTests {
     /// The example is kept with Unix endings, since one file cannot show two,
     /// so its Windows twin is made here: the same text with every line ending

@@ -2,9 +2,9 @@
 import Testing
 
 /// The tests for the example's commodity directive and the amount written
-/// against it. Each section keeps its tests in a file of its own, so that
-/// changes made side by side add to different files rather than all growing one
-/// past the length SwiftLint allows.
+/// against it. Each topic of the example keeps its tests in a file of its own,
+/// so that changes made side by side add to different files rather than all
+/// growing one past the length SwiftLint allows.
 extension ExampleJournalTests {
     /// `€1.000` is the one shape a number cannot settle, and the directive
     /// above the entry is what settles it: a thousand euros, as hledger reads
