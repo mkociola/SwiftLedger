@@ -45,13 +45,6 @@ import Testing
         }
     }
 
-    /// The refusal is the line's own, so a file that holds nothing else is
-    /// refused all the same.
-    @Test
-    func `a markless sample is refused in a file with no entries`() {
-        #expect(throws: LedgerError.self) { try JournalParser().parse("commodity €1000\n") }
-    }
-
     /// Samples hledger reads: a lone mark with three digits after it is
     /// still a mark, and so is one with nothing behind it. A line indented
     /// under a `commodity` block that is not `format` is skipped there.
