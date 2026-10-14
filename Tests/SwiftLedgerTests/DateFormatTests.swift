@@ -80,6 +80,16 @@ import Testing
         expectRefused("; header\n" + header + Self.postings, atLine: 2)
     }
 
+    /// The calendar check lives in `JournalDate` itself, so a date built in
+    /// code is held to it as much as one the parser reads.
+    @Test
+    func `a day the calendar does not have is no date`() throws {
+        #expect(throws: LedgerError.invalidDate("2024-02-30")) { try JournalDate(year: 2024, month: 2, day: 30) }
+        #expect(throws: LedgerError.invalidDate("1900-02-29")) { try JournalDate(year: 1900, month: 2, day: 29) }
+        #expect(throws: LedgerError.invalidDate("2024-04-31")) { try JournalDate(year: 2024, month: 4, day: 31) }
+        #expect(try JournalDate(year: 2000, month: 2, day: 29).day == 29)
+    }
+
     @Test
     func `a short date is checked against the year it is given`() {
         expectRefused("Y 2023\n02/29 x" + Self.postings, atLine: 2)
