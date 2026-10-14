@@ -18,7 +18,9 @@ public final class LedgerManager {
     /// A transaction built in code is refused, with the balance error
     /// `Transaction.init` throws, when the journal would write it with more
     /// digits than it balances at: the file would not load back. See
-    /// `balance(of:)`.
+    /// `balance(of:)`. A `.directive` holding a line break is refused with
+    /// `LedgerError.lineBreakInField("directive")`, for the reason the case
+    /// itself gives.
     public func add(_ item: JournalItem) throws {
         try requireReloadable(item)
         var updated = ledger
@@ -74,7 +76,13 @@ public final class LedgerManager {
     /// A transaction that still carries the lines it was parsed from is
     /// replayed verbatim and was checked when it was read, so it passes: that
     /// is what lets a removed entry be put back exactly as it was.
+    ///
+    /// A `.directive` holding a line break is refused too (issue #72). The
+    /// serializer writes it verbatim, so it lands in the file as two lines,
+    /// and the next parse books a dated second line as an entry nobody wrote.
+    /// `Journal` itself takes one, since its `init` and `append` do not throw.
     private func requireReloadable(_ item: JournalItem) throws {
+        if case let .directive(text) = item { try Transaction.requireOneLine(text, at: "directive") }
         guard case let .transaction(transaction) = item, transaction.sourceText == nil else { return }
         try Transaction.requireBalanced(transaction.postings, formats: ledger.journal.commodityFormats)
     }
