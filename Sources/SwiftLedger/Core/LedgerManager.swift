@@ -77,10 +77,8 @@ public final class LedgerManager {
     /// replayed verbatim and was checked when it was read, so it passes: that
     /// is what lets a removed entry be put back exactly as it was.
     ///
-    /// A `.directive` holding a line break is refused too (issue #72). The
-    /// serializer writes it verbatim, so it lands in the file as two lines,
-    /// and the next parse books a dated second line as an entry nobody wrote.
-    /// `Journal` itself takes one, since its `init` and `append` do not throw.
+    /// A `.directive` holding a line break is refused too, for the reason
+    /// `JournalItem.directive` gives (issue #72).
     private func requireReloadable(_ item: JournalItem) throws {
         if case let .directive(text) = item { try Transaction.requireOneLine(text, at: "directive") }
         guard case let .transaction(transaction) = item, transaction.sourceText == nil else { return }
