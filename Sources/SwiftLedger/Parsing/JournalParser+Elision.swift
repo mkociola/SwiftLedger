@@ -15,7 +15,8 @@ extension JournalParser {
     /// single amount: the standard opening-balances entry writes a dollar leg
     /// and a pound leg and lets one `equity:opening balances` line absorb both.
     /// Since `Posting` carries one amount, such a line expands here into one
-    /// posting per commodity with something left to absorb, sorted by
+    /// posting per commodity with something left to absorb (or a zero in each
+    /// commodity when none has, see `remainders(of:in:)`), sorted by
     /// commodity symbol, sitting where the elided line was. That is what
     /// ledger and hledger infer, and it is the order hledger prints the entry
     /// back in.

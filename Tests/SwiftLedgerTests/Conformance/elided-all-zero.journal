@@ -7,7 +7,7 @@
     Assets:Savings      -5 EUR
     Equity:Opening
 
-; One commodity leaves one zero, at the digits the entry wrote.
+; One commodity leaves one zero.
 2024-01-02 Opening balances
     Assets:Checking     $10.00
     Assets:Checking     $-10.00
