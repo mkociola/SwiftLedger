@@ -86,11 +86,9 @@ extension JournalParser {
             sums[amount.commodity, default: (.zero, amount.commodityIsPrefix)].quantity += amount.quantity
         }
 
-        let symbols = sums.keys.sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) }
-        let remainders = symbols.compactMap { commodity -> Amount? in
-            guard let sum = sums[commodity] else { return nil }
-            return Amount(quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix)
-        }
+        let remainders = sums
+            .sorted { $0.key.unicodeScalars.lexicographicallyPrecedes($1.key.unicodeScalars) }
+            .map { Amount(quantity: -$0.value.quantity, commodity: $0.key, commodityIsPrefix: $0.value.isPrefix) }
         let leftOver = remainders.filter { $0.quantity != .zero }
         return leftOver.isEmpty ? remainders : leftOver
     }
