@@ -130,7 +130,7 @@ extension JournalParser {
             let example = "as in '\(keyword) $1000.' or '\(keyword) €1.000,00'"
             throw LedgerError.unreadableDirective(trimmed, reason: "its sample shows no decimal mark, \(example)")
         }
-        style.declare(parsed.shape, commodity: parsed.amount.commodity, isDefault: keyword == "D")
+        style.declare(shape, commodity: parsed.amount.commodity, isDefault: keyword == "D")
     }
 
     /// Why hledger refuses a `D` or `commodity` line whose sample holds no
