@@ -15,7 +15,7 @@ import Testing
     struct Case: CustomTestStringConvertible {
         let text: String
         let date: JournalDate
-        let auxDate: JournalDate?
+        var auxDate: JournalDate?
         var testDescription: String {
             text
         }
@@ -42,12 +42,6 @@ import Testing
             Case(text: "Y 2020\n2024-01-08=01-10 x", date: date(2024, 1, 8), auxDate: date(2024, 1, 10)),
             Case(text: "Y 2024\n01/15=01/20 x", date: date(2024, 1, 15), auxDate: date(2024, 1, 20)),
         ]
-
-        init(text: String, date: JournalDate, auxDate: JournalDate? = nil) {
-            self.text = text
-            self.date = date
-            self.auxDate = auxDate
-        }
 
         private static func date(_ year: Int, _ month: Int, _ day: Int) -> JournalDate {
             // swiftlint:disable:next force_try
