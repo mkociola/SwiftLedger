@@ -9,10 +9,16 @@ public struct JournalDate: Sendable, Codable, Hashable, Comparable, CustomString
     public let month: Int
     public let day: Int
 
+    /// Throws `LedgerError.invalidDate` for a day the Gregorian calendar does
+    /// not have, `2024-02-30` and `2023-02-29` as much as `2024-13-01`: hledger
+    /// refuses a journal dated that way, and a day kept here that no calendar
+    /// has would come out of `date(timeZone:)` as some other day.
     public init(year: Int, month: Int, day: Int) throws {
+        let isLeap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+        let monthLengths = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
         guard year > 0,
               (1 ... 12).contains(month),
-              (1 ... 31).contains(day)
+              (1 ... monthLengths[month - 1]).contains(day)
         else {
             throw LedgerError.invalidDate(String(format: "%04d-%02d-%02d", year, month, day))
         }
