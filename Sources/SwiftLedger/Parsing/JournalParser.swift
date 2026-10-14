@@ -10,7 +10,9 @@ import Foundation
 ///     [* | !] [ACCOUNT_NAME]  [AMOUNT] [  ; comment]      ; balanced virtual
 /// ```
 ///
-/// - Date formats: `YYYY-MM-DD` or `YYYY/MM/DD`
+/// - Date formats: year, month and day with one `-`, `/` or `.` between
+///   them, leading zeros optional, or month and day alone in the
+///   year a `Y` or `year` line sets (see `consumeDates`)
 /// - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `100.00 EUR`, `£500`.
 ///   The number is ASCII digits, at most one decimal mark and any number of
 ///   digit-group marks, and nothing else: `$1e5`, `$0x10`, `$1_000`, `$1x2y`
@@ -133,11 +135,12 @@ public struct JournalParser {
         // Watches how the file writes each commodity, so that a transaction
         // the caller later rebuilds is written the same way.
         var style = JournalStyleCollector()
+        // The year the last `Y` or `year` line set, for a date that leaves it out.
+        var year: Int?
         var index = 0
 
         while index < lines.count {
-            let raw = lines[index]
-            let line = raw
+            let line = lines[index]
 
             // Blank line. One holding spaces or tabs reads as blank too, and
             // is kept as it came so that it is written back as it came.
@@ -177,7 +180,7 @@ public struct JournalParser {
             // Transaction header (starts with a date)
             if startsWithDate(trimmed) {
                 let (transaction, consumed) = try located(line: index + 1, entry: Self.entryHeader(line)) {
-                    try parseTransaction(lines: lines, from: index, into: &style)
+                    try parseTransaction(lines: lines, from: index, year: year, into: &style)
                 }
                 items.append(.transaction(transaction))
                 index += consumed
@@ -187,12 +190,12 @@ public struct JournalParser {
             // Anything else — an unsupported directive (`include`, `P`, `commodity`,
             // `alias`, `D`, `year`, an indented sub-directive) or malformed content.
             // Kept verbatim so serialising never rewrites what we cannot interpret.
-            // A `D`, `commodity` or `decimal-mark` line is read for what it
-            // declares and kept verbatim all the same: learning from a line is
-            // not the same as modelling it, and this one still goes back byte
-            // for byte.
+            // A `D`, `commodity`, `decimal-mark`, `Y` or `year` line is read
+            // for what it declares and kept verbatim all the same: learning
+            // from a line is not the same as modelling it, and this one still
+            // goes back byte for byte.
             // One it recognises and cannot read refuses the file at its line.
-            try located(line: index + 1, entry: nil) { try declareFormat(from: line, into: &style) }
+            try located(line: index + 1, entry: nil) { try declare(from: line, into: &style, year: &year) }
             items.append(.directive(line))
             index += 1
         }
@@ -246,13 +249,14 @@ public struct JournalParser {
     private func parseTransaction(
         lines: [String],
         from start: Int,
+        year: Int?,
         into style: inout JournalStyleCollector,
     ) throws -> (Transaction, Int) {
         let headerLine = lines[start]
         let lineNumber = start + 1 // 1-based for errors
         let entry = Self.entryHeader(headerLine)
 
-        let header = try parseHeader(headerLine, lineNumber: lineNumber)
+        let header = try parseHeader(headerLine, year: year, lineNumber: lineNumber)
 
         // Collect the transaction body: the indented lines below the header.
         // A full-line comment among them is commentary rather than a posting —
@@ -305,22 +309,13 @@ public struct JournalParser {
 
     private func parseHeader(
         _ line: String,
+        year: Int?,
         lineNumber: Int,
     ) throws -> ParsedHeader {
-        var rest = line
-
-        // DATE
-        let (date, afterDate) = try consumeDate(rest, lineNumber: lineNumber)
-        rest = afterDate.trimmingCharacters(in: .whitespaces)
-
-        // Optional = AUXDATE
-        var auxDate: JournalDate?
-        if rest.hasPrefix("=") {
-            rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
-            let (aux, afterAux) = try consumeDate(rest, lineNumber: lineNumber)
-            auxDate = aux
-            rest = afterAux.trimmingCharacters(in: .whitespaces)
-        }
+        // DATE [= AUXDATE]
+        var afterDates = line[...]
+        let (date, auxDate) = try consumeDates(&afterDates, year: year, lineNumber: lineNumber)
+        var rest = afterDates.trimmingCharacters(in: .whitespaces)
 
         // Optional status (* or !)
         var txStatus: ClearingStatus = .unmarked

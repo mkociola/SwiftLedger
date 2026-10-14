@@ -1,0 +1,19 @@
+2023/12/30 Before any year directive
+    Expenses:Utilities    $1.00
+    Assets:Checking
+
+Y2024 ; no space is needed before the year
+
+1/5=1.9 Short primary and secondary dates
+    Expenses:Utilities    $2.00
+    Assets:Checking
+
+year 2025
+
+2024-001-0005=2.1 Leading zeros, and a secondary date in the primary's year
+    Expenses:Utilities    $3.00
+    Assets:Checking
+
+12/31 The year the last directive set
+    Expenses:Utilities    $4.00
+    Assets:Checking

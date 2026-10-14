@@ -3,19 +3,6 @@
 import Foundation
 
 extension JournalParser {
-    func startsWithDate(_ str: String) -> Bool {
-        // Quick check: at least 10 chars matching YYYY[-/]MM[-/]DD
-        guard str.count >= 10 else { return false }
-        let digits = str.prefix(10)
-        let separators: Set<Character> = ["-", "/"]
-        let chars = Array(digits)
-        return chars[0].isNumber && chars[1].isNumber && chars[2].isNumber && chars[3].isNumber &&
-            separators.contains(chars[4]) &&
-            chars[5].isNumber && chars[6].isNumber &&
-            separators.contains(chars[7]) &&
-            chars[8].isNumber && chars[9].isNumber
-    }
-
     /// The markers that make a line outside a transaction a full-line comment.
     ///
     /// ledger and hledger read all five this way. `JournalSerializer` writes a
@@ -114,25 +101,6 @@ extension JournalParser {
     func isTransactionComment(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         return trimmed.hasPrefix(";") || trimmed.hasPrefix("#")
-    }
-
-    func consumeDate(_ str: String, lineNumber: Int) throws -> (JournalDate, String) {
-        guard str.count >= 10 else {
-            throw LedgerError.parseError(line: lineNumber, message: "Expected date, got '\(str)'")
-        }
-        let dateStr = String(str.prefix(10))
-        let rest = String(str.dropFirst(10))
-
-        let parts = dateStr.components(separatedBy: CharacterSet(charactersIn: "-/"))
-        // swiftlint:disable identifier_name
-        guard parts.count == 3,
-              let y = Int(parts[0]), let m = Int(parts[1]), let d = Int(parts[2])
-        else {
-            throw LedgerError.invalidDate(dateStr)
-        }
-        let date = try JournalDate(year: y, month: m, day: d)
-        // swiftlint:enable identifier_name
-        return (date, rest)
     }
 
     /// Splits the inline comment off an `account` directive: two or more

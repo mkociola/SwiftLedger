@@ -135,7 +135,8 @@ account Income:Salary
 ```
 
 Supported:
-- Dates: `YYYY-MM-DD` or `YYYY/MM/DD`
+- Dates: `2024-01-05`, `2024/1/5` or `2024.01.05`, and month and day alone
+  (`1/5`) in the year a `Y` or `year` line sets, as hledger reads them
 - Amount formats: `$100`, `-$50`, `$-50`, `100 USD`, `USD 100`, `£500.00`. A
   space between a commodity in front and its number is layout and no part of
   the name, so `USD 100` and `USD100` are one commodity, `USD`, where earlier

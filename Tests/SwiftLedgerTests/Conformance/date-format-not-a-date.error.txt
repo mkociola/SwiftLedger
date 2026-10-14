@@ -1,0 +1,6 @@
+hledger: Error: date-format-not-a-date.journal:1:5:
+  |
+1 | 2024x Not a date
+  |     ^
+unexpected 'x'
+expecting date separator or digit

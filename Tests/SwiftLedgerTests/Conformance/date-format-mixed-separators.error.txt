@@ -1,0 +1,6 @@
+hledger: Error: date-format-mixed-separators.journal:1:1:
+  |
+1 | 2024-01/05 Two separators
+  | ^^^^^^^^^^
+
+This date has different separators, please use consistent separators.

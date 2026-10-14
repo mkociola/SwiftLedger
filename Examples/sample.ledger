@@ -111,6 +111,24 @@ account Expenses:Utilities
 2024-02-29 Statement check
     Assets:Savings         $0 = $5000.00
 
+; ── Dates written other ways ────────────────────────────────────────────────
+; hledger writes a date with '-', '/' or '.' between its parts, the month and
+; the day with one digit or two, and a secondary date may leave out its year,
+; which it then takes from the primary date. All three entries are read as
+; hledger reads them, and an edited one is written back as YYYY-MM-DD.
+
+2024/3/4 Taxi from the station
+    Expenses:Transport         $18.00
+    Assets:Checking
+
+2024.03.06 Bus ticket
+    Expenses:Transport         $2.50
+    Assets:Checking
+
+2024-03-07=03-08 Train ticket, charged the next day
+    Expenses:Transport         $24.00
+    Assets:Checking
+
 ; ── Virtual postings ────────────────────────────────────────────────────────
 ; Parentheses make a posting virtual: it moves money in a tracking account
 ; outside the double-entry books and takes no part in balancing. Square

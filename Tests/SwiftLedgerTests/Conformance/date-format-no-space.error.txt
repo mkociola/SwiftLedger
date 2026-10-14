@@ -1,0 +1,6 @@
+hledger: Error: date-format-no-space.journal:1:11:
+  |
+1 | 2024-01-08x No space after the date
+  |           ^
+unexpected 'x'
+expecting digit, secondary date, or whitespace or newline

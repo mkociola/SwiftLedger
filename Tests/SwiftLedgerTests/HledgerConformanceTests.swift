@@ -33,13 +33,10 @@ import Testing
         "amount-forms",
         "apply-account",
         "balance-assertion-fails",
-        "date-formats",
         "default-commodity",
         "include",
         "posting-date-tag",
         "posting-status-tabs",
-        "secondary-date-without-year",
-        "year-directive",
     ]
 
     /// The corpus, read from the repository rather than bundled, so that

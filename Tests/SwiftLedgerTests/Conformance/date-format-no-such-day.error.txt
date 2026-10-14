@@ -1,0 +1,6 @@
+hledger: Error: date-format-no-such-day.journal:1:1:
+  |
+1 | 2024-02-30 No such day
+  | ^^^^^^^^^^
+
+This is not a valid date, please fix it.
