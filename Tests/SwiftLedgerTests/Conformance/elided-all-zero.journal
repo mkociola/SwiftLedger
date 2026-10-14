@@ -1,0 +1,28 @@
+; An elided posting whose group already nets to zero in every commodity
+; absorbs a zero in each of them, sorted by symbol.
+2024-01-01 Opening balances
+    Assets:Checking     $10
+    Assets:Checking     $-10
+    Assets:Savings      5 EUR
+    Assets:Savings      -5 EUR
+    Equity:Opening
+
+; One commodity leaves one zero, at the digits the entry wrote.
+2024-01-02 Opening balances
+    Assets:Checking     $10.00
+    Assets:Checking     $-10.00
+    Equity:Opening
+
+; A written zero is a commodity the group wrote.
+2024-01-03 Opening balances
+    Assets:Checking     $10
+    Assets:Checking     $-10
+    Assets:Savings      0 EUR
+    Equity:Opening
+
+; A priced posting weighs what it cost, so only dollars are left at zero.
+2024-01-04 Opening balances
+    Assets:Brokerage    10 AAPL @ $5
+    Assets:Checking     $-50
+    Equity:Opening
+

@@ -69,16 +69,17 @@ extension JournalParser {
     /// wrote an amount leaves zero to absorb, in the first commodity the entry
     /// writes (see `zeroAmount(matching:)`, which is where file order decides).
     ///
-    /// A group whose written amounts already balance leaves one zero rather
-    /// than nothing, in the first commodity written, so that the line the user
-    /// wrote is still a posting. Only commodities past the first are dropped
-    /// when they net out: an entry does not need a `0` leg per commodity to
-    /// say what it already said.
+    /// A group whose written amounts already balance in every commodity leaves
+    /// a zero in each of them rather than nothing, still sorted by symbol, so
+    /// that the line the user wrote is still a posting and a rebuilt entry
+    /// writes the `$0` and `0 EUR` lines `hledger print -x` writes. Only when
+    /// some commodity leaves something over are the ones that net out
+    /// dropped, which hledger does too.
     func remainders(of group: [RawPosting], in transaction: [RawPosting]) throws -> [Amount] {
         let written = group.compactMap { raw in
             raw.amount.map { raw.price?.cost(of: $0.quantity) ?? $0 }
         }
-        guard let first = written.first else { return try [zeroAmount(matching: transaction)] }
+        guard !written.isEmpty else { return try [zeroAmount(matching: transaction)] }
 
         var sums: [String: (quantity: Decimal, isPrefix: Bool)] = [:]
         for amount in written {
@@ -87,15 +88,11 @@ extension JournalParser {
 
         let symbols = sums.keys.sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) }
         let remainders = symbols.compactMap { commodity -> Amount? in
-            guard let sum = sums[commodity], sum.quantity != .zero else { return nil }
-            return Amount(
-                quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix,
-            )
+            guard let sum = sums[commodity] else { return nil }
+            return Amount(quantity: -sum.quantity, commodity: commodity, commodityIsPrefix: sum.isPrefix)
         }
-        guard remainders.isEmpty else { return remainders }
-        return [Amount(
-            quantity: .zero, commodity: first.commodity, commodityIsPrefix: first.commodityIsPrefix,
-        )]
+        let leftOver = remainders.filter { $0.quantity != .zero }
+        return leftOver.isEmpty ? remainders : leftOver
     }
 
     /// Zero in the first commodity the entry writes, **in file order**: the
