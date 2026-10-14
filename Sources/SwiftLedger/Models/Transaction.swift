@@ -113,7 +113,8 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     ///   in `leadingComments` or `Posting.trailingComments`,
     ///   `LedgerError.syntaxInField` if the header or posting grammar would
     ///   read a field back as something other than the field, by the rules
-    ///   `validateHeaderSyntax` and `validatePostingSyntax` state,
+    ///   `validateHeaderSyntax`, `validatePostingSyntax` and
+    ///   `validateCommoditySyntax` state,
     ///   `LedgerError.unbalancedTransaction` if the real postings do
     ///   not sum to zero for any commodity,
     ///   `LedgerError.unbalancedBracketedPostings` if the balanced virtual ones
@@ -172,6 +173,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
             auxDate: auxDate, status: status, code: code, description: description, comment: comment,
         )
         try Self.validatePostingSyntax(postings)
+        try Self.validateCommoditySyntax(postings)
         try Self.validateAccountNames(postings)
         try Self.requireBalanced(postings, written: written)
         self.id = id
