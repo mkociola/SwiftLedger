@@ -2599,7 +2599,10 @@ private extension LedgerError {
 
     @Test
     func `an indented keyword neither opens nor closes a block`() throws {
+        // Under a `commodity` line, where an indented line is a subdirective
+        // rather than a line that belongs to nothing.
         let indentedStart = """
+        commodity $
             comment
         2024-01-02 real
             a  $1
@@ -2607,7 +2610,7 @@ private extension LedgerError {
         """
         let journal = try JournalParser().parse(indentedStart)
         #expect(journal.transactions.map(\.description) == ["real"])
-        #expect(journal.directives == ["    comment"])
+        #expect(journal.directives == ["commodity $", "    comment"])
         #expect(JournalSerializer().serialize(journal) == indentedStart)
 
         // …and inside a block the same indentation leaves `end comment` as

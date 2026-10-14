@@ -1,0 +1,6 @@
+hledger: Error: indented-orphan-top.journal:1:5:
+  |
+1 |     Assets:Savings    $1.00
+  |     ^
+unexpected 'A'
+expecting newline

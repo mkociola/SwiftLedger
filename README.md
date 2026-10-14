@@ -180,7 +180,10 @@ Every other line is kept as a `JournalItem.directive`, holding the source line
 verbatim — indentation included — and is written back byte-for-byte, unless
 it is a `decimal-mark`, `D` or `commodity` line hledger cannot read
 (`decimal-mark x`, `D xyz`, a `commodity` with nothing after it), which
-refuses the file with `LedgerError.unreadableDirective` as hledger does:
+refuses the file with `LedgerError.unreadableDirective` as hledger does, or an
+indented line that no entry or directive above it owns, such as a posting a
+blank line cut off from its entry, which refuses the file at its line with
+`LedgerError.parseError` as hledger does:
 
 ```ledger
 include accounts.ledger

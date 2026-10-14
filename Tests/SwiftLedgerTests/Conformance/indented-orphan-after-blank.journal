@@ -1,0 +1,6 @@
+; A blank line ends the entry, and the posting under it belongs to nothing.
+2024-01-01 Lunch
+    Expenses:Food    $5.00
+    Assets:Checking
+
+    Assets:Savings    $1.00

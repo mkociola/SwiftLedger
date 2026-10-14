@@ -1,0 +1,6 @@
+hledger: Error: indented-orphan-after-whitespace.journal:6:5:
+  |
+6 |     Assets:Savings    $1.00
+  |     ^
+unexpected 'A'
+expecting newline

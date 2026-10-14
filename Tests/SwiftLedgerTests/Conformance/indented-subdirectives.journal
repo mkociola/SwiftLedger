@@ -1,0 +1,15 @@
+commodity $
+    format $1,000.00
+    
+    note dollars
+
+account Assets:Checking
+    ; the current account
+    type A
+
+payee Grocer
+    note the corner shop
+
+2024-01-01 Grocer
+    Expenses:Food    $1,250.00
+    Assets:Checking
