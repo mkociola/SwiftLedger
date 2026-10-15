@@ -188,7 +188,7 @@ extension JournalParser {
 
     /// Whether what follows a number could have been part of it, which means
     /// the digits stopped short rather than the commodity starting.
-    private static func cutsNumberShort(_ remainder: String) -> Bool {
+    static func cutsNumberShort(_ remainder: String) -> Bool {
         guard let first = remainder.first else { return false }
         return opensSignedNumber(first)
     }
@@ -199,7 +199,7 @@ extension JournalParser {
     /// A quoted symbol may hold anything and is taken exactly as written,
     /// quotes included: the quoting is not modelled here, and `10 "AAPL 2"`
     /// is a line that loaded before and has to go on loading.
-    private static func commodityCarriesDigit(_ remainder: String) -> Bool {
+    static func commodityCarriesDigit(_ remainder: String) -> Bool {
         guard !remainder.hasPrefix("\"") else { return false }
         return remainder.contains(where: \.isASCIIDigit)
     }
