@@ -1,0 +1,5 @@
+hledger: Error: date-format-two-digit-year.journal:1:5:
+  |
+1 | Y 24
+  |     ^
+Year must contain at least 4 digits: 24

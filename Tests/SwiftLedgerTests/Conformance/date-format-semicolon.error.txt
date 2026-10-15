@@ -1,0 +1,6 @@
+hledger: Error: date-format-semicolon.journal:1:11:
+  |
+1 | 2024-01-01;paid early
+  |           ^
+unexpected ';'
+expecting digit, secondary date, or whitespace or newline
