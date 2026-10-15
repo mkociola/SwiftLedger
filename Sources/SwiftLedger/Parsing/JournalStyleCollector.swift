@@ -125,10 +125,9 @@ struct JournalStyleCollector {
             fractionDigits: shape.fractionDigits,
             groupsThousands: shape.usesSeparator,
         )
-        // A sample that names no mark leaves the reading marks as they were:
-        // a mark-less `commodity €1000` after `commodity €1.000,00` would
-        // otherwise take the comma away again. hledger refuses such a sample
-        // outright.
+        // A sample that names no mark leaves the reading marks as they were.
+        // The parser refuses such a sample before it gets here, as hledger
+        // does, so this only keeps a caller that did not from clearing them.
         guard let mark else { return }
         if isDefault {
             defaultCommodityMark = mark

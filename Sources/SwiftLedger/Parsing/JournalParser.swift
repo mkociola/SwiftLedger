@@ -114,7 +114,9 @@ import Foundation
 /// Any line outside this grammar — `include`, `P`, `commodity`, `alias`, `D`,
 /// `year`, an indented sub-directive, or anything else — is kept verbatim as a
 /// `.directive` item and written back unchanged by `JournalSerializer`. The
-/// parser never reinterprets what it does not understand.
+/// parser never reinterprets what it does not understand. An indented line
+/// with no block above it to belong to, such as a posting a blank line cut off
+/// from its entry, is refused at its line, as hledger refuses it.
 ///
 /// An error thrown while an entry is being read says where it was found:
 /// `LedgerError.inJournal` carries the line, the header of the entry it was
@@ -194,9 +196,10 @@ public struct JournalParser {
             // for what it declares and kept verbatim all the same: learning
             // from a line is not the same as modelling it, and this one still
             // goes back byte for byte.
-            // One it recognises and cannot read refuses the file at its line.
+            // One it recognises and cannot read refuses the file at its line,
+            // and so does an indented line no block above it can own.
             try located(line: index + 1, entry: nil) { try declare(from: line, into: &style, year: &year) }
-            items.append(.directive(line))
+            try items.append(.directive(ownedLine(at: index, in: lines)))
             index += 1
         }
 

@@ -192,6 +192,19 @@ account Expenses:Utilities
     Assets:Brokerage:Old   - 4 VTI
     Assets:Brokerage:New   4 VTI
 
+; ── An elided line with nothing left to absorb ──────────────────────────────
+; When the written postings already net to zero in every commodity, the
+; elided line still takes a zero in each of them, sorted by symbol, as hledger
+; reads it: the restaurants line below is £0.00 and €0,00. It is only when
+; some commodity leaves something over that the ones netting out are dropped.
+
+2024-03-11 Card charges abroad reversed by the bank
+    Assets:EuroAccount     -€8,00
+    Assets:EuroAccount     €8,00
+    Assets:PoundAccount    -£6.00
+    Assets:PoundAccount    £6.00
+    Expenses:Food:Restaurants
+
 ; ── Decimal marks and a comment after an amount ─────────────────────────────
 ; Which mark divides the fraction is read out of the number: a mark with
 ; anything other than three digits after it divides, so €12,50 is twelve euros

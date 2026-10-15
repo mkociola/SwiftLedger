@@ -1,0 +1,7 @@
+; A priced pair that cancels can write the first of the two commodities left
+; over: the cost lands on the euros, though the dollars are unpriced first.
+2024-01-01 Wash and exchange
+    Assets:Euros       10 EUR @ 1.1 USD
+    Assets:Travel     -10 EUR @ 1.1 USD
+    Assets:Dollars   -110 USD
+    Assets:Savings    100 EUR

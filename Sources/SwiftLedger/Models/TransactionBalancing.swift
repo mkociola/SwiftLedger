@@ -10,9 +10,9 @@ public enum BalanceVerdict: Sendable, Equatable {
     case balanced
     /// The group is left in exactly two commodities of opposite sign and
     /// nothing priced: money changed from one into the other. `from` is in the
-    /// commodity that appears first, which is the one hledger hangs its
-    /// inferred cost on. Neither amount is a cost and nothing is written to
-    /// the file for it.
+    /// commodity of the first posting in either of the two, priced or not,
+    /// which is the one hledger hangs its inferred cost on. Neither amount is
+    /// a cost and nothing is written to the file for it.
     case exchange(from: Amount, to: Amount) // swiftlint:disable:this identifier_name
     /// What each commodity is off by, in order of first appearance, with a
     /// priced posting counted at what it cost.
@@ -111,7 +111,13 @@ enum TransactionBalancing {
         // `-10 AAPL @@ 1500 USD` move nothing and still cost 1500.
         let costs = sums(group.filter { $0.price != nil }.map { ($0.balancingAmount.commodity, $0.balancingAmount) })
         guard costs.allSatisfy({ isZero($0.amount, places: places) }) else { return .unbalanced(residuals) }
-        return .exchange(from: left[0].amount, to: left[1].amount)
+
+        // `left` is in the order of the first unpriced posting, but hledger
+        // takes the commodity of the first posting in either of the two,
+        // priced or not, so a priced pair that cancels can put it first.
+        let first = group.first { posting in left.contains { $0.amount.commodity == posting.amount.commodity } }
+        let fromIndex = first?.amount.commodity == left[1].amount.commodity ? 1 : 0
+        return .exchange(from: left[fromIndex].amount, to: left[1 - fromIndex].amount)
     }
 
     private struct Key: Hashable {

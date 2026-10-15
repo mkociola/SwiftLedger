@@ -1,0 +1,22 @@
+[
+  {
+    "account": "Assets:Brokerage",
+    "amounts": [
+      {
+        "commodity": "AAPL",
+        "mantissa": 10,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -50,
+        "places": 0
+      }
+    ]
+  }
+]

@@ -290,11 +290,11 @@ import Testing
         #expect(reparsed.postings.map(\.amount.quantity) == [eighth, -eighth])
     }
 
-    /// A sample that names no mark declares nothing about the marks, so it
-    /// cannot take away what an earlier directive declared: `€1.000` is still
-    /// a thousand below both lines. hledger refuses the mark-less sample.
+    /// A sample that names no mark would declare nothing about the marks, and
+    /// so leave `€1.000` below both lines a thousand without a word. hledger
+    /// refuses the mark-less sample at its line, and so does the parser.
     @Test
-    func `a sample without a mark leaves an earlier declaration standing`() throws {
+    func `a sample without a mark is refused below an earlier declaration`() {
         let text = """
         commodity €1.000,00
         commodity €1000
@@ -303,22 +303,21 @@ import Testing
             expenses:rent    €1.000
             assets:bank     €-1.000
         """
-        #expect(try Self.quantities(in: text) == [1000, -1000])
+        #expect { try JournalParser().parse(text) } throws: { ($0 as? LedgerError)?.line == 2 }
     }
 
     /// A directive's own sample is read with the marks declared above it, so
-    /// `D €1.000` under `decimal-mark ,` states a grouped whole number rather
-    /// than one euro to three places.
+    /// `D €1.000` under `decimal-mark ,` is a grouped whole number rather than
+    /// one euro to three places, and shows no decimal mark, which hledger
+    /// refuses.
     @Test
     func `a directive's sample is read by the directives above it`() throws {
         let alone = try JournalParser().parse("D €1.000").commodityFormats["€"]
         #expect(alone?.fractionDigits == 3)
         #expect(alone?.groupsThousands == false)
 
-        let declared = try JournalParser().parse("decimal-mark ,\nD €1.000").commodityFormats["€"]
-        #expect(declared?.fractionDigits == 0)
-        #expect(declared?.groupsThousands == true)
-        #expect(declared?.decimalMark == ",")
+        let declared = "decimal-mark ,\nD €1.000"
+        #expect { try JournalParser().parse(declared) } throws: { ($0 as? LedgerError)?.line == 2 }
     }
 
     /// A mark with nothing in front of it divides under either declaration,
