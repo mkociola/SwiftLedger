@@ -68,6 +68,9 @@ public struct JournalSerializer {
                 let commentLines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
                 lines.append(contentsOf: commentLines.map { isCommentLine($0) ? $0 : "; \($0)" })
             case let .directive(raw):
+                // Verbatim, a `\n` included: a directive has no marker to put
+                // in front of a second line, so `LedgerManager` refuses one
+                // that holds a `\n` instead (issue #72).
                 lines.append(raw)
             case let .accountDirective(directive):
                 var line = "account \(directive.name)"
