@@ -53,6 +53,13 @@ parser reads or the serializer writes comes with both:
 - an assertion in the `example journal` suite that the entry parses to what its
   comment claims, so the example cannot drift from the parser unnoticed.
 
+The suite keeps its tests in topic files named after the example's commented
+sections, `ExampleJournalTests+<Topic>.swift`, each an extension of
+`ExampleJournalTests`. A new assertion goes in the file for its topic, or in a
+new topic file, and never in `ExampleJournalTests.swift` itself, so that
+branches merged one after another spread their additions over small files
+instead of pushing one past SwiftLint's length limits.
+
 The example has to keep parsing and serialising byte for byte, and any balance
 assertion it carries has to be the balance its own entries produce, because the
 library preserves assertions without checking them.
