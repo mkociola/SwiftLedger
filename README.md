@@ -178,8 +178,9 @@ Supported:
 
 Every other line is kept as a `JournalItem.directive`, holding the source line
 verbatim — indentation included — and is written back byte-for-byte, unless
-it is a `decimal-mark`, `D` or `commodity` line hledger cannot read
-(`decimal-mark x`, `D xyz`, a `commodity` with nothing after it), which
+it is a `decimal-mark`, `D`, `commodity` or `format` line hledger cannot read
+(`decimal-mark x`, `D xyz`, a `commodity` with nothing after it, a sample with
+no decimal mark such as `commodity €1000`), which
 refuses the file with `LedgerError.unreadableDirective` as hledger does:
 
 ```ledger

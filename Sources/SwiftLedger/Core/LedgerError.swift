@@ -29,11 +29,11 @@ public enum LedgerError: Error, Sendable, Equatable {
     /// spanning several commodities is not this error: it absorbs the
     /// remainder of each one.
     case cannotResolveElision
-    /// A `decimal-mark`, `D` or `commodity` line whose argument cannot be
-    /// read: a mark other than `.` or `,`, a `D` sample with no number in
-    /// it, a keyword with nothing after it. The first associated value is the
-    /// directive as the file writes it; `reason` says in words what it
-    /// lacks.
+    /// A `decimal-mark`, `D`, `commodity` or `format` line whose argument
+    /// cannot be read: a mark other than `.` or `,`, a `D` sample with no
+    /// number in it, a sample with no decimal mark, a keyword with nothing
+    /// after it. The first associated value is the directive as the file
+    /// writes it; `reason` says in words what it lacks.
     ///
     /// Kept verbatim, such a line declares nothing, and the amounts below it
     /// are read by another mark than the author meant without a word. hledger
