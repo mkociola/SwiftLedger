@@ -200,6 +200,10 @@ ends the entry above it, and it is written back with its whitespace, where
 `JournalItem.blank` would write an empty line. `journal.directives` lists it
 with the rest.
 
+An indented line that no entry or directive above it owns, such as a posting
+a blank line cut off from its entry, refuses the file at its line with
+`LedgerError.parseError`, as hledger does.
+
 > **`include` is preserved, not followed.** `PlainTextJournalStore` reads and
 > writes one file. Transactions in included files are invisible to `Ledger`
 > queries, and the `include` lines themselves survive a save untouched.
