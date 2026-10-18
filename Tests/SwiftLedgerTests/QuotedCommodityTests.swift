@@ -138,11 +138,11 @@ import Testing
         #expect(try CommodityGrammarTests.refusedField { try Self.entry(amount) } == "postings[0].amount.commodity")
     }
 
-    /// A `commodity` directive names its symbol the way a posting does, so a
-    /// quoted one declares the style of the bare name.
-    @Test
-    func `a commodity directive declares a quoted symbol's style`() throws {
-        let text = "commodity \"Mutual Fund\" 1,000.00\n\n2024-01-01 Fund\n"
+    /// A `commodity` or `D` directive names its symbol the way a posting
+    /// does, so a quoted one declares the style of the bare name.
+    @Test(arguments: ["commodity", "D"])
+    func `a directive declares a quoted symbol's style`(keyword: String) throws {
+        let text = "\(keyword) \"Mutual Fund\" 1,000.00\n\n2024-01-01 Fund\n"
             + "    Assets:Fund    10 \"Mutual Fund\"\n    Assets:Checking\n"
         let format = try #require(JournalParser().parse(text).commodityFormats["Mutual Fund"])
         #expect(format.fractionDigits == 2)
