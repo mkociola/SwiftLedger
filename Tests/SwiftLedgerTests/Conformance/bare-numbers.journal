@@ -1,0 +1,8 @@
+2024-01-01 Bare numbers with no directive are in no commodity
+    Expenses:Rent    1200
+    Expenses:Fees    5 EUR
+    Assets:Checking
+
+2024-01-02 A bare price and assertion
+    Assets:Fund    10 @ 5 = 10
+    Assets:Checking    -50

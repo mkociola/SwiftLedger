@@ -41,6 +41,11 @@ struct JournalStyleCollector {
 
     /// Styles a `D` or `commodity` directive states outright.
     private var declared: [String: DeclaredStyle] = [:]
+    /// The commodity the latest `D` line names, with the side its sample
+    /// wrote it on, which is what a bare number below the line is in, as
+    /// hledger reads it. `nil` above any `D` line, and below one whose sample
+    /// is itself bare, where a bare number is in no commodity at all.
+    private(set) var defaultCommodity: (name: String, isPrefix: Bool)?
     /// The decimal mark each kind of directive has declared for reading, as of
     /// the line the parser is on. See `declaredDecimalMark(for:)` for how the
     /// three rank.
@@ -94,9 +99,10 @@ struct JournalStyleCollector {
             if let end = symbol?.upperBound, end < raw.endIndex, raw[end].isWhitespace {
                 spacedPrefix[commodity, default: 0] += 1
             }
-        } else if raw.contains(commodity) {
-            // A bare number is read as USD without writing it on either side,
-            // so it casts no vote.
+        } else if !commodity.isEmpty, raw.contains(commodity) {
+            // A bare number writes its commodity on neither side, whether a
+            // `D` line named one or not, so it casts no vote. Without the
+            // check, the empty name is found in every text.
             suffixed[commodity, default: 0] += 1
         }
         // Only a negative amount with its commodity in front can show which
@@ -114,7 +120,7 @@ struct JournalStyleCollector {
     /// Records the style a directive states for a commodity, written the way
     /// ledger writes one, as a sample amount: `D $1,000.00`. `isDefault` is
     /// true for a `D` directive, which names the file's default commodity as
-    /// well as a style.
+    /// well as a style; see `defaultCommodity`.
     ///
     /// A declaration says nothing about where a minus sign goes, so that stays
     /// with whatever the file's own amounts show. A sample with one mark is
@@ -122,12 +128,16 @@ struct JournalStyleCollector {
     /// above it, and declares the mark it was read with, for writing and for
     /// reading both: `D 1.000 EUR` declares the point, as it does in hledger,
     /// so `12,50 EUR` below it is twelve hundred and fifty in both tools.
-    mutating func declare(_ shape: NumberShape, commodity: String, isDefault: Bool) {
+    mutating func declare(_ shape: NumberShape, as amount: Amount, isDefault: Bool) {
+        let commodity = amount.commodity
         let mark = Self.decimalMark(of: shape)
         declared[commodity] = DeclaredStyle(
             fractionDigits: shape.fractionDigits,
             groupsThousands: shape.usesSeparator,
         )
+        if isDefault {
+            defaultCommodity = commodity.isEmpty ? nil : (commodity, amount.commodityIsPrefix)
+        }
         // A sample that names no mark leaves the reading marks as they were.
         // The parser refuses such a sample before it gets here, as hledger
         // does, so this only keeps a caller that did not from clearing them.
@@ -157,10 +167,10 @@ struct JournalStyleCollector {
     /// commodity, taking the old one's mark with it. `decimal-mark` names no
     /// commodity and reaches all of them, and so does `D`: hledger reads every
     /// commodity without a declaration of its own by the default commodity's
-    /// marks. A bare number, `nil` here, is in no commodity however `Amount`
-    /// later names it, so no `commodity` directive reaches it, not even one
-    /// for the `USD` the parser reads it as; hledger reads it by the other
-    /// two alone.
+    /// marks. A bare number, `nil` here, is in no commodity of its own,
+    /// whatever `D` later puts it in, so no `commodity` directive reaches it,
+    /// not even one for the commodity `D` names; hledger reads it by the
+    /// other two alone.
     func declaredDecimalMark(for commodity: String?) -> Character? {
         decimalMarkDirective ?? commodity.flatMap { commodityDirectiveMarks[$0] } ?? defaultCommodityMark
     }

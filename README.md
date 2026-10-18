@@ -144,7 +144,9 @@ Supported:
   most of the file's amounts in that commodity write one. A symbol holding a
   space, a digit or punctuation is written in double quotes, `10 "Mutual
   Fund"`, as hledger writes it; the quotes are no part of the name, and a
-  rebuilt amount in such a commodity gets them back
+  rebuilt amount in such a commodity gets them back. A bare number is in the
+  commodity a `D` line above it names, and in no commodity at all otherwise,
+  written back bare, as hledger reads it; earlier versions read it as `USD`
 - Status: `*` cleared, `!` pending
 - Codes: `(REF-042)`
 - One elided posting per balancing group — the real postings and the bracketed

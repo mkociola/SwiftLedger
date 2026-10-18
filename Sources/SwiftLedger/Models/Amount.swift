@@ -11,7 +11,10 @@ import Foundation
 public struct Amount: Sendable, Codable, Hashable, CustomStringConvertible {
     /// The signed quantity. Positive = inflow to the account; negative = outflow.
     public let quantity: Decimal
-    /// Commodity identifier: "USD", "$", "BTC", etc.
+    /// Commodity identifier: "USD", "$", "BTC", etc. Empty for an amount
+    /// written as a bare number in a journal with no `D` line above it, which
+    /// is in no commodity at all, as hledger reads it, and is written back
+    /// bare.
     public let commodity: String
     /// `true` if the commodity symbol precedes the number (e.g. `$100`);
     /// `false` if it follows (e.g. `100 USD`).

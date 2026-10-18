@@ -1,0 +1,15 @@
+2024-01-01 Above the directive a bare number is in no commodity
+    Expenses:Rent    5
+    Assets:Checking
+
+D $1,000.00
+
+2024-01-02 Below it the bare number is in dollars
+    Expenses:Rent    7
+    Assets:Checking
+
+D 1.000,00 EUR
+
+2024-01-03 A second directive replaces the first
+    Expenses:Rent    9
+    Assets:Checking

@@ -37,7 +37,8 @@ import Foundation
 ///   and a thousand with no fraction `1000` rather than the `1.000` that
 ///   reads back as one. A commodity symbol that holds a space, a digit or
 ///   punctuation is written in double quotes, as hledger writes it, since
-///   bare it would not read back: `10 "Mutual Fund"`.
+///   bare it would not read back: `10 "Mutual Fund"`. An amount in no
+///   commodity is written as the bare number it was read from.
 /// - A posting's price and balance assertion are re-emitted after its amount,
 ///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
 /// - A virtual posting's account name is written back inside its own
@@ -248,8 +249,11 @@ public struct JournalSerializer {
         let absValue = format.render(abs(amount.quantity))
         let sign = amount.quantity < 0 ? "-" : ""
         // The quotes a symbol may need are no part of its name, which is
-        // what the format is keyed by.
+        // what the format is keyed by. No name at all is a bare number,
+        // which reads back as one, or as the commodity a `D` line above it
+        // names, as the number it was read from did.
         let symbol = JournalParser.written(symbol: amount.commodity)
+        guard !symbol.isEmpty else { return "\(sign)\(absValue)" }
         guard amount.commodityIsPrefix else {
             return "\(sign)\(absValue) \(symbol)"
         }

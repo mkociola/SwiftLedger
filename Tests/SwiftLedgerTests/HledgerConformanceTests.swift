@@ -32,7 +32,6 @@ import Testing
         "amount-stray-cr",
         "apply-account",
         "balance-assertion-fails",
-        "default-commodity",
         "include",
         "posting-date-tag",
         "posting-status-tabs",

@@ -128,15 +128,17 @@ extension Transaction {
     /// written the same way after `@` and `=`. Between the quotes a symbol
     /// may hold anything but two characters: the quote itself, which ends the
     /// symbol early, and `;`, which the posting grammar reads as opening the
-    /// comment before it looks for the quotes, as hledger reads it. An empty
-    /// symbol is not written at all, and the bare number it leaves reads as
-    /// `USD`. Each of these would come back from the next parse as a
-    /// different commodity, or refuse to load at the posting, and nothing
-    /// about the entry the caller built is wrong until it is written.
+    /// comment before it looks for the quotes, as hledger reads it. Either
+    /// would come back from the next parse as a different commodity, or
+    /// refuse to load at the posting, and nothing about the entry the caller
+    /// built is wrong until it is written. An empty symbol is an amount in
+    /// no commodity, which the parser reads from a bare number and the
+    /// serializer writes back as one; below a `D` line the file puts such a
+    /// number in the commodity the line names, as it does every bare number,
+    /// which is the file's rule rather than a fault in the value.
     ///
     /// The parser cannot hand `init` one of these: a symbol it read in quotes
-    /// stopped at the first quote, a bare one at the first `;`, and empty
-    /// quotes left it a bare number.
+    /// stopped at the first quote, and a bare one at the first `;`.
     static func validateCommoditySyntax(_ postings: [Posting]) throws {
         for (index, posting) in postings.enumerated() {
             try requireReadable(posting.amount, at: "postings[\(index)].amount.commodity")
@@ -150,10 +152,6 @@ extension Transaction {
     /// amount is a field nothing writes.
     private static func requireReadable(_ amount: Amount?, at field: @autoclosure () -> String) throws {
         guard let symbol = amount?.commodity else { return }
-        try require(
-            !symbol.isEmpty, at: field(),
-            rule: "a commodity may not be empty, since a bare number reads as USD",
-        )
         try require(
             !symbol.contains { $0 == "\"" || $0 == ";" }, at: field(),
             rule: "a '\"' ends a quoted commodity and a ';' opens the comment before the quotes are read, "
