@@ -41,11 +41,12 @@ struct JournalStyleCollector {
 
     /// Styles a `D` or `commodity` directive states outright.
     private var declared: [String: DeclaredStyle] = [:]
-    /// The commodity the latest `D` line names, with the side its sample
-    /// wrote it on, which is what a bare number below the line is in, as
-    /// hledger reads it. `nil` above any `D` line, and below one whose sample
-    /// is itself bare, where a bare number is in no commodity at all.
-    private(set) var defaultCommodity: (name: String, isPrefix: Bool)?
+    /// The sample amount of the latest `D` line, kept for the commodity it
+    /// names and the side it wrote it on, which is what a bare number below
+    /// the line is in, as hledger reads it. `nil` above any `D` line, and
+    /// below one whose sample is itself bare, where a bare number is in no
+    /// commodity at all.
+    private(set) var defaultCommodity: Amount?
     /// The decimal mark each kind of directive has declared for reading, as of
     /// the line the parser is on. See `declaredDecimalMark(for:)` for how the
     /// three rank.
@@ -136,7 +137,7 @@ struct JournalStyleCollector {
             groupsThousands: shape.usesSeparator,
         )
         if isDefault {
-            defaultCommodity = commodity.isEmpty ? nil : (commodity, amount.commodityIsPrefix)
+            defaultCommodity = commodity.isEmpty ? nil : amount
         }
         // A sample that names no mark leaves the reading marks as they were.
         // The parser refuses such a sample before it gets here, as hledger

@@ -174,12 +174,12 @@ extension JournalParser {
         ) else {
             throw LedgerError.invalidAmount(raw)
         }
-        let `default` = remainder.isEmpty ? style.defaultCommodity : nil
+        let named = remainder.isEmpty ? style.defaultCommodity : nil
         return ShapedAmount(
             amount: Amount(
                 quantity: sign * number.magnitude,
-                commodity: `default`?.name ?? remainder,
-                commodityIsPrefix: `default`?.isPrefix ?? false,
+                commodity: named?.commodity ?? remainder,
+                commodityIsPrefix: named?.commodityIsPrefix ?? false,
             ),
             shape: number.shape,
         )
