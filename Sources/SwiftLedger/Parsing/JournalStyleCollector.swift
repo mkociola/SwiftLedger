@@ -86,9 +86,12 @@ struct JournalStyleCollector {
         }
         if amount.commodityIsPrefix {
             prefixed[commodity, default: 0] += 1
-            // The parser took the space off the name, so the text is the only
-            // place left that shows one was written.
-            if let end = raw.range(of: commodity)?.upperBound, end < raw.endIndex, raw[end].isWhitespace {
+            // The parser took the space off the name, and the quotes it may
+            // have been written in, so the text is the only place left that
+            // shows one was written. The quoted form is looked for first,
+            // since inside the quotes the name is followed by a quote.
+            let symbol = raw.contains("\"") ? raw.range(of: "\"\(commodity)\"") : raw.range(of: commodity)
+            if let end = symbol?.upperBound, end < raw.endIndex, raw[end].isWhitespace {
                 spacedPrefix[commodity, default: 0] += 1
             }
         } else if raw.contains(commodity) {

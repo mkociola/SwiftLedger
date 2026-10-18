@@ -35,7 +35,9 @@ import Foundation
 ///   this parser would read the other way round, so twelve and an eighth is
 ///   written `€12,1250` rather than the `€12,125` that reads back grouped,
 ///   and a thousand with no fraction `1000` rather than the `1.000` that
-///   reads back as one.
+///   reads back as one. A commodity symbol that holds a space, a digit or
+///   punctuation is written in double quotes, as hledger writes it, since
+///   bare it would not read back: `10 "Mutual Fund"`.
 /// - A posting's price and balance assertion are re-emitted after its amount,
 ///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
 /// - A virtual posting's account name is written back inside its own
@@ -245,12 +247,15 @@ public struct JournalSerializer {
         let format = formats[amount.commodity] ?? .default(for: amount.commodity)
         let absValue = format.render(abs(amount.quantity))
         let sign = amount.quantity < 0 ? "-" : ""
+        // The quotes a symbol may need are no part of its name, which is
+        // what the format is keyed by.
+        let symbol = JournalParser.written(symbol: amount.commodity)
         guard amount.commodityIsPrefix else {
-            return "\(sign)\(absValue) \(amount.commodity)"
+            return "\(sign)\(absValue) \(symbol)"
         }
         let gap = format.separatesPrefixCommodity ? " " : ""
         return format.signPrecedesCommodity
-            ? "\(sign)\(amount.commodity)\(gap)\(absValue)"
-            : "\(amount.commodity)\(gap)\(sign)\(absValue)"
+            ? "\(sign)\(symbol)\(gap)\(absValue)"
+            : "\(symbol)\(gap)\(sign)\(absValue)"
     }
 }

@@ -1,0 +1,6 @@
+hledger: Error: quoted-commodity-semicolon.journal:2:25:
+  |
+2 |     Expenses:Fees    10 "A;B"
+  |                         ^
+unexpected '"'
+expecting ';', '=', end of input, ledger-style lot cost, ledger-style lot date, ledger-style lot note, newline, transaction price, or valuation expression

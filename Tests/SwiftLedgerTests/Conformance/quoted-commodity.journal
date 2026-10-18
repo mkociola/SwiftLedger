@@ -1,0 +1,23 @@
+commodity "Mutual Fund" 1,000.00
+
+2024-01-01 A symbol in quotes, behind the number and in front of it
+    Assets:Fund    10 "Mutual Fund"
+    Assets:Fund    "Mutual Fund" 5
+    Assets:Fund    "Mutual Fund"5
+    Assets:Fund    -"Mutual Fund" 2
+    Assets:Fund    "Mutual Fund" -3
+    Equity:Opening    -15 "Mutual Fund"
+
+2024-01-02 Quotes around a symbol that needs none
+    Expenses:Fees    10 "USD"
+    Assets:Checking    -10 USD
+
+2024-01-03 A price and an assertion after a symbol holding their operators
+    Assets:Fund    10 "A@B" @ $5.00 = 10 "A@B"
+    Assets:Checking    -$50.00
+
+2024-01-04 A symbol holding a digit, and one the directive declared
+    Assets:Fund    1,000 "Mutual Fund"
+    Assets:Fund    2 "AAPL 2"
+    Equity:Opening    -1,000 "Mutual Fund"
+    Equity:Opening    -2 "AAPL 2"

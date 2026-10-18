@@ -141,7 +141,10 @@ Supported:
   space between a commodity in front and its number is layout and no part of
   the name, so `USD 100` and `USD100` are one commodity, `USD`, where earlier
   versions named the first `"USD "`. A rebuilt amount gets the space back when
-  most of the file's amounts in that commodity write one
+  most of the file's amounts in that commodity write one. A symbol holding a
+  space, a digit or punctuation is written in double quotes, `10 "Mutual
+  Fund"`, as hledger writes it; the quotes are no part of the name, and a
+  rebuilt amount in such a commodity gets them back
 - Status: `*` cleared, `!` pending
 - Codes: `(REF-042)`
 - One elided posting per balancing group — the real postings and the bracketed

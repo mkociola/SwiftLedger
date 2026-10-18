@@ -67,10 +67,6 @@ extension JournalParser {
         }) else { return false }
         guard keyword == "commodity" else { return true }
         let (sample, _) = splitPostingComment(String(line.dropFirst(keyword.count)))
-        var quoted = false
-        return !(sample ?? "").contains { char in
-            if char == "\"" { quoted.toggle() }
-            return !quoted && ("0" ... "9").contains(char)
-        }
+        return (sample ?? "").firstIndex(outsideQuotes: { ("0" ... "9").contains($0) }) == nil
     }
 }

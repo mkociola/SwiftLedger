@@ -61,8 +61,10 @@ extension JournalParser {
         }
         // A space after the sign is layout too. Left on, it sent `- 100` down
         // the prefix path as a commodity made of that space, where `-100` is
-        // a bare number.
+        // a bare number. Empty quotes name no commodity, and hledger reads
+        // the number behind them as bare, so they come off here too.
         str = str.trimmingCharacters(in: .whitespaces)
+        if str.hasPrefix("\"\"") { str = str.dropFirst(2).trimmingCharacters(in: .whitespaces) }
 
         guard let first = str.first else { throw LedgerError.invalidAmount(raw) }
         if Self.opensNumber(first) {
@@ -86,6 +88,10 @@ extension JournalParser {
     /// against every other entry in the file. `CommodityFormat` records that
     /// the file writes the space, so a rebuilt entry still gets it back.
     ///
+    /// A symbol in double quotes runs to its closing quote instead, so
+    /// `"Mutual Fund" 10` is ten of `Mutual Fund`, digits and all (see
+    /// `quotedSymbol`).
+    ///
     /// The name cannot be empty. The caller has taken one sign off already,
     /// so in `--5` or `+-5` the second stands where the commodity would, and
     /// read on it made five of a commodity called nothing. hledger refuses
@@ -96,10 +102,16 @@ extension JournalParser {
         raw: String,
         in style: JournalStyleCollector,
     ) throws -> ShapedAmount {
-        let commodityEnd = str.firstIndex(where: Self.opensSignedNumber) ?? str.endIndex
-        let commodity = str[..<commodityEnd].trimmingCharacters(in: .whitespaces)
+        let commodity: String
+        var numberText: String
+        if let quoted = try Self.quotedSymbol(opening: str[...], raw: raw) {
+            (commodity, numberText) = (quoted.symbol, quoted.rest.trimmingCharacters(in: .whitespaces))
+        } else {
+            let commodityEnd = str.firstIndex(where: Self.opensSignedNumber) ?? str.endIndex
+            commodity = str[..<commodityEnd].trimmingCharacters(in: .whitespaces)
+            numberText = String(str[commodityEnd...])
+        }
         guard !commodity.isEmpty else { throw LedgerError.invalidAmount(raw) }
-        var numberText = String(str[commodityEnd...])
         var adjustedSign = sign
         if numberText.hasPrefix("-") {
             adjustedSign *= -1
@@ -137,7 +149,9 @@ extension JournalParser {
     /// rather than one unit of `e5` and one of `x2y`. A remainder that is
     /// empty leaves the `USD` a bare number has always been read as; hledger
     /// reads it as an amount in no commodity at all, and that is a separate
-    /// question from this one.
+    /// question from this one. A remainder in double quotes is the symbol
+    /// between them, whatever it holds, and nothing may follow the closing
+    /// quote: `10 "A"B` is refused, as hledger refuses it (`quotedSymbol`).
     private func parseSuffixCommodityAmount(
         _ str: String,
         sign: Decimal,
@@ -145,14 +159,17 @@ extension JournalParser {
         in style: JournalStyleCollector,
     ) throws -> ShapedAmount {
         let end = str.firstIndex { !Self.opensNumber($0) } ?? str.endIndex
-        let remainder = String(str[end...]).trimmingCharacters(in: .whitespaces)
-        guard !Self.cutsNumberShort(remainder),
-              !Self.commodityCarriesDigit(remainder),
-              let number = Self.scanNumber(
-                  String(str[..<end]),
-                  declaredMark: style.declaredDecimalMark(for: remainder.isEmpty ? nil : remainder),
-              )
-        else {
+        var remainder = String(str[end...]).trimmingCharacters(in: .whitespaces)
+        if let quoted = try Self.quotedSymbol(opening: remainder[...], raw: raw) {
+            guard quoted.rest.isEmpty else { throw LedgerError.invalidAmount(raw) }
+            remainder = quoted.symbol
+        } else if Self.cutsNumberShort(remainder) || Self.commodityCarriesDigit(remainder) {
+            throw LedgerError.invalidAmount(raw)
+        }
+        guard let number = Self.scanNumber(
+            String(str[..<end]),
+            declaredMark: style.declaredDecimalMark(for: remainder.isEmpty ? nil : remainder),
+        ) else {
             throw LedgerError.invalidAmount(raw)
         }
         return ShapedAmount(
@@ -182,26 +199,22 @@ extension JournalParser {
 
     /// The same, plus the sign that may sit between a prefix commodity and its
     /// digits: `$-50`.
-    static func opensSignedNumber(_ character: Character) -> Bool {
+    private static func opensSignedNumber(_ character: Character) -> Bool {
         opensNumber(character) || character == "-" || character == "+"
     }
 
     /// Whether what follows a number could have been part of it, which means
     /// the digits stopped short rather than the commodity starting.
-    static func cutsNumberShort(_ remainder: String) -> Bool {
+    private static func cutsNumberShort(_ remainder: String) -> Bool {
         guard let first = remainder.first else { return false }
         return opensSignedNumber(first)
     }
 
-    /// Whether a commodity written after the number holds a digit, which an
-    /// unquoted symbol may not do in either tool.
-    ///
-    /// A quoted symbol may hold anything and is taken exactly as written,
-    /// quotes included: the quoting is not modelled here, and `10 "AAPL 2"`
-    /// is a line that loaded before and has to go on loading.
-    static func commodityCarriesDigit(_ remainder: String) -> Bool {
-        guard !remainder.hasPrefix("\"") else { return false }
-        return remainder.contains(where: \.isASCIIDigit)
+    /// Whether a commodity written bare after the number holds a digit, which
+    /// a bare symbol may not do in either tool. A symbol that needs one is
+    /// written in quotes, and `quotedSymbol` reads it before this is asked.
+    private static func commodityCarriesDigit(_ remainder: String) -> Bool {
+        remainder.contains(where: \.isASCIIDigit)
     }
 
     /// Reads a written number: ASCII digits, at most one decimal mark, and
@@ -348,7 +361,7 @@ extension JournalParser {
     }
 }
 
-private extension Character {
+extension Character {
     /// `0` through `9`, and nothing else.
     ///
     /// `isNumber` on its own is true of `½`, of `²` and of the digits of every
