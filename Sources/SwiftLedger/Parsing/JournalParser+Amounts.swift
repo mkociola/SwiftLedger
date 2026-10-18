@@ -61,8 +61,10 @@ extension JournalParser {
         }
         // A space after the sign is layout too. Left on, it sent `- 100` down
         // the prefix path as a commodity made of that space, where `-100` is
-        // a bare number.
+        // a bare number. Empty quotes name no commodity, and hledger reads
+        // the number behind them as bare, so they come off here too.
         str = str.trimmingCharacters(in: .whitespaces)
+        if str.hasPrefix("\"\"") { str = str.dropFirst(2).trimmingCharacters(in: .whitespaces) }
 
         guard let first = str.first else { throw LedgerError.invalidAmount(raw) }
         if Self.opensNumber(first) {
@@ -88,8 +90,7 @@ extension JournalParser {
     ///
     /// A symbol in double quotes runs to its closing quote instead, so
     /// `"Mutual Fund" 10` is ten of `Mutual Fund`, digits and all (see
-    /// `quotedSymbol`). Empty quotes name nothing, and the number behind
-    /// them is read as the bare number hledger reads it as.
+    /// `quotedSymbol`).
     ///
     /// The name cannot be empty. The caller has taken one sign off already,
     /// so in `--5` or `+-5` the second stands where the commodity would, and
@@ -104,11 +105,6 @@ extension JournalParser {
         let commodity: String
         var numberText: String
         if let quoted = try Self.quotedSymbol(opening: str[...], raw: raw) {
-            guard !quoted.symbol.isEmpty else {
-                return try parseSuffixCommodityAmount(
-                    quoted.rest.trimmingCharacters(in: .whitespaces), sign: sign, raw: raw, in: style,
-                )
-            }
             (commodity, numberText) = (quoted.symbol, quoted.rest.trimmingCharacters(in: .whitespaces))
         } else {
             let commodityEnd = str.firstIndex(where: Self.opensSignedNumber) ?? str.endIndex

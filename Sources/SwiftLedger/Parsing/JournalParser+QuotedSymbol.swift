@@ -44,3 +44,18 @@ extension JournalParser {
 
     private static let quotedPunctuation: Set<Character> = ["-", "+", ".", ",", "@", "*", "{", "}", "="]
 }
+
+extension StringProtocol {
+    /// The first character satisfying `predicate` that stands outside double
+    /// quotes, or `nil`. What a quoted symbol holds is the symbol's, so a
+    /// scan for an operator or a digit on the line skips it.
+    func firstIndex(outsideQuotes predicate: (Character) -> Bool) -> Index? {
+        var quoted = false
+        // The label is spelled out: a trailing closure here resolves to this
+        // very method, and the scan recursed until the stack ran out.
+        return firstIndex(where: { character in
+            if character == "\"" { quoted.toggle() }
+            return !quoted && predicate(character)
+        })
+    }
+}

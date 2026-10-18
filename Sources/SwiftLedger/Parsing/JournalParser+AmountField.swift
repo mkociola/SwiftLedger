@@ -36,7 +36,7 @@ extension JournalParser {
     /// prices ten of `A@B`. Split at the first `@` wherever it stood, the
     /// line was refused over a quote with no partner.
     func splitAmountField(_ field: String) -> AmountField {
-        guard let operatorIndex = Self.firstOperator(in: field[...], among: ["@", "="]) else {
+        guard let operatorIndex = field.firstIndex(outsideQuotes: { $0 == "@" || $0 == "=" }) else {
             return AmountField(amount: trimmedField(field), price: nil, priceIsTotal: false, assertion: nil)
         }
         let amount = trimmedField(field[..<operatorIndex])
@@ -48,7 +48,7 @@ extension JournalParser {
         var price = rest.dropFirst()
         let isTotal = price.first == "@"
         if isTotal { price = price.dropFirst() }
-        guard let assertionIndex = Self.firstOperator(in: price, among: ["="]) else {
+        guard let assertionIndex = price.firstIndex(outsideQuotes: { $0 == "=" }) else {
             return AmountField(
                 amount: amount,
                 price: trimmedField(price),
@@ -79,14 +79,5 @@ extension JournalParser {
 
     private func trimmedField(_ text: some StringProtocol) -> String {
         String(text).trimmingCharacters(in: .whitespaces)
-    }
-
-    /// The first of `operators` written outside double quotes, or `nil`.
-    private static func firstOperator(in text: Substring, among operators: Set<Character>) -> Substring.Index? {
-        var quoted = false
-        return text.firstIndex { character in
-            if character == "\"" { quoted.toggle() }
-            return !quoted && operators.contains(character)
-        }
     }
 }
