@@ -1233,13 +1233,12 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
         }
 
         /// A sign set off from a bare number by a space is still a bare
-        /// number. With the space trimmed off the name it was an amount in a
-        /// commodity with no name at all, written back as `-100` and read as
-        /// USD from then on.
+        /// number, read as one. Left on, the space sent it down the prefix
+        /// path as an amount in a commodity made of that space.
         @Test
         func `a sign and a space in front of a bare number name no commodity`() throws {
             let bare = try JournalParser().parseAmount("- 100", lineNumber: 1)
-            #expect(bare == Amount(quantity: -100, commodity: "USD"))
+            #expect(bare == Amount(quantity: -100, commodity: ""))
 
             let coded = try JournalParser().parseAmount("- USD 100", lineNumber: 1)
             #expect(coded == Amount(quantity: -100, commodity: "USD", commodityIsPrefix: true))
@@ -3724,8 +3723,9 @@ private func renaming(
         #expect(formats["CHF"]?.commodityIsPrefix == nil)
     }
 
-    /// A bare number is read as USD and writes no commodity on either side,
-    /// so it has no say in which side the file writes one on.
+    /// A bare number is in no commodity, or in the one a `D` line names, and
+    /// writes it on neither side, so it has no say in which side the file
+    /// writes one on.
     @Test
     func `a bare number does not vote on which side its commodity goes`() throws {
         let mixed = """
@@ -3741,8 +3741,8 @@ private func renaming(
             Assets:Checking                           -2,400.00
         """
         let formats = try JournalParser().parse(bare).commodityFormats
-        #expect(formats["USD"] != nil)
-        #expect(formats["USD"]?.commodityIsPrefix == nil)
+        #expect(formats[""] != nil)
+        #expect(formats[""]?.commodityIsPrefix == nil)
     }
 }
 

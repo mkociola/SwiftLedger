@@ -54,12 +54,13 @@ import Testing
 
     /// The rule `init` applies is the parser's own: a spelling is accepted
     /// exactly when the line written for it loads back as the same commodity
-    /// on the same side.
+    /// on the same side. An empty symbol has no side: the number is bare,
+    /// and reads back as one.
     @Test(arguments: spellings, [false, true])
     func `a commodity is accepted exactly when it reads back as itself`(symbol: String, isPrefix: Bool) throws {
         let amount = Amount(quantity: 100, commodity: symbol, commodityIsPrefix: isPrefix)
         let back = Self.readBack(amount)
-        let readsBack = back?.commodity == symbol && back?.commodityIsPrefix == isPrefix
+        let readsBack = back?.commodity == symbol && (symbol.isEmpty || back?.commodityIsPrefix == isPrefix)
         #expect(try Self.refusedField { try Self.rent(amount) } == (readsBack ? nil : "postings[0].amount.commodity"))
     }
 
@@ -102,13 +103,13 @@ import Testing
         #expect(field == "postings[1].balanceAssertion.commodity")
     }
 
-    /// A bare number has no commodity written, and the parser reads it as
-    /// `USD`, which passes; only an amount built in code can carry the empty
-    /// commodity, which the next load would read back as `USD`.
+    /// A bare number has no commodity written, and the parser reads it as an
+    /// amount in none, which passes, since the serializer writes it back
+    /// bare.
     @Test
     func `a journal of bare numbers keeps loading`() throws {
         let journal = try JournalParser().parse("2026-07-01 Rent\n    Expenses:Rent  100\n    Assets:Checking\n")
-        #expect(journal.transactions.first?.postings.first?.amount.commodity == "USD")
+        #expect(journal.transactions.first?.postings.first?.amount.commodity == "")
     }
 
     /// A transaction decoded from JSON goes through `init`, so a commodity

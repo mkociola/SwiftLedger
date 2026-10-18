@@ -62,7 +62,7 @@ extension JournalParser {
         // A space after the sign is layout too. Left on, it sent `- 100` down
         // the prefix path as a commodity made of that space, where `-100` is
         // a bare number. Empty quotes name no commodity, and hledger reads
-        // the number behind them as bare, so they come off here too.
+        // the number behind them as a bare one, so they come off here too.
         str = str.trimmingCharacters(in: .whitespaces)
         if str.hasPrefix("\"\"") { str = str.dropFirst(2).trimmingCharacters(in: .whitespaces) }
 
@@ -147,9 +147,11 @@ extension JournalParser {
     /// same reason: neither ledger-cli nor hledger lets an unquoted commodity
     /// symbol hold one, so `1e5` and `1x2y` are a number someone mistyped
     /// rather than one unit of `e5` and one of `x2y`. A remainder that is
-    /// empty leaves the `USD` a bare number has always been read as; hledger
-    /// reads it as an amount in no commodity at all, and that is a separate
-    /// question from this one. A remainder in double quotes is the symbol
+    /// empty is a bare number, which is in the commodity the latest `D` line
+    /// above it names, on the side that line's sample put it, and in no
+    /// commodity at all where no such line stands above it, as hledger reads
+    /// both (`JournalStyleCollector.defaultCommodity`). It used to be read as
+    /// `USD` either way (issue #39). A remainder in double quotes is the symbol
     /// between them, whatever it holds, and nothing may follow the closing
     /// quote: `10 "A"B` is refused, as hledger refuses it (`quotedSymbol`).
     private func parseSuffixCommodityAmount(
@@ -172,11 +174,12 @@ extension JournalParser {
         ) else {
             throw LedgerError.invalidAmount(raw)
         }
+        let named = remainder.isEmpty ? style.defaultCommodity : nil
         return ShapedAmount(
             amount: Amount(
                 quantity: sign * number.magnitude,
-                commodity: remainder.isEmpty ? "USD" : remainder,
-                commodityIsPrefix: false,
+                commodity: named?.commodity ?? remainder,
+                commodityIsPrefix: named?.commodityIsPrefix ?? false,
             ),
             shape: number.shape,
         )

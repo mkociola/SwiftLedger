@@ -308,3 +308,18 @@ end comment
 2024-03-20 Bought into an index fund
     Assets:Funds           10 "Vanguard 500" @ $50.00
     Assets:Checking        -$500.00
+
+; ── A default commodity ─────────────────────────────────────────────────────
+; A D line names the commodity a bare number is in, from the line it stands
+; on, with the side and the style its sample shows, as hledger reads it: the
+; 25.00 below is $25.00, and an entry SwiftLedger rebuilds there writes the
+; dollar sign in. Above such a line, or in a file without one, a bare number
+; is in no commodity at all and is written back bare. The sample states the
+; dollar's style too, as every D line does; this one matches the dollars
+; above, so nothing already written changes.
+
+D $1000.00
+
+2024-03-21 Lunch, written without a symbol
+    Expenses:Food:Restaurants  25.00
+    Assets:Checking

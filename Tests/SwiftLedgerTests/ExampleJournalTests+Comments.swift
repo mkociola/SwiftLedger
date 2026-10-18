@@ -24,6 +24,7 @@ extension ExampleJournalTests {
             "    Expenses:Rent          $1200.00",
             "    Assets:Checking",
             "end comment",
+            "D $1000.00",
         ])
         let rent = Ledger(journal: journal).balance(for: "Expenses:Rent")
         #expect(rent.map(\.quantity) == [2400])

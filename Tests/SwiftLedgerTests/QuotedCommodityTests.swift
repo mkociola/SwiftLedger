@@ -63,7 +63,7 @@ import Testing
     /// hledger.
     @Test(arguments: ["10 \"\"", "\"\"10", "\"\" 10"])
     func `empty quotes leave the number bare`(amount: String) throws {
-        #expect(try Self.first(amount) == Amount(quantity: 10, commodity: "USD"))
+        #expect(try Self.first(amount) == Amount(quantity: 10, commodity: ""))
     }
 
     /// `@` and `=` inside the quotes are part of the symbol, as they are in

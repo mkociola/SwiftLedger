@@ -1,0 +1,9 @@
+D USD 1,000.00
+
+2024-01-01 A default written in front with a space
+    Expenses:Rent    1200 = 1200
+    Assets:Checking
+
+2024-01-02 A written commodity is not replaced
+    Expenses:Rent    5 EUR
+    Assets:Checking
