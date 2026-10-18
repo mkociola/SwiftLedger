@@ -121,7 +121,7 @@ extension LedgerError: LocalizedError {
         case let .unreadableDirective(directive, reason):
             "Directive '\(directive)' cannot be read: \(reason)"
         case let .unbalancedTransaction(commodity, imbalance):
-            "Transaction is unbalanced in \(commodity): off by \(imbalance)"
+            "Transaction is unbalanced in \(commodity.isEmpty ? "its bare numbers" : commodity): off by \(imbalance)"
         case let .unbalancedBracketedPostings(commodity, imbalance):
             "Balanced virtual postings are off by \(imbalance) in \(commodity)"
         case let .unwritableAccountName(name):

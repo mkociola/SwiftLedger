@@ -35,7 +35,8 @@ public struct Amount: Sendable, Codable, Hashable, CustomStringConvertible {
     }
 
     public var description: String {
-        commodityIsPrefix ? "\(commodity)\(quantity)" : "\(quantity) \(commodity)"
+        if commodity.isEmpty { return "\(quantity)" }
+        return commodityIsPrefix ? "\(commodity)\(quantity)" : "\(quantity) \(commodity)"
     }
 }
 
