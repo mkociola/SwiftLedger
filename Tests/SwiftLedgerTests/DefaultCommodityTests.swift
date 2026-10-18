@@ -13,11 +13,16 @@ import Testing
         try JournalParser().parse(text).transactions.flatMap { $0.postings.map(\.amount) }
     }
 
-    static func entry(_ amounts: Amount...) throws -> Transaction {
+    /// An entry of `amount` and its negation, so that it balances whatever
+    /// the amount is in.
+    static func entry(_ amount: Amount) throws -> Transaction {
         try Transaction(
             date: JournalDate(year: 2024, month: 1, day: 1),
             description: "Rent",
-            postings: amounts.map { Posting(accountName: "Expenses:Rent", amount: $0) },
+            postings: [
+                Posting(accountName: "Expenses:Rent", amount: amount),
+                Posting(accountName: "Assets:Checking", amount: amount.negated),
+            ],
         )
     }
 
@@ -97,10 +102,7 @@ import Testing
     /// side.
     @Test(arguments: [false, true])
     func `a rebuilt amount in no commodity is written bare`(isPrefix: Bool) throws {
-        let entry = try Self.entry(
-            Amount(quantity: 1200, commodity: "", commodityIsPrefix: isPrefix),
-            Amount(quantity: -1200, commodity: "", commodityIsPrefix: isPrefix),
-        )
+        let entry = try Self.entry(Amount(quantity: 1200, commodity: "", commodityIsPrefix: isPrefix))
         let lines = JournalSerializer().serialize(Journal(items: [.transaction(entry)])).components(separatedBy: "\n")
         #expect(lines[1].hasSuffix("  1200"))
         #expect(lines[2].hasSuffix("  -1200"))
@@ -132,7 +134,7 @@ import Testing
     @Test
     func `an amount in no commodity reads back as itself`() throws {
         let amount = Amount(quantity: 1200, commodity: "")
-        let entry = try Self.entry(amount, amount.negated)
+        let entry = try Self.entry(amount)
         let written = JournalSerializer().serialize(Journal(items: [.transaction(entry)]))
         #expect(try JournalParser().parse(written).transactions.first?.postings.first?.amount == amount)
     }
