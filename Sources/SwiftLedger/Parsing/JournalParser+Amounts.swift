@@ -203,13 +203,13 @@ extension JournalParser {
 
     /// The same, plus the sign that may sit between a prefix commodity and its
     /// digits: `$-50`.
-    static func opensSignedNumber(_ character: Character) -> Bool {
+    private static func opensSignedNumber(_ character: Character) -> Bool {
         opensNumber(character) || character == "-" || character == "+"
     }
 
     /// Whether what follows a number could have been part of it, which means
     /// the digits stopped short rather than the commodity starting.
-    static func cutsNumberShort(_ remainder: String) -> Bool {
+    private static func cutsNumberShort(_ remainder: String) -> Bool {
         guard let first = remainder.first else { return false }
         return opensSignedNumber(first)
     }
@@ -217,7 +217,7 @@ extension JournalParser {
     /// Whether a commodity written bare after the number holds a digit, which
     /// a bare symbol may not do in either tool. A symbol that needs one is
     /// written in quotes, and `quotedSymbol` reads it before this is asked.
-    static func commodityCarriesDigit(_ remainder: String) -> Bool {
+    private static func commodityCarriesDigit(_ remainder: String) -> Bool {
         remainder.contains(where: \.isASCIIDigit)
     }
 
