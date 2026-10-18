@@ -1363,9 +1363,8 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
 
     /// Written the other way round, what follows the digits is the commodity,
     /// which is how `10AAPL` is a share count in both tools and how this has
-    /// always read. A quoted symbol is kept exactly as written, quotes and all,
-    /// since the quoting is not modelled here and a file using it loaded
-    /// before.
+    /// always read. A quoted symbol is the name between the quotes, digit
+    /// and space included.
     @Test
     func `letters after a bare number name the commodity`() throws {
         let shares = try JournalParser().parseAmount("10AAPL", lineNumber: 1)
@@ -1378,7 +1377,7 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
 
         let quoted = try JournalParser().parseAmount("10 \"AAPL 2\"", lineNumber: 1)
         #expect(quoted.quantity == 10)
-        #expect(quoted.commodity == "\"AAPL 2\"")
+        #expect(quoted.commodity == "AAPL 2")
     }
 
     /// An unquoted commodity symbol carries no digit in either tool, so the

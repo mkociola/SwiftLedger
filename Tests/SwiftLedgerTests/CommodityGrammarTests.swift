@@ -2,12 +2,14 @@ import Foundation
 @testable import SwiftLedger
 import Testing
 
-/// A commodity is written bare on the posting line, after the number or in
-/// front of it, and so is the commodity of a price or a balance assertion. A
-/// spelling the amount grammar reads as something else, a digit after the
-/// number, a `-` in front of it, an `@` anywhere, used to be accepted, written,
-/// and then refused by the next load, or read back as a different commodity.
-/// `Transaction.init` refuses it instead. Issue #70.
+/// A commodity is written on the posting line, after the number or in front
+/// of it, and so is the commodity of a price or a balance assertion. A
+/// spelling the amount grammar reads as something else used to be accepted,
+/// written, and then refused by the next load, or read back as a different
+/// commodity. `Transaction.init` refuses it instead (issue #70). Since the
+/// serializer writes a symbol in double quotes when it needs them (issue
+/// #38), most spellings read back, and the ones refused are those no quoting
+/// writes.
 @Suite("commodity spellings the amount grammar cannot read back") struct CommodityGrammarTests {
     /// Every spelling here is tried on both sides of the number.
     static let spellings = [
@@ -29,9 +31,11 @@ import Testing
 
     /// The commodity the serializer's line for `amount` reads back as, or
     /// `nil` when that line does not load. Built by hand rather than through
-    /// `init`, which is what is under test.
+    /// `init`, which is what is under test, with the symbol quoted the way
+    /// the serializer quotes it.
     static func readBack(_ amount: Amount) -> Amount? {
-        let number = amount.commodityIsPrefix ? "\(amount.commodity)100" : "100 \(amount.commodity)"
+        let symbol = JournalParser.written(symbol: amount.commodity)
+        let number = amount.commodityIsPrefix ? "\(symbol)100" : "100 \(symbol)"
         let text = "2026-07-01 Rent\n    Expenses:Rent  \(number)\n    Assets:Checking\n"
         return try? JournalParser().parse(text).transactions.first?.postings.first?.amount
     }
@@ -59,12 +63,6 @@ import Testing
         #expect(try Self.refusedField { try Self.rent(amount) } == (readsBack ? nil : "postings[0].amount.commodity"))
     }
 
-    @Test(arguments: [false, true])
-    func `the digit from the report is refused on either side`(isPrefix: Bool) throws {
-        let amount = Amount(quantity: 100, commodity: "EUR2", commodityIsPrefix: isPrefix)
-        #expect(try Self.refusedField { try Self.rent(amount) } == "postings[0].amount.commodity")
-    }
-
     @Test
     func `a price commodity is checked by the same rule`() throws {
         let field = try Self.refusedField {
@@ -75,9 +73,9 @@ import Testing
                     Posting(
                         accountName: "Assets:Checking",
                         amount: Amount(quantity: 100, commodity: "EUR"),
-                        price: .perUnit(Amount(quantity: 1.1, commodity: "USD2")),
+                        price: .perUnit(Amount(quantity: 1.1, commodity: "US;D")),
                     ),
-                    Posting(accountName: "Income:Salary", amount: Amount(quantity: -110, commodity: "USD2")),
+                    Posting(accountName: "Income:Salary", amount: Amount(quantity: -110, commodity: "US;D")),
                 ],
             )
         }
@@ -96,7 +94,7 @@ import Testing
                     Posting(
                         accountName: "Assets:Checking",
                         amount: dollars.negated,
-                        balanceAssertion: Amount(quantity: 0, commodity: "USD=0"),
+                        balanceAssertion: Amount(quantity: 0, commodity: "U\"SD"),
                     ),
                 ],
             )
@@ -116,10 +114,10 @@ import Testing
     /// A transaction decoded from JSON goes through `init`, so a commodity
     /// edited into a document by hand is refused by the same check.
     @Test
-    func `a decoded transaction refuses a commodity holding a digit`() throws {
+    func `a decoded transaction refuses a commodity holding a semicolon`() throws {
         let clean = try Self.rent(Amount(quantity: 100, commodity: "EUR"))
         let json = try #require(String(data: JSONEncoder().encode(clean), encoding: .utf8))
-        let broken = json.replacingOccurrences(of: #""commodity":"EUR""#, with: #""commodity":"EUR2""#)
+        let broken = json.replacingOccurrences(of: #""commodity":"EUR""#, with: #""commodity":"EU;R""#)
         #expect(broken != json)
         #expect(throws: LedgerError.self) {
             try JSONDecoder().decode(Transaction.self, from: Data(broken.utf8))
@@ -139,7 +137,7 @@ import Testing
         let manager = try LedgerManager(store: PlainTextJournalStore(url: url))
 
         #expect(throws: LedgerError.self) {
-            try manager.add(.transaction(Self.rent(Amount(quantity: 100, commodity: "EUR2"))))
+            try manager.add(.transaction(Self.rent(Amount(quantity: 100, commodity: "EU;R"))))
         }
         #expect(try String(contentsOf: url, encoding: .utf8) == original)
         #expect(throws: Never.self) { try LedgerManager(store: PlainTextJournalStore(url: url)) }

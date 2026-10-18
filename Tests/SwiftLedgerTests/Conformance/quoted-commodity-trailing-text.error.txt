@@ -1,0 +1,6 @@
+hledger: Error: quoted-commodity-trailing-text.journal:2:28:
+  |
+2 |     Expenses:Fees    10 "A"B
+  |                            ^
+unexpected 'B'
+expecting ';', '=', end of input, ledger-style lot cost, ledger-style lot date, ledger-style lot note, newline, transaction price, or valuation expression

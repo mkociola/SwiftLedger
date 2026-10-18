@@ -30,8 +30,13 @@ extension JournalParser {
     /// Spacing around the operators is free-form in the source and is not
     /// recorded here: `10 AAPL@$150.00` and `10 AAPL @ $150.00` split alike,
     /// and a posting the serializer has to format is spaced canonically.
+    ///
+    /// An operator inside double quotes is part of a commodity symbol, as it
+    /// is in hledger, so the scan skips a quoted span: `10 "A@B" @ $5.00`
+    /// prices ten of `A@B`. Split at the first `@` wherever it stood, the
+    /// line was refused over a quote with no partner.
     func splitAmountField(_ field: String) -> AmountField {
-        guard let operatorIndex = field.firstIndex(where: { $0 == "@" || $0 == "=" }) else {
+        guard let operatorIndex = Self.firstOperator(in: field[...], among: ["@", "="]) else {
             return AmountField(amount: trimmedField(field), price: nil, priceIsTotal: false, assertion: nil)
         }
         let amount = trimmedField(field[..<operatorIndex])
@@ -43,7 +48,7 @@ extension JournalParser {
         var price = rest.dropFirst()
         let isTotal = price.first == "@"
         if isTotal { price = price.dropFirst() }
-        guard let assertionIndex = price.firstIndex(of: "=") else {
+        guard let assertionIndex = Self.firstOperator(in: price, among: ["="]) else {
             return AmountField(
                 amount: amount,
                 price: trimmedField(price),
@@ -74,5 +79,14 @@ extension JournalParser {
 
     private func trimmedField(_ text: some StringProtocol) -> String {
         String(text).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The first of `operators` written outside double quotes, or `nil`.
+    private static func firstOperator(in text: Substring, among operators: Set<Character>) -> Substring.Index? {
+        var quoted = false
+        return text.firstIndex { character in
+            if character == "\"" { quoted.toggle() }
+            return !quoted && operators.contains(character)
+        }
     }
 }

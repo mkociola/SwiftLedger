@@ -121,27 +121,22 @@ extension Transaction {
     /// Refuses a commodity the amount grammar would read as something other
     /// than the commodity, by the same reasoning as `validateHeaderSyntax`.
     ///
-    /// `JournalSerializer` writes an amount as `NUMBER COMMODITY` or
-    /// `COMMODITY[ ]NUMBER`, the symbol bare, and a price and a balance
-    /// assertion the same way after `@` and `=`. The posting grammar first
-    /// cuts the comment off at the first `;`, then the price at the first `@`
-    /// and the assertion at the first `=`, so none of the three may appear in
-    /// a symbol. In front of the number, the symbol runs to the first digit,
-    /// `.`, `,`, `-` or `+`, which open the number or its sign, so it may hold
-    /// none of them. Behind the number, the symbol is whatever follows it, and
-    /// it may not open with one of those characters, which the number would
-    /// have taken; nor hold a digit unless it opens with `"`, since neither
-    /// ledger-cli nor hledger lets a bare symbol hold one, and the parser
-    /// refuses the line rather than guess (the quotes, when written, are kept
-    /// as part of the symbol). On either side the symbol is trimmed, and an
-    /// empty one leaves a bare number, which reads as `USD`.
-    /// Any of these would come back from the next parse as a different
-    /// commodity, or refuse to load at the posting, and nothing about the
-    /// entry the caller built is wrong until it is written.
+    /// `JournalSerializer` writes a symbol bare when the amount grammar reads
+    /// it back whole, and in double quotes otherwise
+    /// (`JournalParser.written(symbol:)`), as hledger writes one that holds a
+    /// space, a digit or punctuation; a price and a balance assertion are
+    /// written the same way after `@` and `=`. Between the quotes a symbol
+    /// may hold anything but two characters: the quote itself, which ends the
+    /// symbol early, and `;`, which the posting grammar reads as opening the
+    /// comment before it looks for the quotes, as hledger reads it. An empty
+    /// symbol is not written at all, and the bare number it leaves reads as
+    /// `USD`. Each of these would come back from the next parse as a
+    /// different commodity, or refuse to load at the posting, and nothing
+    /// about the entry the caller built is wrong until it is written.
     ///
-    /// The rules are the parser's own predicates where it has them, so the
-    /// two cannot drift. The parser cannot hand `init` one of these: every
-    /// symbol it read stopped where these rules say a symbol stops.
+    /// The parser cannot hand `init` one of these: a symbol it read in quotes
+    /// stopped at the first quote, a bare one at the first `;`, and empty
+    /// quotes left it a bare number.
     static func validateCommoditySyntax(_ postings: [Posting]) throws {
         for (index, posting) in postings.enumerated() {
             try requireReadable(posting.amount, at: "postings[\(index)].amount.commodity")
@@ -151,36 +146,19 @@ extension Transaction {
     }
 
     /// Refuses `amount`'s commodity unless the amount grammar reads it back as
-    /// itself, on the side of the number it is written on. A `nil` amount is
-    /// a field nothing writes.
+    /// itself, bare or in the quotes the serializer writes for it. A `nil`
+    /// amount is a field nothing writes.
     private static func requireReadable(_ amount: Amount?, at field: @autoclosure () -> String) throws {
-        guard let amount else { return }
-        let symbol = amount.commodity
-        try requireTrimmed(symbol, at: field())
+        guard let symbol = amount?.commodity else { return }
         try require(
             !symbol.isEmpty, at: field(),
             rule: "a commodity may not be empty, since a bare number reads as USD",
         )
         try require(
-            !symbol.contains { $0 == ";" || $0 == "@" || $0 == "=" }, at: field(),
-            rule: "';' opens the comment, '@' a price and '=' a balance assertion",
+            !symbol.contains { $0 == "\"" || $0 == ";" }, at: field(),
+            rule: "a '\"' ends a quoted commodity and a ';' opens the comment before the quotes are read, "
+                + "so neither can be written in a commodity",
         )
-        if amount.commodityIsPrefix {
-            try require(
-                !symbol.contains(where: JournalParser.opensSignedNumber), at: field(),
-                rule: "a commodity in front of the number ends at the first digit, '.', ',', '-' or '+'",
-            )
-        } else {
-            try require(
-                !JournalParser.cutsNumberShort(symbol), at: field(),
-                rule: "a commodity behind the number may not open with a digit, '.', ',', '-' or '+', "
-                    + "which the number would take",
-            )
-            try require(
-                !JournalParser.commodityCarriesDigit(symbol), at: field(),
-                rule: "a commodity behind the number may not hold a digit unless it opens with '\"'",
-            )
-        }
     }
 
     /// Refuses an `account` directive's name or comment the directive grammar

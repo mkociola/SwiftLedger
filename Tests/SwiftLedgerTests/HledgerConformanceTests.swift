@@ -30,7 +30,6 @@ import Testing
         "account-directive-stray-cr",
         "alias",
         "amount-stray-cr",
-        "amount-forms",
         "apply-account",
         "balance-assertion-fails",
         "default-commodity",

@@ -296,3 +296,15 @@ end comment
 2024-03-18 (P;7) Parking ; paid at the machine
     Expenses:Car            $4.00
     Assets:Checking
+
+; ── A commodity symbol in quotes ────────────────────────────────────────────
+; A symbol that holds a space, a digit or punctuation is written in double
+; quotes, as hledger writes it, and the quotes are no part of the name: the
+; fund below is ten units of a commodity called Vanguard 500, priced in
+; dollars. An entry SwiftLedger rebuilds in that commodity gets the quotes
+; back, since the bare name would not read, and a symbol that needs none,
+; such as VTI above, is written bare.
+
+2024-03-20 Bought into an index fund
+    Assets:Funds           10 "Vanguard 500" @ $50.00
+    Assets:Checking        -$500.00

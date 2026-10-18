@@ -21,8 +21,10 @@ import Foundation
 ///   Digits followed by letters still name a commodity, as `10AAPL` does in
 ///   both tools, but an unquoted commodity symbol carries no digit of its own
 ///   there or here, so a bare `1e5` is invalid too rather than one unit of a
-///   commodity called `e5`. A quoted symbol may carry anything and is kept as
-///   written, quotes included: `10 "AAPL 2"`.
+///   commodity called `e5`. A symbol holding a space, a digit or punctuation
+///   is written in double quotes, which are no part of the name: `10 "AAPL
+///   2"` is ten units of `AAPL 2`, as it is in hledger, and a rebuilt amount
+///   in it is written with the quotes back on.
 /// - Decimal marks: both marks are written `.` or `,` depending on where the
 ///   file comes from, so which is which is read out of the number, as hledger
 ///   reads it. Two different marks make the last one the decimal mark, so
