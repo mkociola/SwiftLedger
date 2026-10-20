@@ -44,9 +44,11 @@ extension JournalParser {
     /// ledger and hledger both spell a style as a sample amount, in three
     /// places: `D $1,000.00`, the one-line `commodity $1,000.00`, and the
     /// indented `format $1,000.00` inside a `commodity` block. An indented line
-    /// can only reach here from such a block — the ones inside a transaction
-    /// are consumed with it — so no block tracking is needed to tell them
-    /// apart. The sample is itself read under whatever the file has declared
+    /// is handed here only from such a block: `declare(at:in:into:year:)`
+    /// reads the block above the line and passes over a `format` line under
+    /// any other, as hledger skips it. The serializer reads the directives
+    /// through that function too, so that it writes a rebuilt amount by the
+    /// mark the next parse reads it by. The sample is itself read under whatever the file has declared
     /// above it, as hledger reads it, so `commodity €1.000` below
     /// `decimal-mark ,` states a grouped whole number. hledger's
     /// `decimal-mark .` or `decimal-mark ,` states no style and names no

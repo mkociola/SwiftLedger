@@ -16,6 +16,7 @@ extension ExampleJournalTests {
         #expect(!journal.transactions.contains { $0.description == "Rent for March" })
         #expect(journal.directives == [
             "    decimal-mark ,",
+            "    format $1.000,00",
             "commodity €1.000,00",
             // The line of four spaces under the car wash is kept as it came.
             "    ",

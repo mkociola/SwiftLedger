@@ -48,4 +48,30 @@ extension ExampleJournalTests {
         let opening = try #require(journal.transactions.first { $0.description == "Opening balances" })
         #expect(opening.postings.first?.amount.quantity == 2500)
     }
+
+    /// The `format $1.000,00` under the same account is skipped too, by the
+    /// serializer as well as the parser. Read by the serializer alone, it
+    /// declared the comma for the dollar and outranked the `D` line, so the
+    /// lunch rebuilt under that line was written `$25,00`, which reads back
+    /// under the `D` line's point as twenty-five hundred dollars.
+    @Test
+    func `the example's indented format under an account leaves rebuilt dollars alone`() throws {
+        var journal = try JournalParser().parse(Self.exampleText)
+        let lunch = try #require(journal.transactions.first { $0.description == "Lunch, written without a symbol" })
+        let dollars = { Amount(quantity: $0, commodity: "$", commodityIsPrefix: true) }
+        let rebuilt = try Transaction(
+            id: lunch.id, date: lunch.date, description: lunch.description, postings: [
+                Posting(accountName: "Expenses:Food:Restaurants", amount: dollars(25)),
+                Posting(accountName: "Assets:Checking", amount: dollars(-25)),
+            ],
+        )
+        let replaced = journal.replace(.transaction(lunch), with: .transaction(rebuilt))
+        #expect(replaced)
+
+        let written = JournalSerializer().serialize(journal)
+        #expect(written.contains(" $25.00\n"))
+        let reparsed = try JournalParser().parse(written)
+        let lunchAgain = try #require(reparsed.transactions.first { $0.description == lunch.description })
+        #expect(lunchAgain.postings.map(\.amount.quantity) == [25, -25])
+    }
 }

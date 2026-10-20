@@ -5,9 +5,13 @@
 ; account type when the name root doesn't match the recognised conventions.
 ; An indented line under one is a subdirective of it, and one hledger does
 ; not know is skipped, here too: the decimal-mark under the first account
-; declares nothing, and the dollars below are still read with the point.
+; declares nothing, and the dollars below are still read with the point. So
+; is a format line, which states a style only under a commodity block: the one
+; below leaves the dollars alone, and an entry SwiftLedger rebuilds in dollars
+; is still written with the point.
 account Assets:Checking
     decimal-mark ,
+    format $1.000,00
 account Assets:Savings
 account Assets:Brokerage
 account Assets:PettyCash
