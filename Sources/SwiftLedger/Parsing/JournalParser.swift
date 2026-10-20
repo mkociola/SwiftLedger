@@ -173,16 +173,19 @@ public struct JournalParser {
             }
 
             // account directive. A nameless `account` line is not one we can
-            // model, and falls through to be kept verbatim.
-            let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(trimmed) }
+            // model, and falls through to be kept verbatim, and so does an
+            // indented one, which is a subdirective of the block above it or
+            // belongs to nothing (issue #118); the last branch settles which.
+            let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(line) }
             if let directive {
                 items.append(.accountDirective(directive))
                 index += 1
                 continue
             }
 
-            // Transaction header (starts with a date)
-            if startsWithDate(trimmed) {
+            // Transaction header: a date at the margin. Indented, a dated line
+            // is a subdirective or an orphan, like an `account` line.
+            if startsWithDate(line) {
                 let (transaction, consumed) = try located(line: index + 1, entry: Self.entryHeader(line)) {
                     try parseTransaction(lines: lines, from: index, year: year, into: &style)
                 }
@@ -219,8 +222,11 @@ public struct JournalParser {
     /// Reads an `account NAME` line, with its inline comment split off so the
     /// comment text never becomes part of the declared account name.
     ///
-    /// Returns `nil` when the line is not an `account` directive, or names no
-    /// account at all.
+    /// Returns `nil` when the line is not an `account` directive, names no
+    /// account at all, or is indented: hledger reads an indented `account`
+    /// line as a subdirective under an `account` or `commodity` block and
+    /// refuses it outside every block, where the parser used to declare the
+    /// account wherever the line stood (issue #118).
     ///
     /// The line arrives without its line ending, as every line does. Left on
     /// in a CRLF file, the `\r` would land in the name, or in the comment when
@@ -229,9 +235,9 @@ public struct JournalParser {
     /// on the line is not a line ending, and the name or comment it lands in
     /// is one no journal can write, so `AccountDirective.init` refuses it and
     /// the file does not load, as it does not for a transaction's field.
-    private func parseAccountDirective(_ trimmed: String) throws -> AccountDirective? {
-        guard trimmed.lowercased().hasPrefix("account ") else { return nil }
-        let (mainPart, comment) = splitInlineComment(trimmed)
+    private func parseAccountDirective(_ line: String) throws -> AccountDirective? {
+        guard line.lowercased().hasPrefix("account ") else { return nil }
+        let (mainPart, comment) = splitInlineComment(line)
         let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return nil }
         return try AccountDirective(

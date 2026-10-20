@@ -1,0 +1,9 @@
+account Assets:Checking
+    account Assets:Savings
+    2024-01-01 Parked
+        Expenses:Rent  $40.00
+        Assets:Checking
+
+2024-01-02 Rent
+    Expenses:Rent  $40.00
+    Assets:Checking

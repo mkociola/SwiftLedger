@@ -1,0 +1,6 @@
+hledger: Error: indented-account-line.journal:5:5:
+  |
+5 |     account Assets:Savings
+  |     ^
+unexpected 'a'
+expecting newline
