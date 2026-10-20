@@ -26,6 +26,7 @@ extension ExampleJournalTests {
             "    Expenses:Rent          $1200.00",
             "    Assets:Checking",
             "end comment",
+            "commodity \"BRK.B\"",
             "D $1000.00",
             "decimal-mark .",
             "decimal-mark ,",

@@ -6,6 +6,31 @@
         "commodity": "$",
         "mantissa": -150000,
         "places": 2
+      },
+      {
+        "commodity": "E-R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": -100,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Fees",
+    "amounts": [
+      {
+        "commodity": "E-R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 100,
+        "places": 0
       }
     ]
   },

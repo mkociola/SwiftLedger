@@ -34,4 +34,23 @@ extension ExampleJournalTests {
         let written = JournalSerializer().serialize(journal)
         #expect(written.contains("\n    Assets:Funds           10 \"Vanguard 500\" @ $50.00\n"))
     }
+
+    /// The `commodity "BRK.B"` line names a symbol in quotes, which loads,
+    /// and the same line with the quotes dropped is refused where it stands,
+    /// as hledger refuses it, since the point is no part of a bare symbol.
+    @Test
+    func `the example's quoted commodity line loads and its bare form is refused`() throws {
+        let text = try Self.exampleText
+        let declaration = "\ncommodity \"BRK.B\"\n"
+        let range = try #require(text.range(of: declaration))
+        let line = text[..<range.lowerBound].count { $0 == "\n" } + 2
+        _ = try JournalParser().parse(text)
+
+        let bare = text.replacingCharacters(in: range, with: "\ncommodity BRK.B\n")
+        #expect { try JournalParser().parse(bare) } throws: { error in
+            guard let error = error as? LedgerError, error.line == line,
+                  case .unreadableDirective = error.withoutLocation else { return false }
+            return true
+        }
+    }
 }

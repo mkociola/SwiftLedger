@@ -157,8 +157,19 @@ extension JournalParser {
     /// Whether `sample` is a commodity symbol and nothing else: one bare word,
     /// or one quoted symbol with nothing after its closing quote, which is
     /// the `commodity` line's one form besides a sample amount.
+    ///
+    /// The bare word is held to the rule a posting's symbol is held to, since
+    /// hledger reads it by the same grammar: `commodity E-R`, `commodity E*R`
+    /// and `commodity E{R` are lines it stops at, where a word with no space
+    /// in it used to be enough here, and the file loaded and declared nothing.
+    /// Such a symbol is named in quotes, `commodity "E-R"`, as it is written
+    /// in an amount. The whitespace test stays in front of the rule, which
+    /// lets a stray `\r` through for `Transaction.init` to name, since no
+    /// transaction reads this line and a `\r` inside it is refused here.
     private static func namesSymbolAlone(_ sample: String) -> Bool {
-        guard sample.hasPrefix("\"") else { return !sample.isEmpty && !sample.contains(where: \.isWhitespace) }
+        guard sample.hasPrefix("\"") else {
+            return !sample.isEmpty && !sample.contains(where: \.isWhitespace) && isBareSymbol(sample)
+        }
         let inner = sample.dropFirst()
         return inner.last == "\"" && !inner.dropLast().contains("\"")
     }
@@ -177,7 +188,8 @@ extension JournalParser {
                 reason: sample.isEmpty
                     ? "it names no commodity and no sample amount"
                     : "it names neither a sample amount nor a commodity symbol alone, "
-                    + "as 'commodity $1,000.00' or 'commodity $' do",
+                    + "as 'commodity $1,000.00' or 'commodity $' do, and a symbol holding a digit, "
+                    + "a space or any of -+.@*{}=\" is named in quotes, as in 'commodity \"E-R\"'",
             )
         }
     }
