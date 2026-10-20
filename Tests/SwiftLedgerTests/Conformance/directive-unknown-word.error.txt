@@ -1,0 +1,6 @@
+hledger: Error: directive-unknown-word.journal:1:1:
+  |
+1 | foo bar
+  | ^
+unexpected 'f'
+expecting end of input or transaction or directive

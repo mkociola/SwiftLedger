@@ -2566,19 +2566,18 @@ private extension LedgerError {
     }
 
     @Test
-    func `a longer word starting with the keyword opens nothing`() throws {
-        // The keyword ends at whitespace, so `comments` is its own word and
-        // its own directive, and what follows is data.
+    func `a longer word starting with the keyword opens nothing`() {
+        // The keyword ends at whitespace, so `comments` is its own word, and
+        // one hledger reads no directive from: the file is refused at that
+        // line, as hledger refuses it, rather than parked in a block to the
+        // end of the file (issue #104).
         let text = """
         comments
         2024-01-02 real
             a  $1
             b  $-1
         """
-        let journal = try JournalParser().parse(text)
-        #expect(journal.transactions.map(\.description) == ["real"])
-        #expect(journal.directives == ["comments"])
-        #expect(JournalSerializer().serialize(journal) == text)
+        #expect { try JournalParser().parse(text) } throws: { ($0 as? LedgerError)?.line == 1 }
     }
 
     @Test

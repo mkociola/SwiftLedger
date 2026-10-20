@@ -1,0 +1,5 @@
+hledger: Error: directive-unknown-decimal-mark-suffix.journal:1:13:
+  |
+1 | decimal-markx ,
+  |             ^
+unexpected 'x'

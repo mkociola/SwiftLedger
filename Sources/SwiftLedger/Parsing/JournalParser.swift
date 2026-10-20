@@ -113,12 +113,14 @@ import Foundation
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
 ///
-/// Any line outside this grammar — `include`, `P`, `commodity`, `alias`, `D`,
-/// `year`, an indented sub-directive, or anything else — is kept verbatim as a
-/// `.directive` item and written back unchanged by `JournalSerializer`. The
-/// parser never reinterprets what it does not understand. An indented line
-/// with no block above it to belong to, such as a posting a blank line cut off
-/// from its entry, is refused at its line, as hledger refuses it.
+/// Any line outside this grammar, such as `include`, `P`, `commodity`, `alias`,
+/// `D`, `year` or an indented sub-directive, is kept verbatim as a `.directive`
+/// item and written back unchanged by `JournalSerializer`. The parser never
+/// reinterprets what it does not understand. A line at the margin that opens
+/// with no word hledger reads at all, `foo bar` or `decimal-markx ,`, is
+/// refused at its line, as hledger refuses it (`requireKnownDirective`), and
+/// so is an indented line with no block above it to belong to, such as a
+/// posting a blank line cut off from its entry.
 ///
 /// An error thrown while an entry is being read says where it was found:
 /// `LedgerError.inJournal` carries the line, the header of the entry it was
@@ -191,15 +193,18 @@ public struct JournalParser {
                 continue
             }
 
-            // Anything else — an unsupported directive (`include`, `P`, `commodity`,
-            // `alias`, `D`, `year`, an indented sub-directive) or malformed content.
-            // Kept verbatim so serialising never rewrites what we cannot interpret.
+            // Anything else, an unsupported directive (`include`, `P`, `commodity`,
+            // `alias`, `D`, `year`, an indented sub-directive), is kept verbatim,
+            // so serialising never rewrites what we cannot interpret. A line
+            // at the margin opening with no word hledger reads is refused at
+            // its line instead, as hledger refuses it (`requireKnownDirective`).
             // A `D`, `commodity`, `decimal-mark`, `Y` or `year` line is read
             // for what it declares and kept verbatim all the same: learning
             // from a line is not the same as modelling it, and this one still
             // goes back byte for byte.
             // One it recognises and cannot read refuses the file at its line,
-            // and so does an indented line no block above it can own.
+            // and so does an indented line no block above it can own
+            // (`ownedLine`).
             try located(line: index + 1, entry: nil) { try declare(from: line, into: &style, year: &year) }
             try items.append(.directive(ownedLine(at: index, in: lines)))
             index += 1
