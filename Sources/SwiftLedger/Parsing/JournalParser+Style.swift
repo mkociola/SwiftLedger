@@ -75,16 +75,21 @@ extension JournalParser {
         }
         // Only a line at the margin is refused. An indented one is a
         // subdirective of the block above it, and hledger skips one it does
-        // not know under a `commodity` or an `account` block, so it is read
-        // for what it declares, as before, and refused for nothing but a
-        // `format` sample with no decimal mark, which hledger does read.
+        // not know under a `commodity` or an `account` block, so nothing but
+        // a `format` line is read from it, and that is refused for nothing
+        // but a sample with no decimal mark, which hledger does read.
         let refuses = !isIndented
         // hledger reads every line opening with `D` as a `D` directive, so
         // `Decimal-Mark ,` is a `D` with no gap after it, and hledger stops
         // there. Kept as a directive nobody reads, it declared no comma.
         if keyword == nil, refuses, trimmed.first == "D" { throw Self.unreadableDefault(trimmed) }
         guard let keyword else { return }
-        guard keyword != "format" || isIndented else { return }
+        // Indented, only `format` declares anything. An indented `D`,
+        // `commodity` or `decimal-mark` line is a subdirective hledger skips,
+        // and read here it declared a mark, or a default commodity, for every
+        // amount below the block that hledger reads by another (issue #105).
+        // At the margin, `format` is nothing hledger reads.
+        guard isIndented == (keyword == "format") else { return }
         let argument = trimmed.dropFirst(keyword.count)
 
         if keyword == "decimal-mark" {

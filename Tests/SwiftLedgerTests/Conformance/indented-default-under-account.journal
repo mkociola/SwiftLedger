@@ -1,0 +1,10 @@
+account Assets:Checking
+  D $1,000.00
+
+2024-01-01 Lunch
+    Expenses:Food    25.00
+    Assets:Checking
+
+2024-01-02 Coffee
+    Expenses:Food    12,50
+    Assets:Checking
