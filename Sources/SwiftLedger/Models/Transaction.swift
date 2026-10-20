@@ -170,7 +170,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
             postings: postings,
         )
         try Self.validateHeaderSyntax(
-            auxDate: auxDate, status: status, code: code, description: description, comment: comment,
+            status: status, code: code, description: description, comment: comment,
         )
         try Self.validatePostingSyntax(postings)
         try Self.validateCommoditySyntax(postings)

@@ -118,8 +118,11 @@ account Expenses:Utilities
 ; ── Dates written other ways ────────────────────────────────────────────────
 ; hledger writes a date with '-', '/' or '.' between its parts, the month and
 ; the day with one digit or two, and a secondary date may leave out its year,
-; which it then takes from the primary date. All three entries are read as
-; hledger reads them, and an edited one is written back as YYYY-MM-DD.
+; which it then takes from the primary date. The = stands directly between
+; the two dates, with no space on either side: after a space it opens the
+; description instead, and a space after it refuses the line, as in hledger.
+; All three entries are read as hledger reads them, and an edited one is
+; written back as YYYY-MM-DD.
 
 2024/3/4 Taxi from the station
     Expenses:Transport         $18.00

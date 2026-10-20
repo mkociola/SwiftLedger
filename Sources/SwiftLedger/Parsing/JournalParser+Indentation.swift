@@ -1,11 +1,16 @@
-// MARK: - Which indented lines outside an entry belong to something
+// MARK: - Reading the lines at the top level that no other branch reads
 
 import Foundation
 
 extension JournalParser {
-    /// The line at `index`, refused when it is indented and nothing above it
-    /// can own it, or when it stands at the margin and opens with no word
-    /// hledger reads (`requireKnownDirective`).
+    /// Reads the line at `index`, which no earlier branch of `parse` read, for
+    /// what it declares, and refuses one hledger refuses.
+    ///
+    /// At the margin the line is a directive. It is read for the style, mark
+    /// or year it states (`declare(from:into:year:)`), which refuses what
+    /// hledger cannot read, and then refused if it opens with no word hledger
+    /// reads at all (`requireKnownDirective`), in that order, so that `yearx
+    /// 2024` is refused as the year line hledger stops in.
     ///
     /// An indented line only reaches the top level of `parse` from outside
     /// every dated entry, since `parseTransaction` takes the ones under a
@@ -15,22 +20,32 @@ extension JournalParser {
     /// off from its entry, often one of nothing but spaces that an editor
     /// left in the middle of the entry. Kept as a directive, that posting was
     /// left out of every report without a word, where hledger refuses the
-    /// file at the line (issue #92), so the parser refuses it too.
-    func ownedLine(at index: Int, in lines: [String]) throws -> String {
+    /// file at the line (issue #92), so the parser refuses it too. A
+    /// subdirective is read only under a `commodity` block, where a `format`
+    /// line states the style and hledger refuses one with no sample amount
+    /// or with text after it (issue #106). Under every other block hledger
+    /// skips what it does not know, `format` included, and so does the
+    /// parser; read there, a `format` line under an `account` block declared
+    /// that account's commodity style (issue #111).
+    func declare(at index: Int, in lines: [String], into style: inout JournalStyleCollector, year: inout Int?) throws {
         let line = lines[index]
         guard let first = line.unicodeScalars.first, first == " " || first == "\t" else {
+            try declare(from: line, into: &style, year: &year)
             try requireKnownDirective(line, lineNumber: index + 1)
-            return line
+            return
         }
-        guard !indentedLineHasOwner(at: index, in: lines) else { return line }
-        throw LedgerError.parseError(
-            line: index + 1,
-            message: "This indented line belongs to no entry or directive above it",
-        )
+        guard let owner = indentedLineOwner(at: index, in: lines) else {
+            throw LedgerError.parseError(
+                line: index + 1,
+                message: "This indented line belongs to no entry or directive above it",
+            )
+        }
+        if owner == "commodity" { try declareFormat(from: line, into: &style) }
     }
 
-    /// Whether the block the indented line at `index` stands in is one that
-    /// takes indented lines, read upwards from the line above it.
+    /// The keyword of the block that owns the indented line at `index`, read
+    /// upwards from the line above it, or `nil` when no block above it takes
+    /// indented lines.
     ///
     /// The indented lines above are the block's own and are passed over, an
     /// indented comment among them. A blank line ends every block, and so
@@ -38,20 +53,20 @@ extension JournalParser {
     /// first of which is the line that opened the block. A line of nothing
     /// but spaces ends an entry, as it ends a dated one, but not a directive's
     /// block, which hledger reads straight past it.
-    private func indentedLineHasOwner(at index: Int, in lines: [String]) -> Bool {
+    private func indentedLineOwner(at index: Int, in lines: [String]) -> String? {
         var crossedWhitespaceLine = false
         for line in lines[..<index].reversed() {
-            if line.isEmpty { return false }
+            if line.isEmpty { return nil }
             guard let first = line.unicodeScalars.first, first == " " || first == "\t" else {
-                return ownsIndentedLines(line, acrossWhitespaceLine: crossedWhitespaceLine)
+                return blockKeyword(of: line, acrossWhitespaceLine: crossedWhitespaceLine)
             }
             if line.trimmingCharacters(in: .whitespaces).isEmpty { crossedWhitespaceLine = true }
         }
-        return false
+        return nil
     }
 
-    /// Whether a line at the margin opens a block of indented lines, as hledger
-    /// reads them.
+    /// The keyword of the block a line at the margin opens, `~` or `=` for
+    /// the entry forms, or `nil` when it opens none, as hledger reads them.
     ///
     /// The `account`, `commodity`, `payee` and `tag` directives take
     /// subdirectives on the lines below them. A periodic (`~`) or automated
@@ -64,13 +79,13 @@ extension JournalParser {
     /// A dated header is not in the list: `parseTransaction` has taken every
     /// line it owns, so the walk up reaches one only across the line that
     /// ended it.
-    private func ownsIndentedLines(_ line: String, acrossWhitespaceLine: Bool) -> Bool {
-        if line.hasPrefix("~") || line.hasPrefix("=") { return !acrossWhitespaceLine }
+    private func blockKeyword(of line: String, acrossWhitespaceLine: Bool) -> String? {
+        if line.hasPrefix("~") || line.hasPrefix("=") { return acrossWhitespaceLine ? nil : String(line.prefix(1)) }
         guard let keyword = ["account", "commodity", "payee", "tag"].first(where: {
             line.hasPrefix($0) && [" ", "\t"].contains(line.dropFirst($0.count).first)
-        }) else { return false }
-        guard keyword == "commodity" else { return true }
+        }) else { return nil }
+        guard keyword == "commodity" else { return keyword }
         let (sample, _) = splitPostingComment(String(line.dropFirst(keyword.count)))
-        return (sample ?? "").firstIndex(outsideQuotes: { ("0" ... "9").contains($0) }) == nil
+        return (sample ?? "").firstIndex(outsideQuotes: { ("0" ... "9").contains($0) }) == nil ? keyword : nil
     }
 }

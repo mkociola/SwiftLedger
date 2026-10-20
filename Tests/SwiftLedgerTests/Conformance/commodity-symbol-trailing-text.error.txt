@@ -1,0 +1,6 @@
+hledger: Error: commodity-symbol-trailing-text.journal:1:15:
+  |
+1 | commodity xyz abc
+  |               ^
+unexpected 'a'
+expecting '+', '-', ';', end of input, newline, or number

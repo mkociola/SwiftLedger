@@ -1,0 +1,6 @@
+hledger: Error: secondary-date-gap-after.journal:1:12:
+  |
+1 | 2024-01-08= 01-10 Rent
+  |            ^
+unexpected space
+expecting full or partial date
