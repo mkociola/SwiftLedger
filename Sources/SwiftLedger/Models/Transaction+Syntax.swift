@@ -24,7 +24,10 @@ extension Transaction {
     /// the serializer writes in front of a value is what decides whether the
     /// value is safe: a cleared entry described `* Lunch` is written
     /// `* * Lunch` and reads back as itself, and `(CHQ) (note) lunch` is a
-    /// code and a description. The description and the comment are refused
+    /// code and a description. A description opening with `=` is safe
+    /// wherever it stands: the serializer writes a space in front of it, and
+    /// a secondary date opens only at an `=` straight after the date (issue
+    /// #119). The description and the comment are refused
     /// with whitespace at either end rather than trimmed here, so that the
     /// caller is told and what is stored is what a reload returns; the parser
     /// does not trim a code, so a code may keep its spaces.
@@ -35,7 +38,6 @@ extension Transaction {
     /// read was trimmed. A code may hold a `;`, since it is read before the
     /// comment is looked for.
     static func validateHeaderSyntax(
-        auxDate: JournalDate?,
         status: ClearingStatus,
         code: String?,
         description: String,
@@ -57,12 +59,6 @@ extension Transaction {
             !description.hasPrefix("*") && !description.hasPrefix("!"), at: "description",
             rule: "with no status and no code in front of it, a description may not open with '*' or '!', "
                 + "which mark a status",
-        )
-        guard auxDate == nil else { return }
-        try require(
-            !description.hasPrefix("="), at: "description",
-            rule: "with nothing in front of it, a description may not open with '=', "
-                + "which introduces a secondary date",
         )
     }
 

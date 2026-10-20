@@ -623,8 +623,7 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
     /// the field the error has to name. The rules are the header grammar's:
     /// a code runs to the first `)`; with no code in front of it a
     /// description opening `(` is a code, closed or not; with no status or code a
-    /// leading `*` or `!` is the status; with nothing at all in front of it a
-    /// leading `=` introduces a secondary date; and a `;` past the code opens
+    /// leading `*` or `!` is the status; and a `;` past the code opens
     /// the comment. A description or comment the parser would trim is
     /// refused too, so what is stored is what a reload returns.
     @Test(arguments: [
@@ -635,7 +634,6 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         (HeaderFields(description: "* Lunch"), "description"),
         (HeaderFields(description: "! Lunch"), "description"),
         (HeaderFields(description: "*"), "description"),
-        (HeaderFields(description: "= Lunch"), "description"),
         (HeaderFields(status: .cleared, code: "CHQ", description: "Lunch  ; with client"), "description"),
         (HeaderFields(description: "Lunch\t\t; with client"), "description"),
         (HeaderFields(description: " Lunch"), "description"),
@@ -696,6 +694,8 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         HeaderFields(status: .cleared, description: "= Lunch"),
         HeaderFields(code: "CHQ", description: "= Lunch"),
         HeaderFields(auxDate: makeDate(2024, 1, 2), description: "= Lunch"),
+        HeaderFields(description: "= Lunch"),
+        HeaderFields(description: "=01-10 Lunch"),
         HeaderFields(code: " CHQ ", description: "Lunch"),
         HeaderFields(code: "", description: "Lunch"),
         HeaderFields(description: ""),

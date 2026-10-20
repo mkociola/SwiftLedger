@@ -28,13 +28,16 @@ extension JournalParser {
     /// The dates have to end where the header's next field can begin, at a
     /// space, a tab or the end of the line, so `2024-01-08x` is refused
     /// rather than read as a date and a description of `x`, as hledger
-    /// refuses it.
+    /// refuses it. The secondary date follows an `=` that follows the primary
+    /// date directly, and follows the `=` directly, as hledger reads it:
+    /// `2024-01-08 = 01-10 Rent` has no secondary date and is described
+    /// `= 01-10 Rent`, and `2024-01-08= 01-10 Rent` is refused at the space.
+    /// Both used to read a secondary date across the gaps (issue #119).
     func consumeDates(_ rest: inout Substring, year: Int?, lineNumber: Int) throws -> (JournalDate, JournalDate?) {
         let date = try consumeDate(&rest, year: year, lineNumber: lineNumber)
         var auxDate: JournalDate?
-        let afterGap = rest.drop { $0 == " " || $0 == "\t" }
-        if afterGap.first == "=" {
-            rest = afterGap.dropFirst().drop { $0 == " " || $0 == "\t" }
+        if rest.first == "=" {
+            rest = rest.dropFirst()
             auxDate = try consumeDate(&rest, year: date.year, lineNumber: lineNumber)
         }
         guard rest.first.map({ $0 == " " || $0 == "\t" }) ?? true else {

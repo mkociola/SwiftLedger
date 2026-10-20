@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Supported grammar:
 /// ```
-/// DATE [= AUXDATE] [* | !] [(CODE)] DESCRIPTION [  ; comment]
+/// DATE[=AUXDATE] [* | !] [(CODE)] DESCRIPTION [  ; comment]
 ///     [* | !] ACCOUNT_NAME  [AMOUNT] [  ; comment]
 ///     [* | !] (ACCOUNT_NAME)  [AMOUNT] [  ; comment]      ; virtual
 ///     [* | !] [ACCOUNT_NAME]  [AMOUNT] [  ; comment]      ; balanced virtual
