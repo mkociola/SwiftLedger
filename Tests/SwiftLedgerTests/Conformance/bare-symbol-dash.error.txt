@@ -1,0 +1,6 @@
+hledger: Error: bare-symbol-dash.journal:2:27:
+  |
+2 |     Expenses:Rent    100 E-R
+  |                           ^
+unexpected '-'
+expecting ';', '=', end of input, ledger-style lot cost, ledger-style lot date, ledger-style lot note, newline, transaction price, or valuation expression

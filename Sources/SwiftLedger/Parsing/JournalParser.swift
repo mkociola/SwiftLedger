@@ -24,7 +24,9 @@ import Foundation
 ///   commodity called `e5`. A symbol holding a space, a digit or punctuation
 ///   is written in double quotes, which are no part of the name: `10 "AAPL
 ///   2"` is ten units of `AAPL 2`, as it is in hledger, and a rebuilt amount
-///   in it is written with the quotes back on.
+///   in it is written with the quotes back on. Written bare, such a symbol
+///   is no amount here either: `100 E R` and `E*R100` refuse the file, as
+///   they do in hledger (`isBareSymbol`).
 /// - Decimal marks: both marks are written `.` or `,` depending on where the
 ///   file comes from, so which is which is read out of the number, as hledger
 ///   reads it. Two different marks make the last one the decimal mark, so

@@ -1,0 +1,71 @@
+2024-01-01 Symbol 1
+    Expenses:Rent    100 E,R
+    Assets:Checking
+
+2024-01-02 Symbol 2
+    Expenses:Rent    100 E(R)
+    Assets:Checking
+
+2024-01-03 Symbol 3
+    Expenses:Rent    100 E!R
+    Assets:Checking
+
+2024-01-04 Symbol 4
+    Expenses:Rent    100 E#R
+    Assets:Checking
+
+2024-01-05 Symbol 5
+    Expenses:Rent    100 E/R
+    Assets:Checking
+
+2024-01-06 Symbol 6
+    Expenses:Rent    100 E:R
+    Assets:Checking
+
+2024-01-07 Symbol 7
+    Expenses:Rent    100 E'R
+    Assets:Checking
+
+2024-01-08 Symbol 8
+    Expenses:Rent    100 E%R
+    Assets:Checking
+
+2024-01-09 Symbol 9
+    Expenses:Rent    100 E_R
+    Assets:Checking
+
+2024-01-10 Symbol 10
+    Expenses:Rent    100 E$R
+    Assets:Checking
+
+2024-01-11 Symbol 11
+    Expenses:Rent    E(R)100
+    Assets:Checking
+
+2024-01-12 Symbol 12
+    Expenses:Rent    E!R100
+    Assets:Checking
+
+2024-01-13 Symbol 13
+    Expenses:Rent    E/R100
+    Assets:Checking
+
+2024-01-14 Symbol 14
+    Expenses:Rent    E'R100
+    Assets:Checking
+
+2024-01-15 Symbol 15
+    Expenses:Rent    E_R100
+    Assets:Checking
+
+2024-01-16 Symbol 16
+    Expenses:Rent    100 "E R"
+    Assets:Checking
+
+2024-01-17 Symbol 17
+    Expenses:Rent    "E*R"100
+    Assets:Checking
+
+2024-01-18 Symbol 18
+    Expenses:Rent    100 "E-R"
+    Assets:Checking

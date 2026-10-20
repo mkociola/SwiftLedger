@@ -1,0 +1,6 @@
+hledger: Error: bare-symbol-star-prefix.journal:2:23:
+  |
+2 |     Expenses:Rent    E*R100
+  |                       ^
+unexpected '*'
+expecting '+', '-', or number
