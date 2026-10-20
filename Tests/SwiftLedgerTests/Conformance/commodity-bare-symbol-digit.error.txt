@@ -1,0 +1,6 @@
+hledger: Error: commodity-bare-symbol-digit.journal:1:13:
+  |
+1 | commodity E1R
+  |             ^
+unexpected 'R'
+expecting ';', digit, end of input, exponent, ledger-style lot cost, ledger-style lot date, ledger-style lot note, newline, space, transaction price, or valuation expression

@@ -1,0 +1,6 @@
+hledger: Error: commodity-bare-symbol-point.journal:1:13:
+  |
+1 | commodity E.R
+  |             ^
+unexpected 'R'
+expecting digits

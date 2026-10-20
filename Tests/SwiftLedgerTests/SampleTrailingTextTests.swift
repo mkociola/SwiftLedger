@@ -8,17 +8,23 @@ import Testing
 /// the style it meant to state without a word (issue #106). Under every
 /// other block hledger skips an indented line, `format` included, and so
 /// does the parser now, where it used to read a `format` line under an
-/// `account` block as that account's commodity style (issue #111). Each
-/// shape is hledger 1.52.4's reading, pinned in `commodity-sample-trailing-text`,
-/// `commodity-symbol-trailing-text`, `format-no-amount`, `format-under-account`
-/// and `commodity-symbol-forms`.
+/// `account` block as that account's commodity style (issue #111). A symbol
+/// alone is held to the rule for a bare symbol in an amount, so `commodity
+/// E-R` is refused as hledger refuses it, where the parser loaded it and
+/// declared nothing, and `commodity "E-R"` loads. Each shape is hledger
+/// 1.52.4's reading, pinned in `commodity-sample-trailing-text`,
+/// `commodity-symbol-trailing-text`, the `commodity-bare-symbol-*` journals,
+/// `format-no-amount`, `format-under-account` and `commodity-symbol-forms`.
 @Suite("sample lines hledger cannot read") struct SampleTrailingTextTests {
     /// Each is refused at the line it stands on, a `format` line with other
-    /// subdirectives above it included.
+    /// subdirectives above it included, and a symbol alone holding a
+    /// character hledger quotes for.
     @Test(arguments: [
         "commodity xyz abc", "commodity $1,000.00 x", "commodity € x", "commodity \"AAPL 2\" x",
         "commodity xyz\tabc", "commodity €\n  format xyz", "commodity €\n  format $1,000.00 x",
         "commodity €\n  format", "commodity €\n  note euro\n  format",
+        "commodity E-R", "commodity E*R", "commodity E{R", "commodity E.R", "commodity E1R",
+        "commodity €\ncommodity E=R",
     ])
     func `a commodity or format line with text hledger cannot read refuses the file`(head: String) {
         let text = "\(head)\n\n2024-01-01 Pay\n    Assets:Checking  €1.00\n    Income:Salary\n"
@@ -36,9 +42,10 @@ import Testing
     /// periodic entry's posting to an account named `format`. Every one goes
     /// back as it came.
     @Test(arguments: [
-        "commodity \"AAPL 2\"", "commodity m²", "commodity xyz ; note", "commodity $1,000.00  ; note",
-        "commodity USD 1,000.00", "D $1,000.00 x", "account Foo\n  format xyz", "account Foo\n  format €1000",
-        "payee Foo\n  format", "commodity €\n  note x\n  format €1.000,00", "~ monthly\n    format  €1000",
+        "commodity \"AAPL 2\"", "commodity \"E-R\"", "commodity m²", "commodity E(R)", "commodity xyz ; note",
+        "commodity $1,000.00  ; note", "commodity USD 1,000.00", "D $1,000.00 x", "account Foo\n  format xyz",
+        "account Foo\n  format €1000", "payee Foo\n  format", "commodity €\n  note x\n  format €1.000,00",
+        "~ monthly\n    format  €1000",
     ])
     func `a line hledger reads still loads and goes back as it came`(head: String) throws {
         let text = "\(head)\n\n2024-01-01 Pay\n    Assets:Checking  €1.00\n    Income:Salary\n"

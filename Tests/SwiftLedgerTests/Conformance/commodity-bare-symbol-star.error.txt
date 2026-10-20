@@ -1,0 +1,6 @@
+hledger: Error: commodity-bare-symbol-star.journal:1:12:
+  |
+1 | commodity E*R
+  |            ^
+unexpected '*'
+expecting '+', '-', ';', end of input, newline, or number

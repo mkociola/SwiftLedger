@@ -319,11 +319,15 @@ end comment
 ; fund below is ten units of a commodity called Vanguard 500, priced in
 ; dollars. An entry SwiftLedger rebuilds in that commodity gets the quotes
 ; back, since the bare name would not read, and a symbol that needs none,
-; such as VTI above, is written bare.
+; such as VTI above, is written bare. A commodity line names such a symbol in
+; quotes too: bare, the point in BRK.B would read as a decimal mark, and the
+; line is refused, here and in hledger.
 
 2024-03-20 Bought into an index fund
     Assets:Funds           10 "Vanguard 500" @ $50.00
     Assets:Checking        -$500.00
+
+commodity "BRK.B"
 
 ; ── A default commodity ─────────────────────────────────────────────────────
 ; A D line names the commodity a bare number is in, from the line it stands
