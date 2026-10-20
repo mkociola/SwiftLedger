@@ -1,0 +1,6 @@
+hledger: Error: bare-symbol-space.journal:2:28:
+  |
+2 |     Expenses:Rent    100 E R
+  |                            ^
+unexpected 'R'
+expecting ';', '=', end of input, ledger-style lot cost, ledger-style lot date, ledger-style lot note, newline, transaction price, or valuation expression

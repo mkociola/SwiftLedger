@@ -1,0 +1,6 @@
+hledger: Error: bare-symbol-brace.journal:2:29:
+  |
+2 |     Expenses:Rent    100 E{R
+  |                             ^
+unexpected newline
+expecting '+', '-', or number

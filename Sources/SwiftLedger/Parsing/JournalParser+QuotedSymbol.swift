@@ -27,22 +27,37 @@ extension JournalParser {
         return (String(content[..<closing]), content[content.index(after: closing)...])
     }
 
-    /// The symbol as a posting line writes it: in double quotes when it holds
-    /// a character a bare symbol cannot, bare otherwise.
-    ///
-    /// The characters are the ones hledger's `print` quotes for, a digit,
-    /// whitespace, or one of `-+.@*{}=`, and the comma, which opens a number
-    /// here where hledger reads it as part of a bare symbol. Quoting a symbol
-    /// hledger would write bare costs nothing, since it reads the quoted form
-    /// the same, where a bare symbol it does not read leaves a file it
-    /// refuses. The quote and the `;` are not in the list because no quoting
-    /// writes them; `Transaction.init` refuses a symbol holding either.
-    static func written(symbol: String) -> String {
-        let needsQuotes = symbol.contains { $0.isASCIIDigit || $0.isWhitespace || quotedPunctuation.contains($0) }
-        return needsQuotes ? "\"\(symbol)\"" : symbol
+    /// Whether a symbol can be written bare and read back whole, which is
+    /// hledger's rule for an unquoted symbol: no digit, no whitespace, and
+    /// none of `-+.@*{}="`. Read bare, each of those is something else, a
+    /// number, the end of the symbol, a price, an assertion or a quote, so
+    /// `100 E R`, `E*R100` and `100 E-R` are no amount, as they are none in
+    /// hledger, and a rebuilt amount writes such a symbol in quotes (issue
+    /// #112). Every other character is the symbol's own in both tools:
+    /// `E(R)`, `E!R`, `E/R`, `E:R`, `E'R` and `E,R` read bare, the last
+    /// behind the number alone, since a comma opens a number in front of one
+    /// here. The `;` is not in the list because the comment has opened
+    /// before a symbol is read, and a stray `\r` is left in for
+    /// `Transaction.init` to refuse by name, as it refuses one in every
+    /// field, which says more than an invalid amount would.
+    static func isBareSymbol(_ symbol: String) -> Bool {
+        !symbol.contains { $0 != "\r" && ($0.isASCIIDigit || $0.isWhitespace || nonsimple.contains($0)) }
     }
 
-    private static let quotedPunctuation: Set<Character> = ["-", "+", ".", ",", "@", "*", "{", "}", "="]
+    private static let nonsimple: Set<Character> = ["-", "+", ".", "@", "*", "{", "}", "=", "\""]
+
+    /// The symbol as a posting line writes it: in double quotes when a bare
+    /// symbol could not hold it, bare otherwise.
+    ///
+    /// The comma is quoted as well, since it opens a number here where
+    /// hledger reads it as part of a bare symbol. Quoting a symbol hledger
+    /// would write bare costs nothing, since it reads the quoted form the
+    /// same, where a bare symbol it does not read leaves a file it refuses.
+    /// A symbol holding a quote or a `;` is one no quoting writes;
+    /// `Transaction.init` refuses it before it gets here.
+    static func written(symbol: String) -> String {
+        isBareSymbol(symbol) && !symbol.contains(",") ? symbol : "\"\(symbol)\""
+    }
 }
 
 extension StringProtocol {
