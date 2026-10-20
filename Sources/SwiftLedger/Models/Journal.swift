@@ -292,7 +292,8 @@ public struct Journal: Sendable, Codable {
         return (opening, inBlock)
     }
 
-    /// Removes the first occurrence of `item` from the journal.
+    /// Removes the first occurrence of `item` from the journal, and with an
+    /// `account` directive the indented lines under it (`removeItem(at:)`).
     ///
     /// Equality is value-based: if the journal contains two structurally
     /// identical items, only the first one is removed.
@@ -302,8 +303,27 @@ public struct Journal: Sendable, Codable {
     @discardableResult
     public mutating func remove(_ item: JournalItem) -> Bool {
         guard let idx = items.firstIndex(of: item) else { return false }
-        items.remove(at: idx)
+        removeItem(at: idx)
         return true
+    }
+
+    /// Removes the item at `index`, and with an `account` directive the
+    /// indented lines under it, which are its subdirectives: a `note`, a
+    /// `type`, an indented comment or a line of nothing but spaces among
+    /// them. They are `.directive` and `.comment` items of their own, as the
+    /// parser keeps them, and left behind they stood under whatever came
+    /// before the directive: under another directive, a line hledger refuses
+    /// and so does the parser, and under an entry, a posting nobody wrote
+    /// that the next parse booked (issue #117). A blank line ends the block,
+    /// as it does for the parser, so the next declaration's lines stay. The
+    /// directive handed back does not carry them; an undo restores the line
+    /// alone.
+    private mutating func removeItem(at index: Int) {
+        guard case .accountDirective = items.remove(at: index) else { return }
+        let indented = { (text: String) in text.unicodeScalars.first == " " || text.unicodeScalars.first == "\t" }
+        while index < items.count, let text = items[index].verbatimLine, indented(text) {
+            items.remove(at: index)
+        }
     }
 
     /// Replaces the first occurrence of `item` with `replacement`, in place.
@@ -323,14 +343,16 @@ public struct Journal: Sendable, Codable {
         return true
     }
 
-    /// Removes the `account` directive declaring `name` and returns it.
+    /// Removes the `account` directive declaring `name`, with the indented
+    /// lines under it (`removeItem(at:)`), and returns it.
     ///
     /// Keyed by name, so the caller neither has to know the directive's `type`
     /// and `comment` to remove it, nor loses them by removing it: handed back
     /// to `append(_:)`, the returned value reproduces the line verbatim, where
     /// an appended `account` directive lands (the end of the journal, or in front of a
     /// block comment left open there) and not at its old position.
-    /// Removing by value through `remove(_:)` can do neither.
+    /// Removing by value through `remove(_:)` can do neither. The subdirectives
+    /// are not carried: an undo restores the declaration without them.
     ///
     /// If two lines declare the same account, only the first is removed.
     ///
@@ -339,9 +361,20 @@ public struct Journal: Sendable, Codable {
     public mutating func removeAccountDirective(named name: String) -> AccountDirective? {
         for (index, item) in items.enumerated() {
             guard case let .accountDirective(directive) = item, directive.name == name else { continue }
-            items.remove(at: index)
+            removeItem(at: index)
             return directive
         }
         return nil
+    }
+}
+
+private extension JournalItem {
+    /// The text of a line kept as it came, a directive or a full-line
+    /// comment, or `nil` for an item the parser modelled.
+    var verbatimLine: String? {
+        switch self {
+        case let .directive(text), let .comment(text): text
+        default: nil
+        }
     }
 }
