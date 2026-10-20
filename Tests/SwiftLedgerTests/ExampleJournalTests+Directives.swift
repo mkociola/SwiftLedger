@@ -6,9 +6,8 @@ import Testing
 /// so that changes made side by side add to different files rather than all
 /// growing one past the length SwiftLint allows.
 extension ExampleJournalTests {
-    /// `€1.000` is the one shape a number cannot settle, and the directive
-    /// above the entry is what settles it: a thousand euros, as hledger reads
-    /// it, where the parser used to read one.
+    /// `€1.000` is one euro where nothing is declared, and the directive
+    /// above the entry is what makes it a thousand, as hledger reads it.
     @Test
     func `the example's commodity directive settles a whole thousand`() throws {
         let journal = try JournalParser().parse(Self.exampleText)
