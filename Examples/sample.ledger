@@ -323,3 +323,21 @@ D $1000.00
 2024-03-21 Lunch, written without a symbol
     Expenses:Food:Restaurants  25.00
     Assets:Checking
+
+; ── The mark in force where an entry stands ─────────────────────────────────
+; A decimal-mark line speaks from where it stands to the next one, so a file
+; can switch marks part way through, as this one does for the refund below,
+; copied from a statement that writes euros with a point. An entry
+; SwiftLedger rebuilds is written with the mark in force where it stands, not
+; the last one the file declares: the refund comes back €4.50 under its
+; decimal-mark . line, where €4,50 would read as four hundred and fifty, here
+; and in hledger. The commodity line above still speaks for every euro entry
+; between it and the switch, and the last line puts the comma back.
+
+decimal-mark .
+
+2024-03-22 Refund for the coffee in Vienna
+    Assets:EuroAccount     €4.50
+    Expenses:Food:Restaurants
+
+decimal-mark ,
