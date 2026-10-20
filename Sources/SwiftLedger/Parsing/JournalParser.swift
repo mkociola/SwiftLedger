@@ -49,6 +49,10 @@ import Foundation
 ///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
 ///   balancing; assertions are preserved but never checked.
 /// - Status: `*` = cleared, `!` = pending
+/// - Code: `(CODE)` after the status, running to the first `)` wherever on
+///   the line that is, as hledger reads it. A `(` there with no `)` after it
+///   on the line refuses the file, as hledger refuses it: `(CHQ1 Rent` is a
+///   typo, not a payee.
 /// - Comments: `;`, `#`, `*`, `%` or `|` at line start; inline `  ;` after
 ///   2+ spaces. On a posting line the two-space rule ends the account name
 ///   rather than the amount, so once a name has ended, a `;` opens the
@@ -332,13 +336,17 @@ public struct JournalParser {
             rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
         }
 
-        // Optional (CODE)
+        // Optional (CODE). A `(` here opens a code, and one with no `)`
+        // after it on the line refuses the line, as hledger refuses it: a
+        // missing `)` is a typo, and kept, the whole of it became the payee
+        // without a word (issue #101).
         var code: String?
         if rest.hasPrefix("(") {
-            if let closeIdx = rest.firstIndex(of: ")") {
-                code = String(rest[rest.index(after: rest.startIndex) ..< closeIdx])
-                rest = String(rest[rest.index(after: closeIdx)...]).trimmingCharacters(in: .whitespaces)
+            guard let closeIdx = rest.firstIndex(of: ")") else {
+                throw LedgerError.parseError(line: lineNumber, message: "Expected ')' to close the transaction code")
             }
+            code = String(rest[rest.index(after: rest.startIndex) ..< closeIdx])
+            rest = String(rest[rest.index(after: closeIdx)...]).trimmingCharacters(in: .whitespaces)
         }
 
         // The description runs to the first `;`, however few spaces precede

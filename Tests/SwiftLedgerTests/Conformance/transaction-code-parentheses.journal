@@ -1,0 +1,15 @@
+2024-01-01 Rent (early
+    Expenses:Rent    $1.00
+    Assets:Checking
+
+2024-01-02 (CHQ1) Rent (early
+    Expenses:Rent    $2.00
+    Assets:Checking
+
+2024-01-03 ()Rent
+    Expenses:Rent    $3.00
+    Assets:Checking
+
+2024-01-04 ( CHQ1 ) Rent
+    Expenses:Rent    $4.00
+    Assets:Checking

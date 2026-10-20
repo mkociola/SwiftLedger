@@ -11,9 +11,10 @@ extension Transaction {
     /// reads it back by position, as hledger does: `=` straight after the
     /// date opens a secondary date; `*` or `!` where the status would be is
     /// the status; `(` where the code would be opens a code that runs to the
-    /// first `)`, wherever on the line that is; past the code, the first `;`
-    /// opens the inline comment, however few spaces precede it; the rest,
-    /// trimmed, is the description.
+    /// first `)`, wherever on the line that is, and with no `)` on the line
+    /// the parser refuses it; past the code, the first `;` opens the inline
+    /// comment, however few spaces precede it; the rest, trimmed, is the
+    /// description.
     /// A value that looks like the syntax in front of it is read as that
     /// syntax, and the entry comes back as a different entry, with nothing
     /// downstream to object, or the file SwiftLedger itself has just written
@@ -48,10 +49,8 @@ extension Transaction {
             return
         }
         try require(
-            !(description.hasPrefix("(") && (description.contains(")") || comment?.contains(")") == true)),
-            at: "description",
-            rule: "with no code in front of it, a description may not open with '(' when a ')' follows "
-                + "on the line, which is how a code is written",
+            !description.hasPrefix("("), at: "description",
+            rule: "with no code in front of it, a description may not open with '(', which opens a code",
         )
         guard status == .unmarked else { return }
         try require(
