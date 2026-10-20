@@ -122,11 +122,10 @@ extension JournalParser {
         guard let parsed = try? parseShapedAmount(sample, lineNumber: 0, in: style) else { return }
         // hledger asks every sample for a decimal mark, as the directives
         // above it read the sample, and stops at one with none: `€1000`, or
-        // `€1.000` under `decimal-mark ,`. A lone mark the tie-break read is
-        // not that case, since hledger reads it as the decimal mark. Indented,
-        // only `format` is asked, as the one line a `commodity` block reads.
+        // `€1.000` under `decimal-mark ,`. Indented, only `format` is asked,
+        // as the one line a `commodity` block reads.
         let shape = parsed.shape
-        if shape.decimalMark == nil, shape.isSettled, refuses || keyword == "format" {
+        if shape.decimalMark == nil, refuses || keyword == "format" {
             let example = "as in '\(keyword) $1000.' or '\(keyword) €1.000,00'"
             throw LedgerError.unreadableDirective(trimmed, reason: "its sample shows no decimal mark, \(example)")
         }

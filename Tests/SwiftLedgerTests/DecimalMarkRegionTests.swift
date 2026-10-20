@@ -23,9 +23,7 @@ import Testing
 
     static let layouts: [Layout] = [
         // The journal from the issue: the comma is in force where the entry
-        // stands, and the point only below it. The fourth digit is the
-        // padding `CommodityFormat.readsAsGrouped` adds against the
-        // tie-break; what this pins is the mark.
+        // stands, and the point only below it.
         Layout(journal: """
         decimal-mark ,
 
@@ -38,7 +36,7 @@ import Testing
         2024-02-01 fees
             expenses:fees    $1.50
             assets:bank     $-1.50
-        """, written: "€1,1250"),
+        """, written: "€1,125"),
         // The reverse layout: the file ends on the comma, and the entry
         // stands under the point.
         Layout(journal: """
@@ -68,7 +66,7 @@ import Testing
         2024-02-01 fees
             expenses:fees    $1.50
             assets:bank     $-1.50
-        """, symbol: "$", written: "$1,1250"),
+        """, symbol: "$", written: "$1,125"),
         // A commodity the file has no amount in is written by the mark in
         // force too, rather than by the point of the default style.
         Layout(journal: """
@@ -79,10 +77,9 @@ import Testing
             assets:bank     €-1000
 
         decimal-mark .
-        """, symbol: "$", written: "$1,1250"),
+        """, symbol: "$", written: "$1,125"),
         // Above every directive nothing is in force and the file's own mark
-        // stands. A comma amount is never written in the one shape the
-        // tie-break reads the other way, so it reads back right there too.
+        // stands, and a lone mark divides there, so it reads back right too.
         Layout(journal: """
         2024-01-01 rent
             expenses:rent    €1000
@@ -93,7 +90,7 @@ import Testing
         2024-02-01 fees
             expenses:fees    €1,50
             assets:bank     €-1,50
-        """, written: "€1,1250"),
+        """, written: "€1,125"),
         // A directive inside a `comment` block is text the parser reads
         // nothing from, so it declares nothing for the entry below it.
         Layout(journal: """
@@ -106,7 +103,7 @@ import Testing
         2024-01-01 rent
             expenses:rent    €1000
             assets:bank     €-1000
-        """, written: "€1,1250"),
+        """, written: "€1,125"),
     ]
 
     /// An eighth rebuilt where the rent entry stands is written with the mark

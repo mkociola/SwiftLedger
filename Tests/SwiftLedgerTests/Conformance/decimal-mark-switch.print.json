@@ -14,8 +14,8 @@
         "amounts": [
           {
             "commodity": "€",
-            "mantissa": 11250,
-            "places": 4,
+            "mantissa": 1125,
+            "places": 3,
             "cost": null
           }
         ],
@@ -29,8 +29,8 @@
         "amounts": [
           {
             "commodity": "€",
-            "mantissa": -11250,
-            "places": 4,
+            "mantissa": -1125,
+            "places": 3,
             "cost": null
           }
         ],

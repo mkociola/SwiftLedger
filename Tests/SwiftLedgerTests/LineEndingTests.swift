@@ -176,7 +176,7 @@ private func shape(of journal: Journal) -> [JournalItem] {
 
     /// A style directive on such a line is still read for what it declares,
     /// as hledger reads it: dropped without a word, it would leave the amounts
-    /// below to the tie-break, and `€1.000` would be one euro rather than a
+    /// below undeclared, and `€1.000` would be one euro rather than a
     /// thousand.
     @Test(arguments: ["commodity €1.000,00", "D €1.000,00", "decimal-mark ,"])
     func `a directive with a stray carriage return still declares its style`(directive: String) throws {

@@ -8,8 +8,8 @@ import Testing
 /// as one euro, and the first edit wrote that one euro back in the declared
 /// style (issue #33). hledger reads `commodity`, `D` and `decimal-mark`
 /// directives for this, from the line each stands on, and so does the parser
-/// now. Without a directive the reading is the one the library has always
-/// had, which `AmountValidationTests` pins.
+/// now. Without a directive a lone mark divides, as hledger reads it, which
+/// `UndeclaredLoneMarkTests` pins.
 @Suite("decimal mark directives") struct DecimalMarkDirectiveTests {
     /// Every posting amount in the file, in order.
     static func quantities(in text: String) throws -> [Decimal] {
@@ -223,7 +223,7 @@ import Testing
     /// from reading as a group mark. Declared, the thousands have no places
     /// at all, and the rebuilt amount is written as the file writes one.
     @Test
-    func `a rebuilt amount in a declared file is not padded against the tie-break`() throws {
+    func `a rebuilt amount in a declared file is written to the declared places`() throws {
         var journal = try JournalParser().parse("""
         decimal-mark ,
 
@@ -280,10 +280,7 @@ import Testing
         #expect(replaced)
 
         let written = JournalSerializer().serialize(journal)
-        // The fourth digit is the padding `CommodityFormat.readsAsGrouped`
-        // adds against the tie-break. The directive makes it unnecessary, and
-        // it is harmless; what this pins is the mark.
-        #expect(written.contains("\(symbol)1,1250"))
+        #expect(written.contains("\(symbol)1,125"))
         let reparsed = try #require(JournalParser().parse(written).transactions.first)
         #expect(reparsed.postings.map(\.amount.quantity) == [eighth, -eighth])
     }

@@ -20,10 +20,10 @@ import Foundation
 /// records. `JournalParser` watches how each commodity is written and hands
 /// `Journal.commodityFormats` the house style it found; `JournalSerializer`
 /// writes a rebuilt posting in that style. The style does not get the last
-/// word on one thing: a comma amount is never written in a shape the reader
-/// would take the other way round, so `render` writes a place more or a group
-/// less rather than a number that changes value on its way back in. The two
-/// rules compose:
+/// word on one thing: a grouped thousand with no fraction is never written
+/// as the lone mark with three digits after it that reads back as one, so
+/// `render` writes that one number ungrouped rather than a number that
+/// changes value on its way back in. The two rules compose:
 ///
 /// - a transaction nobody touched is replayed from `Transaction.sourceText`,
 ///   byte for byte, and never consults this at all;
@@ -185,45 +185,25 @@ public struct CommodityFormat: Sendable, Codable, Hashable {
             integerDigits = grouping(integerDigits, hasFraction: !fractionDigits.isEmpty)
         }
         guard !fractionDigits.isEmpty else { return integerDigits }
-        if readsAsGrouped(integer: integerDigits, fraction: fractionDigits) { fractionDigits += "0" }
         return "\(integerDigits)\(decimalMark)\(fractionDigits)"
     }
 
-    /// Whether the number about to be written would be read back as a grouped
-    /// integer rather than as the fraction it is.
+    /// The integer part in digit groups, unless grouping it would write a
+    /// lone mark with exactly three digits after it.
     ///
-    /// A lone mark with exactly three digits after it is the one shape no
-    /// number settles, and the reading kept for it is ledger-cli's, where `,`
-    /// groups: an eighth of a euro written `12,125` comes back as twelve
-    /// thousand odd. A fourth digit is the smallest thing that makes the
-    /// number say which mark it wrote, and `12,1250` is twelve and an eighth
-    /// here, in hledger under a comma declaration, and in ledger-cli told to
-    /// read commas. A point never needs it, because the same tie-break already
-    /// reads a point as dividing, and an integer part of nothing but zeros
-    /// never needs it either, because nothing groups a zero and `0,125`
-    /// settles itself.
-    private func readsAsGrouped(integer: String, fraction: String) -> Bool {
-        decimalMark == ","
-            && fraction.count == 3
-            && !integer.contains(groupMark)
-            && !integer.allSatisfy { $0 == "0" }
-    }
-
-    /// The integer part in digit groups, unless grouping it would write that
-    /// same unsettled shape the other way round.
-    ///
-    /// A file that divides with `,` groups with `.`, so a thousand with no
-    /// fraction behind it comes out `1.000`, which the tie-break reads as one.
-    /// The grouping is what makes the shape, so a number that would show one
-    /// group and nothing else goes ungrouped, exactly as every number under a
-    /// thousand in the same file does; two groups are unambiguous (`1.000.000`
-    /// has no fraction to be), and so is any amount with a fraction, which
-    /// writes both marks and says which is which. A file that groups with `,`
-    /// never meets this, since `1,000` already reads as a thousand.
+    /// A thousand with no fraction behind it would come out `1,000` or
+    /// `1.000`, which hledger and this parser read as one where nothing is
+    /// declared. The grouping is what makes the shape, so a number that would
+    /// show one group and nothing else goes ungrouped, exactly as every number
+    /// under a thousand in the same file does; two groups are unambiguous
+    /// (`1,000,000` has no fraction to be), and so is any amount with a
+    /// fraction, which writes both marks and says which is which. hledger
+    /// prints such a number with a trailing decimal mark, `$1,000.`, which
+    /// reads back the same way; the ungrouped form is what this library
+    /// already wrote for a file grouping with the point (issue #83).
     private func grouping(_ digits: String, hasFraction: Bool) -> String {
         let grouped = Self.grouped(digits, by: groupMark)
-        guard groupMark == ".", !hasFraction,
-              grouped.count(where: { $0 == groupMark }) == 1 else { return grouped }
+        guard !hasFraction, grouped.count(where: { $0 == groupMark }) == 1 else { return grouped }
         return digits
     }
 
