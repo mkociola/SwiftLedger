@@ -263,13 +263,19 @@ struct JournalStyleCollector {
                 // Ties, and files with no negative prefixed amount at all, keep
                 // the placement SwiftLedger has always written.
                 signPrecedesCommodity: (signFirst[commodity] ?? 0) >= (signAfterCommodity[commodity] ?? 0),
-                // A declared reading mark outranks the vote. Every amount
-                // below the directive is read by it, so a rebuilt amount
-                // written with the other mark reads back wrong: in a file of
-                // `€1000` under `decimal-mark ,`, nothing votes, and an
-                // eighth written `€1.125` came back as eleven hundred odd.
-                decimalMark: declaredDecimalMark(for: commodity)
-                    ?? Self.mostCommonMark(decimalMarks[commodity] ?? [:]),
+                // The mark the amounts were read with, and so the one a
+                // rebuilt amount among them is written with. A settled
+                // amount votes by the mark the directive above it read it
+                // with, so a declaration speaks here through its amounts;
+                // only where none voted, in a file of `€1000` under
+                // `decimal-mark ,`, does it speak for itself, since an
+                // eighth written `€1.125` there came back as eleven hundred
+                // odd. One answer for the whole file: a rebuilt entry is
+                // written by the directive in force where it stands
+                // (`JournalSerializer`, issue #80), which differs from this
+                // in a file that switches marks part way through.
+                decimalMark: decimalMarks[commodity].map(Self.mostCommonMark)
+                    ?? declaredDecimalMark(for: commodity) ?? ".",
                 // A tie goes behind the number, where `Amount.init` puts a
                 // commodity it is told nothing about, and a commodity written
                 // on neither side has shown none. The space has to win
@@ -285,18 +291,16 @@ struct JournalStyleCollector {
             // Everything a declaration does not state is left to the amounts:
             // where the sign goes, where the commodity goes, and whether a
             // space follows it. The last two are unknown for a commodity that
-            // has no amounts.
-            var merged = result[commodity] ?? CommodityFormat()
+            // has no amounts, and its mark is the one its declaration states,
+            // as above; a commodity with amounts keeps theirs.
+            var merged = result[commodity]
+                ?? CommodityFormat(decimalMark: declaredDecimalMark(for: commodity) ?? ".")
             merged.fractionDigits = stated.fractionDigits
             // A declaration states how to write one, not how precisely the
             // file actually speaks, so it can raise the observed maximum but
             // never lower it.
             merged.maxFractionDigits = max(merged.maxFractionDigits, stated.fractionDigits)
             merged.groupsThousands = stated.groupsThousands
-            // The mark is the one the amounts below the directives are read
-            // by, as above; a declaration whose sample could not name a mark
-            // overrules nothing here, and the amounts keep the vote.
-            merged.decimalMark = declaredDecimalMark(for: commodity) ?? merged.decimalMark
             result[commodity] = merged
         }
         return result
@@ -348,9 +352,10 @@ struct JournalStyleCollector {
     }
 
     /// The mark the most amounts wrote. There are two to choose between, so
-    /// the count is between two numbers: `,` has to win outright, and a tie or
-    /// a commodity whose every amount abstained leaves `.`, which is the
-    /// default and what SwiftLedger has always written.
+    /// the count is between two numbers: `,` has to win outright, and a tie
+    /// leaves `.`, which is the default and what SwiftLedger has always
+    /// written. A commodity whose every amount abstained has no votes to
+    /// count and is not asked.
     private static func mostCommonMark(_ votes: [Character: Int]) -> Character {
         (votes[","] ?? 0) > (votes["."] ?? 0) ? "," : "."
     }

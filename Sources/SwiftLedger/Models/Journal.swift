@@ -104,6 +104,11 @@ public struct Journal: Sendable, Codable {
     /// it is not encoded, exactly as `Transaction.sourceText` is not. A
     /// commodity that is missing here is written in
     /// `CommodityFormat.default(for:)`.
+    ///
+    /// The decimal mark here is the file's one answer for the commodity. A
+    /// file may switch marks part way through, so a rebuilt entry is written
+    /// with the mark a `decimal-mark`, `commodity` or `D` line in force where
+    /// it stands declares, when one does, and with this one otherwise.
     public private(set) var commodityFormats: [String: CommodityFormat] = [:]
 
     /// How this file lines its posting amounts up, or `nil` when it showed no
