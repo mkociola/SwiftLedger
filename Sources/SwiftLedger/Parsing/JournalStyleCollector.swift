@@ -30,8 +30,7 @@ struct JournalStyleCollector {
     private var prefixed: [String: Int] = [:]
     private var spacedPrefix: [String: Int] = [:]
     private var suffixed: [String: Int] = [:]
-    /// Per commodity: how many of its amounts wrote each decimal mark. An
-    /// amount whose own marks could not be told apart casts no vote.
+    /// Per commodity: how many of its amounts wrote each decimal mark.
     private var decimalMarks: [String: [Character: Int]] = [:]
     /// What a `D` or `commodity` directive states for a commodity outright.
     private struct DeclaredStyle {
@@ -85,9 +84,8 @@ struct JournalStyleCollector {
             }
         }
         // One amount, one vote on the marks, however many of them it wrote:
-        // `1.000,00` shows both and still counts once. An amount the
-        // tie-break read abstains: see `NumberShape.isSettled`.
-        if shape.isSettled, let mark = Self.decimalMark(of: shape) {
+        // `1.000,00` shows both and still counts once.
+        if let mark = Self.decimalMark(of: shape) {
             decimalMarks[commodity, default: [:]][mark, default: 0] += 1
         }
         if amount.commodityIsPrefix {
@@ -125,10 +123,11 @@ struct JournalStyleCollector {
     ///
     /// A declaration says nothing about where a minus sign goes, so that stays
     /// with whatever the file's own amounts show. A sample with one mark is
-    /// read as any amount is, by the tie-break where nothing is declared
+    /// read as any amount is, as the decimal mark where nothing is declared
     /// above it, and declares the mark it was read with, for writing and for
-    /// reading both: `D 1.000 EUR` declares the point, as it does in hledger,
-    /// so `12,50 EUR` below it is twelve hundred and fifty in both tools.
+    /// reading both: `D 1.000 EUR` declares the point and `D 1,000 EUR` the
+    /// comma, as they do in hledger, so `12,50 EUR` below the first is twelve
+    /// hundred and fifty in both tools.
     mutating func declare(_ shape: NumberShape, as amount: Amount, isDefault: Bool) {
         let commodity = amount.commodity
         let mark = Self.decimalMark(of: shape)
@@ -338,9 +337,7 @@ struct JournalStyleCollector {
     /// The decimal mark one written number was read with: the mark that
     /// divided its own fraction, or failing that the counterpart of the mark
     /// it grouped with, since a number grouping with `.` divides with `,`.
-    /// `nil` for a number that wrote no mark at all. Whether the reading was
-    /// the number's own or the tie-break's is `NumberShape.isSettled`'s to
-    /// say, and only `observe` asks.
+    /// `nil` for a number that wrote no mark at all.
     private static func decimalMark(of shape: NumberShape) -> Character? {
         shape.decimalMark ?? shape.groupMark.map(counterpart)
     }

@@ -56,8 +56,8 @@ import Testing
         #expect(try DecimalMarkDirectiveTests.quantities(in: written) == [1250, -1250, 1250, -1250])
     }
 
-    /// A sample with one mark is read like any other amount, by the tie-break
-    /// where nothing is declared above it, and declares the mark it was read
+    /// A sample with one mark is read like any other amount, as the decimal
+    /// mark where nothing is declared above it, and declares the mark it was read
     /// with: `D 1.000 EUR` is one euro to three places and declares the
     /// point, so `12,50 EUR` below it is twelve hundred and fifty, as hledger
     /// reads it. It used to declare the three places and no mark at all.

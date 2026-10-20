@@ -35,11 +35,9 @@ import Foundation
 ///   the entry stands, where a `decimal-mark`, `commodity` or `D` line above
 ///   it declares one: a file may switch marks part way through, and an
 ///   eighth written `€1.125` under `decimal-mark ,` reads back as eleven
-///   hundred odd (issue #80). A comma amount is never written in a shape
-///   this parser would read the other way round, so twelve and an eighth is
-///   written `€12,1250` rather than the `€12,125` that reads back grouped,
-///   and a thousand with no fraction `1000` rather than the `1.000` that
-///   reads back as one. A commodity symbol that holds a space, a digit or
+///   hundred odd (issue #80). A grouped thousand with no fraction is written
+///   `1000` rather than the `1,000` or `1.000` that reads back as one in
+///   both tools. A commodity symbol that holds a space, a digit or
 ///   punctuation is written in double quotes, as hledger writes it, since
 ///   bare it would not read back: `10 "Mutual Fund"`. An amount in no
 ///   commodity is written as the bare number it was read from.
@@ -283,9 +281,8 @@ public struct JournalSerializer {
         var format = formats[amount.commodity] ?? .default(for: amount.commodity)
         // The mark is the one the directives in force here read a lone mark
         // by, asked as the parser asks them, with a bare number in no
-        // commodity. Where none is in force the file's own mark stands and
-        // reads back right: a comma amount is never written in the one shape
-        // the tie-break reads the other way, and a point divides there.
+        // commodity. Where none is in force the file's own mark stands, and
+        // reads back right, since a lone mark divides there whichever it is.
         if let mark = declared.declaredDecimalMark(for: amount.commodity.isEmpty ? nil : amount.commodity) {
             format.decimalMark = mark
         }

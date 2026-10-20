@@ -1,0 +1,9 @@
+D 1,000 EUR
+
+2024-01-01 The sample declares the comma it was read with
+    Expenses:Rent    12.50 EUR
+    Assets:Checking
+
+2024-01-02 So a lone comma below it divides
+    Expenses:Rent    1,500 EUR
+    Assets:Checking

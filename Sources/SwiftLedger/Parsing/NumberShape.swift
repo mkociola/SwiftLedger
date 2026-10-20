@@ -24,15 +24,4 @@ struct NumberShape {
     /// The character that separated the digit groups, on the same terms: `.`
     /// in `1.000,00`, `,` in `1,000.00`, `nil` in `1.000`.
     var groupMark: Character?
-    /// Whether the number itself or a directive above it settled which mark
-    /// was which, rather than the tie-break settling it for the number.
-    ///
-    /// False for the one shape no number can settle on its own, a mark with
-    /// exactly three digits after it, when no directive above it settled it
-    /// either. `1,000` and `1.000` still get the value the scanner has always
-    /// given them, and the marks above say what that reading was, but the
-    /// collector makes them abstain on the question of which convention the
-    /// file follows: one `€12,50` says more about that than a page of `€1.000`
-    /// does. Settled by a directive, the same number votes.
-    var isSettled: Bool
 }

@@ -1298,26 +1298,23 @@ private func oneLineTexts(of transaction: Transaction) -> [String] {
         #expect(try value("1,00,000") == 100_000)
     }
 
-    /// The one shape the number cannot settle on its own. Both readings are in
-    /// use in the wild, and the tie-break kept is the one this library and
-    /// ledger-cli have always had.
+    /// A mark before exactly three digits divides like any other lone mark,
+    /// as hledger reads it; ledger-cli would read `1,000` as a thousand
+    /// (issue #83).
     @Test
-    func `a mark before exactly three digits keeps the old reading`() throws {
-        #expect(try value("1,000") == 1000)
+    func `a mark before exactly three digits divides the fraction`() throws {
+        #expect(try value("1,000") == 1)
         #expect(try value("1.000") == 1)
+        #expect(try value("10,500") == Decimal(string: "10.5"))
     }
 
-    /// Nothing groups a zero, so the tie-break never reaches a number whose
-    /// integer part is one. hledger reads these the same way, and ledger's own
-    /// source carries the same exception. A three-decimal currency writes them
-    /// all day, which is what makes the old reading, `€0,750` as seven hundred
-    /// and fifty euros, worth ruling out.
+    /// Nothing groups a zero, so these never read the other way in any tool:
+    /// `€0,750` is three quarters, not seven hundred and fifty euros.
     @Test
     func `a mark with only zeros in front of it divides the fraction`() throws {
         #expect(try value("0,500") == Decimal(string: "0.5"))
         #expect(try value("0,075") == Decimal(string: "0.075"))
         #expect(try value("€0,750") == Decimal(string: "0.75"))
-        #expect(try value("10,500") == 10500)
     }
 
     @Test
@@ -3852,47 +3849,6 @@ private func renaming(
         #expect(journal.commodityFormats["EUR"]?.decimalMark == ".")
     }
 
-    /// `€1.000` could be a thousand grouped or one written to three places,
-    /// and the scanner settles it by a rule rather than by anything the number
-    /// says. A number read that way abstains here, so the file's one piece of
-    /// real evidence is not outvoted by three pieces of none.
-    @Test
-    func `a number that cannot say which mark is which casts no vote`() throws {
-        let commaFile = """
-        2026-01-01 opening
-            assets:bank      €1.000
-            equity:opening  €-1.000
-
-        2026-01-02 second
-            assets:bank      €2.000
-            equity:opening  €-2.000
-
-        2026-01-03 third
-            assets:bank      €3.000
-            equity:opening  €-3.000
-
-        2026-01-04 coffee
-            expenses:food     €12,50
-            assets:bank      €-12,50
-        """
-        #expect(try JournalParser().parse(commaFile).commodityFormats["€"]?.decimalMark == ",")
-
-        let pointFile = """
-        2026-01-01 opening
-            assets:bank      $1,000
-            equity:opening  $-1,000
-
-        2026-01-02 second
-            assets:bank      $2,000
-            equity:opening  $-2,000
-
-        2026-01-03 coffee
-            expenses:food     $12.50
-            assets:bank      $-12.50
-        """
-        #expect(try JournalParser().parse(pointFile).commodityFormats["$"]?.decimalMark == ".")
-    }
-
     /// A file with no fraction anywhere still shows which convention it
     /// follows: the mark it groups with is the one it does not divide with.
     @Test
@@ -3985,10 +3941,10 @@ private func renaming(
 
 // MARK: - What is written has to read back
 
-/// Rendering and parsing are two halves of one round trip, and the parser
-/// settles one shape by a tie-break rather than by anything the number says.
-/// A writer that ignored that put a number on disk worth a thousand times what
-/// it held: `12,125` came back grouped, and `1.000` came back divided.
+/// Rendering and parsing are two halves of one round trip, and a lone mark
+/// with three digits after it reads as the decimal mark whichever it is. A
+/// writer that ignored that put a number on disk worth a thousand times what
+/// it held: a grouped thousand written `1.000` came back as one.
 @Suite("rendered marks read back") struct RenderedMarkTests {
     /// Every shape this type can write, read back as the value it held.
     @Test(arguments: [".", ","] as [Character], [false, true])
@@ -4019,10 +3975,11 @@ private func renaming(
     }
 
     /// An eighth of a euro in a file that writes two places: the third place
-    /// is the amount's own, and the fourth is what keeps the comma from
-    /// reading as a group mark on the way back in.
+    /// is the amount's own, and nothing is added to it, since `12,125` reads
+    /// back as twelve and an eighth here and in hledger. A fourth place used
+    /// to keep the comma from reading as a group mark (issue #83).
     @Test
-    func `an amount with three places joins a comma file with four`() throws {
+    func `an amount with three places joins a comma file as written`() throws {
         var journal = try JournalParser().parse("""
         2024-01-02 groceries
             expenses:food       €12,50
@@ -4045,15 +4002,16 @@ private func renaming(
         )))
 
         let written = JournalSerializer().serialize(journal)
-        #expect(written.contains("€12,1250"))
+        #expect(written.contains("€12,125"))
         let reparsed = try #require(JournalParser().parse(written).transactions.last)
         #expect(reparsed.postings.map(\.amount.quantity) == [eighth, -eighth])
     }
 
-    /// A file that writes three places pads a shorter amount to three, which
-    /// is exactly the shape the reader cannot settle, so it gets a fourth.
+    /// A file that writes three places pads a shorter amount to three,
+    /// `12,500`, which reads back as twelve and a half in both tools. It
+    /// used to get a fourth place against the tie-break (issue #83).
     @Test
-    func `an amount padded to three places in a comma file gets a fourth`() throws {
+    func `an amount padded to three places in a comma file stays at three`() throws {
         var journal = try JournalParser().parse("""
         2024-01-02 opening
             assets:bank      €1.234,567
@@ -4077,24 +4035,27 @@ private func renaming(
         )))
 
         let written = JournalSerializer().serialize(journal)
-        #expect(written.contains("€12,5000"))
+        #expect(written.contains("€12,500"))
         let reparsed = try #require(JournalParser().parse(written).transactions.last)
         #expect(reparsed.postings.map(\.amount.quantity) == [half, -half])
     }
 
-    /// A thousand in a file that groups with `.` and writes no fraction: the
-    /// grouping is what would make `1.000`, so that one number goes ungrouped,
-    /// as every number under a thousand in the same file already is.
-    @Test
-    func `a thousand with no fraction is written ungrouped in a comma file`() throws {
-        let format = CommodityFormat(fractionDigits: 0, groupsThousands: true, decimalMark: ",")
+    /// A thousand in a file that groups and writes no fraction: the grouping
+    /// is what would make `1.000` or `1,000`, which read as one in both
+    /// tools, so that one number goes ungrouped, as every number under a
+    /// thousand in the same file already is, whichever mark the file groups
+    /// with.
+    @Test(arguments: [".", ","] as [Character])
+    func `a thousand with no fraction is written ungrouped in a grouped file`(mark: Character) throws {
+        let format = CommodityFormat(fractionDigits: 0, groupsThousands: true, decimalMark: mark)
         #expect(format.render(1000) == "1000")
         #expect(format.render(999) == "999")
         // Two groups say what one cannot, and an amount with a fraction writes
         // both marks, so neither of those gives anything up.
-        #expect(format.render(1_000_000) == "1.000.000")
-        #expect(try CommodityFormat(fractionDigits: 2, groupsThousands: true, decimalMark: ",")
-            .render(#require(Decimal(string: "1000.5"))) == "1.000,50")
+        let group = format.groupMark
+        #expect(format.render(1_000_000) == "1\(group)000\(group)000")
+        #expect(try CommodityFormat(fractionDigits: 2, groupsThousands: true, decimalMark: mark)
+            .render(#require(Decimal(string: "1000.5"))) == "1\(group)000\(mark)50")
     }
 }
 
@@ -4748,7 +4709,7 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
         2026-01-01 Set the reserve
             Expenses:Food        $10.00
             Assets:Cash         $-10.00
-            (Reserve:capital)  $250,000
+            (Reserve:capital)  $250,000.00
         """
         let ledger = try Ledger(journal: JournalParser().parse(text))
         let sheet = try BalanceSheet(ledger: ledger, asOf: makeDate(2026, 6, 1))
@@ -5867,8 +5828,8 @@ private let envelopeJournal = """
 /// hledger reads and SwiftLedger used to refuse as unbalanced by $550,000.
 private let reserveJournal = """
 2025-01-01 set the reserves
-    (Reserve:capital)   $250,000
-    (Reserve:launch)    $300,000
+    (Reserve:capital)   $250,000.00
+    (Reserve:launch)    $300,000.00
 """
 
 /// A one-entry journal whose amounts all begin at `column` — built rather than

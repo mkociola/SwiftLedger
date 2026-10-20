@@ -1,0 +1,31 @@
+2024-01-01 A lone comma before three digits is the decimal mark
+    Expenses:Rent    $1,000
+    Assets:Checking
+
+2024-01-02 And so is a lone point
+    Expenses:Rent    $1.000
+    Assets:Checking
+
+2024-01-03 Whatever stands in front of it
+    Expenses:Rent    $12,345
+    Assets:Checking
+
+2024-01-04 Or how many digits follow it
+    Expenses:Rent    $1,0000
+    Assets:Checking
+
+2024-01-05 Zeros in front of it
+    Expenses:Rent    $0,500
+    Assets:Checking
+
+2024-01-06 A mark written twice groups
+    Expenses:Rent    $1,000,000
+    Assets:Checking
+
+2024-01-07 A trailing mark divides nothing and settles the other
+    Expenses:Rent    $1.000,
+    Assets:Checking
+
+2024-01-08 Two marks settle each other
+    Expenses:Rent    $1,000.00
+    Assets:Checking

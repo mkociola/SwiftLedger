@@ -38,14 +38,11 @@ import Foundation
 ///   commodity, for `decimal-mark` and for `D`), and a lone mark below it
 ///   divides when it is the declared one and groups otherwise, whatever
 ///   follows it, so under `commodity €1.000,00` both `€1.000` and `€12.50`
-///   are whole thousands. Without a directive a lone mark with any count of
-///   digits after it other than three divides, so `€12,50` is twelve fifty;
-///   one with nothing but zeros in front of it divides whatever follows,
-///   since there is nothing there to group, so `€0,750` is three quarters;
-///   and one with exactly three digits after it is the one shape the number
-///   cannot settle, which keeps the reading this library and ledger-cli have
-///   always had: `1,000` is a thousand and `1.000` is one, where hledger
-///   would read `1,000` as one.
+///   are whole thousands. Without a directive a lone mark divides whatever
+///   follows it, as hledger reads it, so `€12,50` is twelve fifty, `€0,750`
+///   three quarters and `$1,000` one dollar; ledger-cli would read the last
+///   as a thousand, and a file written for it says so with a `commodity` or
+///   `decimal-mark` line.
 /// - A posting amount may be followed by a price (`@` per unit, `@@` total)
 ///   and/or a balance assertion (`=`), in that order, each written in either
 ///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in

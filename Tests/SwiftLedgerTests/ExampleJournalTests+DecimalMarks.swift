@@ -132,4 +132,20 @@ extension ExampleJournalTests {
             "    Expenses:Food:Restaurants  -€4.50",
         ])
     }
+
+    /// The fuel is metered to the millilitre, and `38,250 L` is thirty-eight
+    /// and a quarter litres, as hledger reads a lone mark with three digits
+    /// after it; the parser used to read thirty-eight thousand by ledger-cli's
+    /// tie-break. The elided leg absorbs the cost at the price.
+    @Test
+    func `the example reads a lone mark before three digits as the decimal mark`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        let fuel = try #require(journal.transactions.first { $0.description == "Fuel, metered to the millilitre" })
+        #expect(try fuel.postings.map(\.amount) == [
+            Amount(quantity: #require(Decimal(string: "38.250")), commodity: "L"),
+            Amount(quantity: #require(Decimal(string: "-68.85")), commodity: "€", commodityIsPrefix: true),
+        ])
+        #expect(try fuel.postings.first?.price
+            == .perUnit(Amount(quantity: #require(Decimal(string: "1.80")), commodity: "€", commodityIsPrefix: true)))
+    }
 }

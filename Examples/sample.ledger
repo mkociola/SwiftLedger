@@ -218,13 +218,14 @@ account Expenses:Utilities
 ; fifty, as most of Europe writes it, and the €1.500,00 in the opening entry
 ; above is fifteen hundred. hledger and ledger 3 both read €12,50 that way, so
 ; the entry below means the same in either tool. A mark with exactly three
-; digits after it is the one form the number cannot settle, and it keeps
-; ledger's reading, where $1,000 is a thousand and $1.000 is one; hledger reads
-; $1,000 as one unless a directive declares the commodity. An entry SwiftLedger
-; rebuilds is written back with the marks the file uses for that commodity, and
-; this file uses both: an edited euro entry comes back €12,50 while an edited
-; dollar entry comes back $1200.00, each in the style its own amounts are
-; written in.
+; digits after it divides as well, as hledger reads it, so the fuel below is
+; thirty-eight and a quarter litres at one euro eighty; ledger-cli would read
+; 38,250 as thirty-eight thousand, and a file written for it says which it
+; means with a commodity or decimal-mark line, as the invoice further down
+; does. An entry SwiftLedger rebuilds is written back with the marks the file
+; uses for that commodity, and this file uses both: an edited euro entry comes
+; back €12,50 while an edited dollar entry comes back $1200.00, each in the
+; style its own amounts are written in.
 ; A ; after an amount opens the posting's comment even with one space in front
 ; of it, as it does in ledger and in hledger, since two spaces are what end an
 ; account name and the name has ended by then.
@@ -233,9 +234,13 @@ account Expenses:Utilities
     Expenses:Food:Restaurants  €12,50 ; one space is enough to start a comment
     Assets:EuroAccount     -€12,50
 
+2024-03-13 Fuel, metered to the millilitre
+    Expenses:Car           38,250 L @ €1,80
+    Assets:EuroAccount
+
 ; ── A directive settles the one shape a number cannot ───────────────────────
 ; €1.000 is a thousand grouped or one euro to three places, and nothing in the
-; number says which. Without a directive it keeps ledger's reading, one euro.
+; number says which. Without a directive it is one euro, as hledger reads it.
 ; A commodity directive states the marks, and from the line it stands on
 ; every such amount in that commodity is read with the declared decimal mark,
 ; so the invoice below is a thousand euros, as hledger reads it. A D directive
