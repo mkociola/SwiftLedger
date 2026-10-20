@@ -1,0 +1,6 @@
+hledger: Error: indented-entry.journal:1:5:
+  |
+1 |     2024-01-01 Rent
+  |     ^
+unexpected '2'
+expecting newline
