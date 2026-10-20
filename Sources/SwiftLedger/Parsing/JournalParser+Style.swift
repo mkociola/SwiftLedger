@@ -55,12 +55,12 @@ extension JournalParser {
     /// A line hledger refuses to read is refused here too, with
     /// `LedgerError.unreadableDirective`: a `decimal-mark` that names neither
     /// mark, a `D` with no number in its sample, a `D` or `commodity` with
-    /// nothing after it, a sample that shows no decimal mark as the lines
-    /// above it read it. Kept, such a line declared no mark, and the amounts
-    /// below it were read by another mark than the author wrote it for,
-    /// without a word. A sample that has a number and still does not
-    /// parse is left alone, as before: hledger reads some of those, and a
-    /// file it loads is not refused on a guess.
+    /// nothing after it, a `commodity` with more than a symbol or a sample
+    /// amount on it, a `format` with no sample amount, a sample that shows no
+    /// decimal mark as the lines above it read it. Kept, such a line declared
+    /// no mark, and the amounts below it were read by another mark than the
+    /// author wrote it for, without a word. Text after a `D` sample is read
+    /// past, as hledger reads past it, and the line is kept as it came.
     func declareFormat(from line: String, into style: inout JournalStyleCollector) throws {
         let isIndented = line.first == " " || line.first == "\t"
         let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -118,13 +118,10 @@ extension JournalParser {
         // worth without a word, where hledger reads straight past it.
         let (field, _) = splitPostingComment(String(argument))
         let sample = field?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        // `commodity $` names a commodity without stating a style; only the
-        // sample-amount forms say anything to record.
-        guard sample.contains(where: \.isNumber) else {
-            if refuses, let error = Self.unreadable(keyword, sample: sample, directive: trimmed) { throw error }
+        guard let parsed = try? parseShapedAmount(sample, lineNumber: 0, in: style) else {
+            try Self.refuseUnreadableSample(keyword, sample: sample, directive: trimmed, refuses: refuses)
             return
         }
-        guard let parsed = try? parseShapedAmount(sample, lineNumber: 0, in: style) else { return }
         // hledger asks every sample for a decimal mark, as the directives
         // above it read the sample, and stops at one with none: `€1000`, or
         // `€1.000` under `decimal-mark ,`. A lone mark the tie-break read is
@@ -138,14 +135,50 @@ extension JournalParser {
         style.declare(shape, as: parsed.amount, isDefault: keyword == "D")
     }
 
-    /// Why hledger refuses a `D` or `commodity` line whose sample holds no
-    /// number, or `nil` when it reads the line. `commodity $` names a
-    /// commodity, a form a `D` does not have, and a `commodity` with nothing
-    /// after it names nothing at all.
-    private static func unreadable(_ keyword: String, sample: String, directive: String) -> LedgerError? {
-        if keyword == "D" { return unreadableDefault(directive) }
-        guard sample.isEmpty else { return nil }
-        return .unreadableDirective(directive, reason: "it names no commodity and no sample amount")
+    /// Refuses a `D`, `commodity` or `format` line whose sample is no amount,
+    /// where hledger refuses it. `commodity` may name a symbol and nothing
+    /// else, bare or in quotes (`commodity $`, `commodity "AAPL 2"`), which
+    /// states no style. Anything else on a `commodity` or a `format` line is
+    /// one hledger stops at, and kept, the style it meant to state was lost
+    /// without a word: `commodity xyz abc`, `commodity $1,000.00 x`, `format
+    /// xyz` (issue #106), and a `commodity` with nothing after it. A `D` is
+    /// refused with no number in its sample; with one, hledger reads past
+    /// whatever follows the sample, and the line is kept. An indented line,
+    /// `refuses` false, is refused only as a `format` line.
+    private static func refuseUnreadableSample(
+        _ keyword: String, sample: String, directive: String, refuses: Bool,
+    ) throws {
+        if keyword == "commodity", namesSymbolAlone(sample) { return }
+        if keyword == "D", sample.contains(where: \.isNumber) { return }
+        if refuses || keyword == "format" { throw unreadable(keyword, sample: sample, directive: directive) }
+    }
+
+    /// Whether `sample` is a commodity symbol and nothing else: one bare word,
+    /// or one quoted symbol with nothing after its closing quote, which is
+    /// the `commodity` line's one form besides a sample amount.
+    private static func namesSymbolAlone(_ sample: String) -> Bool {
+        guard sample.hasPrefix("\"") else { return !sample.isEmpty && !sample.contains(where: \.isWhitespace) }
+        let inner = sample.dropFirst()
+        return inner.last == "\"" && !inner.dropLast().contains("\"")
+    }
+
+    /// Why hledger refuses a `D`, `commodity` or `format` line whose sample is
+    /// no amount. `commodity $` names a commodity, a form a `D` does not have,
+    /// so a `commodity` is refused with nothing after it or with more than a
+    /// symbol; `format` takes nothing but a sample amount.
+    private static func unreadable(_ keyword: String, sample: String, directive: String) -> LedgerError {
+        switch keyword {
+        case "D": unreadableDefault(directive)
+        case "format":
+            .unreadableDirective(directive, reason: "'format' takes a sample amount, such as 'format $1,000.00'")
+        default: .unreadableDirective(
+                directive,
+                reason: sample.isEmpty
+                    ? "it names no commodity and no sample amount"
+                    : "it names neither a sample amount nor a commodity symbol alone, "
+                    + "as 'commodity $1,000.00' or 'commodity $' do",
+            )
+        }
     }
 
     /// The error for a `D` line with no sample amount after the `D`.
