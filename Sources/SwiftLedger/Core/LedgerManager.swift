@@ -108,7 +108,8 @@ public final class LedgerManager {
     ///
     /// - Returns: The directive removed — `type` and `comment` included, ready
     ///   to hand back to `add(_:)` as an undo step — or `nil` if `name` was not
-    ///   declared.
+    ///   declared. The indented lines under the directive go with it and are
+    ///   not carried (`Journal.removeAccountDirective(named:)`).
     /// - Throws: Any error raised by the store's `save` method.
     @discardableResult
     public func removeAccountDirective(named name: String) throws -> AccountDirective? {

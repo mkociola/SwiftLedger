@@ -251,7 +251,8 @@ let removed = journal.removeAccountDirective(named: "Expenses:Rent")
 // `removed` carries the directive's type and comment, so appending it back
 // reproduces the line verbatim, which is what an undo step needs. It lands
 // at the end of the journal (or in front of a block comment left open there),
-// not at the line's old position.
+// not at the line's old position. The indented lines under the directive,
+// its subdirectives, are removed with it and not carried.
 journal.append(.accountDirective(removed!))
 ```
 
