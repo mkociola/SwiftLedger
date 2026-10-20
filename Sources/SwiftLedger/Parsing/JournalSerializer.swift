@@ -31,7 +31,11 @@ import Foundation
 ///   (`Journal.commodityFormats`). A `Decimal` has forgotten every one of them
 ///   by the time it gets here, so without that an edit to a payee would also
 ///   restyle that entry's `$-1,234.50` to `-$1234.5`, and a European file's
-///   `€1.500,00` to `€1,500.00`. A comma amount is never written in a shape
+///   `€1.500,00` to `€1,500.00`. The decimal mark is the one in force where
+///   the entry stands, where a `decimal-mark`, `commodity` or `D` line above
+///   it declares one: a file may switch marks part way through, and an
+///   eighth written `€1.125` under `decimal-mark ,` reads back as eleven
+///   hundred odd (issue #80). A comma amount is never written in a shape
 ///   this parser would read the other way round, so twelve and an eighth is
 ///   written `€12,1250` rather than the `€12,125` that reads back grouped,
 ///   and a thousand with no fraction `1000` rather than the `1.000` that
@@ -58,6 +62,15 @@ public struct JournalSerializer {
     /// Serialises the journal to a string.
     public func serialize(_ journal: Journal) -> String {
         var lines: [String] = []
+        // The directives in force at each point of the file, read as
+        // `JournalParser` reads them. `Journal.commodityFormats` carries one
+        // mark per commodity for the whole file, and a `decimal-mark`,
+        // `commodity` or `D` line speaks from where it stands to the next
+        // one, so a rebuilt entry is written by the line above it rather
+        // than by the file as a whole (issue #80).
+        let parser = JournalParser()
+        var declared = JournalStyleCollector()
+        var inBlockComment = false
         for item in journal.items {
             switch item {
             case .blank:
@@ -75,6 +88,16 @@ public struct JournalSerializer {
                 // in front of a second line, so `LedgerManager` refuses one
                 // that holds a `\n` instead (issue #72).
                 lines.append(raw)
+                // A line inside a `comment` block is text the parser reads
+                // nothing from, and a line it would refuse declares nothing
+                // either, since the file it is in does not load.
+                if inBlockComment {
+                    inBlockComment = !parser.isCommentBlockEnd(raw)
+                } else if parser.isCommentBlockStart(raw) {
+                    inBlockComment = true
+                } else {
+                    try? parser.declareFormat(from: raw, into: &declared)
+                }
             case let .accountDirective(directive):
                 var line = "account \(directive.name)"
                 if let comment = directive.comment {
@@ -85,6 +108,7 @@ public struct JournalSerializer {
                 lines.append(contentsOf: serializeTransaction(
                     transaction,
                     formats: journal.commodityFormats,
+                    declared: declared,
                     alignment: journal.amountAlignment ?? Self.defaultAlignment,
                     indent: journal.postingIndent ?? Self.defaultIndent,
                 ))
@@ -143,6 +167,7 @@ public struct JournalSerializer {
     private func serializeTransaction(
         _ transaction: Transaction,
         formats: [String: CommodityFormat],
+        declared: JournalStyleCollector,
         alignment: AmountAlignment,
         indent: String,
     ) -> [String] {
@@ -179,7 +204,9 @@ public struct JournalSerializer {
 
         // Posting lines, each followed by the comment lines written below it
         for posting in transaction.postings {
-            lines.append(serializePosting(posting, formats: formats, alignment: alignment, indent: indent))
+            lines.append(serializePosting(
+                posting, formats: formats, declared: declared, alignment: alignment, indent: indent,
+            ))
             for comment in posting.trailingComments {
                 lines.append(transactionCommentLine(comment))
             }
@@ -191,6 +218,7 @@ public struct JournalSerializer {
     private func serializePosting(
         _ posting: Posting,
         formats: [String: CommodityFormat],
+        declared: JournalStyleCollector,
         alignment: AmountAlignment,
         indent: String,
     ) -> String {
@@ -202,7 +230,7 @@ public struct JournalSerializer {
 
         line += posting.delimitedAccountName
 
-        let amountStr = formatPostingAmount(posting, formats: formats)
+        let amountStr = formatPostingAmount(posting, formats: formats, declared: declared)
         // Pad to the journal's own margin — two spaces at minimum, since one
         // is not enough to separate an account name from an amount.
         let padding: Int = switch alignment {
@@ -222,15 +250,18 @@ public struct JournalSerializer {
     /// The whole amount field of a posting: the amount, then whatever price
     /// and balance assertion it carries, in the order ledger writes them —
     /// `AMOUNT @ PRICE = ASSERTION`, canonically spaced.
-    private func formatPostingAmount(_ posting: Posting, formats: [String: CommodityFormat]) -> String {
-        var field = formatAmount(posting.amount, formats: formats)
+    private func formatPostingAmount(
+        _ posting: Posting, formats: [String: CommodityFormat], declared: JournalStyleCollector,
+    ) -> String {
+        let format = { formatAmount($0, formats: formats, declared: declared) }
+        var field = format(posting.amount)
         switch posting.price {
         case nil: break
-        case let .perUnit(price): field += " @ \(formatAmount(price, formats: formats))"
-        case let .total(price): field += " @@ \(formatAmount(price, formats: formats))"
+        case let .perUnit(price): field += " @ \(format(price))"
+        case let .total(price): field += " @@ \(format(price))"
         }
         if let assertion = posting.balanceAssertion {
-            field += " = \(formatAmount(assertion, formats: formats))"
+            field += " = \(format(assertion))"
         }
         return field
     }
@@ -238,14 +269,26 @@ public struct JournalSerializer {
     /// Writes one amount in the journal's own style for its commodity, falling
     /// back to `CommodityFormat.default(for:)` for a commodity the file has no
     /// example of — a journal built in code, or the first `$` amount in a file
-    /// that has none yet.
+    /// that has none yet. Either way the decimal mark is the one `declared`
+    /// has in force where the entry stands, when a directive above it has
+    /// declared one.
     ///
     /// The style sets a minimum number of decimal places, never a maximum, so
     /// an amount carrying more digits than the house style keeps all of them.
     /// Rounding here would change what the journal says and could leave a
     /// transaction that no longer balances.
-    private func formatAmount(_ amount: Amount, formats: [String: CommodityFormat]) -> String {
-        let format = formats[amount.commodity] ?? .default(for: amount.commodity)
+    private func formatAmount(
+        _ amount: Amount, formats: [String: CommodityFormat], declared: JournalStyleCollector,
+    ) -> String {
+        var format = formats[amount.commodity] ?? .default(for: amount.commodity)
+        // The mark is the one the directives in force here read a lone mark
+        // by, asked as the parser asks them, with a bare number in no
+        // commodity. Where none is in force the file's own mark stands and
+        // reads back right: a comma amount is never written in the one shape
+        // the tie-break reads the other way, and a point divides there.
+        if let mark = declared.declaredDecimalMark(for: amount.commodity.isEmpty ? nil : amount.commodity) {
+            format.decimalMark = mark
+        }
         let absValue = format.render(abs(amount.quantity))
         let sign = amount.quantity < 0 ? "-" : ""
         // The quotes a symbol may need are no part of its name, which is

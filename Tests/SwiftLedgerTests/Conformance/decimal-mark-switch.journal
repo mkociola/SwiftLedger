@@ -1,0 +1,11 @@
+decimal-mark ,
+
+2024-01-01 An eighth written with the comma in force here
+    Expenses:Rent    €1,1250
+    Assets:Checking
+
+decimal-mark .
+
+2024-01-02 And with the point once the file switches
+    Expenses:Rent    €1.125
+    Assets:Checking

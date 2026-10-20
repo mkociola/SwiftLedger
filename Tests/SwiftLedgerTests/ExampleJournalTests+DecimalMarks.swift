@@ -103,4 +103,33 @@ extension ExampleJournalTests {
         ])
         #expect(!written.contains("€1,500.00"))
     }
+
+    /// The refund stands under `decimal-mark .`, between the comma the
+    /// commodity line declares and the comma the last line puts back, so it
+    /// is four euros fifty, and a rebuilt refund is written with the point
+    /// in force where it stands rather than the comma the file ends on,
+    /// which is still its style for euros as a whole.
+    @Test
+    func `the example writes a rebuilt entry with the mark in force where it stands`() throws {
+        var journal = try JournalParser().parse(Self.exampleText)
+        let refund = try #require(
+            journal.transactions.first { $0.description == "Refund for the coffee in Vienna" },
+        )
+        #expect(try refund.postings.map(\.amount.quantity) == [
+            #require(Decimal(string: "4.50")), #require(Decimal(string: "-4.50")),
+        ])
+        let renamed = try Transaction(
+            id: refund.id, date: refund.date, description: "Refund for the coffee in Vienna (revised)",
+            postings: refund.postings,
+        )
+        let replaced = journal.replace(.transaction(refund), with: .transaction(renamed))
+        #expect(replaced)
+
+        let lines = JournalSerializer().serialize(journal).components(separatedBy: "\n")
+        let header = try #require(lines.firstIndex(of: "2024-03-22 Refund for the coffee in Vienna (revised)"))
+        #expect(Array(lines[(header + 1) ... (header + 2)]) == [
+            "    Assets:EuroAccount     €4.50",
+            "    Expenses:Food:Restaurants  -€4.50",
+        ])
+    }
 }
