@@ -65,9 +65,16 @@ public struct JournalSerializer {
         // mark per commodity for the whole file, and a `decimal-mark`,
         // `commodity` or `D` line speaks from where it stands to the next
         // one, so a rebuilt entry is written by the line above it rather
-        // than by the file as a whole (issue #80).
+        // than by the file as a whole (issue #80). They are read through the
+        // parser's own `declare(at:in:into:year:)`, over the lines written so
+        // far, so that an indented `format` line declares a style only where
+        // the next parse reads one, under a `commodity` block. Read wherever
+        // it stood, one under an `account` block gave its commodity a mark
+        // the parser does not read it by, and a rebuilt `4.50 EUR` came back
+        // as 450 EUR.
         let parser = JournalParser()
         var declared = JournalStyleCollector()
+        var year: Int?
         var inBlockComment = false
         for item in journal.items {
             switch item {
@@ -94,7 +101,7 @@ public struct JournalSerializer {
                 } else if parser.isCommentBlockStart(raw) {
                     inBlockComment = true
                 } else {
-                    try? parser.declareFormat(from: raw, into: &declared)
+                    try? parser.declare(at: lines.count - 1, in: lines, into: &declared, year: &year)
                 }
             case let .accountDirective(directive):
                 var line = "account \(directive.name)"
