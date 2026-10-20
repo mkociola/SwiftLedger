@@ -622,7 +622,7 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
     /// Every header value whose line would read back as another entry, with
     /// the field the error has to name. The rules are the header grammar's:
     /// a code runs to the first `)`; with no code in front of it a
-    /// description opening `(`…`)` is a code; with no status or code a
+    /// description opening `(` is a code, closed or not; with no status or code a
     /// leading `*` or `!` is the status; with nothing at all in front of it a
     /// leading `=` introduces a secondary date; and a `;` past the code opens
     /// the comment. A description or comment the parser would trim is
@@ -631,6 +631,7 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         (HeaderFields(code: "a)b", description: "Lunch"), "code"),
         (HeaderFields(description: "(note) lunch"), "description"),
         (HeaderFields(status: .cleared, description: "(note) lunch"), "description"),
+        (HeaderFields(description: "(note lunch"), "description"),
         (HeaderFields(description: "* Lunch"), "description"),
         (HeaderFields(description: "! Lunch"), "description"),
         (HeaderFields(description: "*"), "description"),
@@ -691,10 +692,10 @@ private func reread(_ transaction: Transaction) throws -> Transaction {
         HeaderFields(status: .pending, description: "! Lunch"),
         HeaderFields(code: "CHQ", description: "* Lunch"),
         HeaderFields(code: "CHQ", description: "(note) lunch"),
+        HeaderFields(code: "CHQ", description: "(note lunch"),
         HeaderFields(status: .cleared, description: "= Lunch"),
         HeaderFields(code: "CHQ", description: "= Lunch"),
         HeaderFields(auxDate: makeDate(2024, 1, 2), description: "= Lunch"),
-        HeaderFields(description: "(note lunch"),
         HeaderFields(code: " CHQ ", description: "Lunch"),
         HeaderFields(code: "", description: "Lunch"),
         HeaderFields(description: ""),
@@ -2563,19 +2564,18 @@ private extension LedgerError {
     }
 
     @Test
-    func `a longer word starting with the keyword opens nothing`() throws {
-        // The keyword ends at whitespace, so `comments` is its own word and
-        // its own directive, and what follows is data.
+    func `a longer word starting with the keyword opens nothing`() {
+        // The keyword ends at whitespace, so `comments` is its own word, and
+        // one hledger reads no directive from: the file is refused at that
+        // line, as hledger refuses it, rather than parked in a block to the
+        // end of the file (issue #104).
         let text = """
         comments
         2024-01-02 real
             a  $1
             b  $-1
         """
-        let journal = try JournalParser().parse(text)
-        #expect(journal.transactions.map(\.description) == ["real"])
-        #expect(journal.directives == ["comments"])
-        #expect(JournalSerializer().serialize(journal) == text)
+        #expect { try JournalParser().parse(text) } throws: { ($0 as? LedgerError)?.line == 1 }
     }
 
     @Test

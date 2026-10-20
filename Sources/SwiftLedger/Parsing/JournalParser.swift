@@ -24,7 +24,9 @@ import Foundation
 ///   commodity called `e5`. A symbol holding a space, a digit or punctuation
 ///   is written in double quotes, which are no part of the name: `10 "AAPL
 ///   2"` is ten units of `AAPL 2`, as it is in hledger, and a rebuilt amount
-///   in it is written with the quotes back on.
+///   in it is written with the quotes back on. Written bare, such a symbol
+///   is no amount here either: `100 E R` and `E*R100` refuse the file, as
+///   they do in hledger (`isBareSymbol`).
 /// - Decimal marks: both marks are written `.` or `,` depending on where the
 ///   file comes from, so which is which is read out of the number, as hledger
 ///   reads it. Two different marks make the last one the decimal mark, so
@@ -46,6 +48,10 @@ import Foundation
 ///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
 ///   balancing; assertions are preserved but never checked.
 /// - Status: `*` = cleared, `!` = pending
+/// - Code: `(CODE)` after the status, running to the first `)` wherever on
+///   the line that is, as hledger reads it. A `(` there with no `)` after it
+///   on the line refuses the file, as hledger refuses it: `(CHQ1 Rent` is a
+///   typo, not a payee.
 /// - Comments: `;`, `#`, `*`, `%` or `|` at line start; inline `  ;` after
 ///   2+ spaces. On a posting line the two-space rule ends the account name
 ///   rather than the amount, so once a name has ended, a `;` opens the
@@ -110,12 +116,14 @@ import Foundation
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
 ///
-/// Any line outside this grammar — `include`, `P`, `commodity`, `alias`, `D`,
-/// `year`, an indented sub-directive, or anything else — is kept verbatim as a
-/// `.directive` item and written back unchanged by `JournalSerializer`. The
-/// parser never reinterprets what it does not understand. An indented line
-/// with no block above it to belong to, such as a posting a blank line cut off
-/// from its entry, is refused at its line, as hledger refuses it.
+/// Any line outside this grammar, such as `include`, `P`, `commodity`, `alias`,
+/// `D`, `year` or an indented sub-directive, is kept verbatim as a `.directive`
+/// item and written back unchanged by `JournalSerializer`. The parser never
+/// reinterprets what it does not understand. A line at the margin that opens
+/// with no word hledger reads at all, `foo bar` or `decimal-markx ,`, is
+/// refused at its line, as hledger refuses it (`requireKnownDirective`), and
+/// so is an indented line with no block above it to belong to, such as a
+/// posting a blank line cut off from its entry.
 ///
 /// An error thrown while an entry is being read says where it was found:
 /// `LedgerError.inJournal` carries the line, the header of the entry it was
@@ -170,16 +178,19 @@ public struct JournalParser {
             }
 
             // account directive. A nameless `account` line is not one we can
-            // model, and falls through to be kept verbatim.
-            let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(trimmed) }
+            // model, and falls through to be kept verbatim, and so does an
+            // indented one, which is a subdirective of the block above it or
+            // belongs to nothing (issue #118); the last branch settles which.
+            let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(line) }
             if let directive {
                 items.append(.accountDirective(directive))
                 index += 1
                 continue
             }
 
-            // Transaction header (starts with a date)
-            if startsWithDate(trimmed) {
+            // Transaction header: a date at the margin. Indented, a dated line
+            // is a subdirective or an orphan, like an `account` line.
+            if startsWithDate(line) {
                 let (transaction, consumed) = try located(line: index + 1, entry: Self.entryHeader(line)) {
                     try parseTransaction(lines: lines, from: index, year: year, into: &style)
                 }
@@ -188,15 +199,18 @@ public struct JournalParser {
                 continue
             }
 
-            // Anything else — an unsupported directive (`include`, `P`, `commodity`,
-            // `alias`, `D`, `year`, an indented sub-directive) or malformed content.
-            // Kept verbatim so serialising never rewrites what we cannot interpret.
+            // Anything else, an unsupported directive (`include`, `P`, `commodity`,
+            // `alias`, `D`, `year`, an indented sub-directive), is kept verbatim,
+            // so serialising never rewrites what we cannot interpret. A line
+            // at the margin opening with no word hledger reads is refused at
+            // its line instead, as hledger refuses it (`requireKnownDirective`).
             // A `D`, `commodity`, `decimal-mark`, `Y` or `year` line is read
             // for what it declares and kept verbatim all the same: learning
             // from a line is not the same as modelling it, and this one still
             // goes back byte for byte.
             // One it recognises and cannot read refuses the file at its line,
-            // and so does an indented line no block above it can own.
+            // and so does an indented line no block above it can own
+            // (`ownedLine`).
             try located(line: index + 1, entry: nil) { try declare(from: line, into: &style, year: &year) }
             try items.append(.directive(ownedLine(at: index, in: lines)))
             index += 1
@@ -216,8 +230,11 @@ public struct JournalParser {
     /// Reads an `account NAME` line, with its inline comment split off so the
     /// comment text never becomes part of the declared account name.
     ///
-    /// Returns `nil` when the line is not an `account` directive, or names no
-    /// account at all.
+    /// Returns `nil` when the line is not an `account` directive, names no
+    /// account at all, or is indented: hledger reads an indented `account`
+    /// line as a subdirective under an `account` or `commodity` block and
+    /// refuses it outside every block, where the parser used to declare the
+    /// account wherever the line stood (issue #118).
     ///
     /// The line arrives without its line ending, as every line does. Left on
     /// in a CRLF file, the `\r` would land in the name, or in the comment when
@@ -226,9 +243,9 @@ public struct JournalParser {
     /// on the line is not a line ending, and the name or comment it lands in
     /// is one no journal can write, so `AccountDirective.init` refuses it and
     /// the file does not load, as it does not for a transaction's field.
-    private func parseAccountDirective(_ trimmed: String) throws -> AccountDirective? {
-        guard trimmed.lowercased().hasPrefix("account ") else { return nil }
-        let (mainPart, comment) = splitInlineComment(trimmed)
+    private func parseAccountDirective(_ line: String) throws -> AccountDirective? {
+        guard line.lowercased().hasPrefix("account ") else { return nil }
+        let (mainPart, comment) = splitInlineComment(line)
         let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return nil }
         return try AccountDirective(
@@ -329,13 +346,17 @@ public struct JournalParser {
             rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
         }
 
-        // Optional (CODE)
+        // Optional (CODE). A `(` here opens a code, and one with no `)`
+        // after it on the line refuses the line, as hledger refuses it: a
+        // missing `)` is a typo, and kept, the whole of it became the payee
+        // without a word (issue #101).
         var code: String?
         if rest.hasPrefix("(") {
-            if let closeIdx = rest.firstIndex(of: ")") {
-                code = String(rest[rest.index(after: rest.startIndex) ..< closeIdx])
-                rest = String(rest[rest.index(after: closeIdx)...]).trimmingCharacters(in: .whitespaces)
+            guard let closeIdx = rest.firstIndex(of: ")") else {
+                throw LedgerError.parseError(line: lineNumber, message: "Expected ')' to close the transaction code")
             }
+            code = String(rest[rest.index(after: rest.startIndex) ..< closeIdx])
+            rest = String(rest[rest.index(after: closeIdx)...]).trimmingCharacters(in: .whitespaces)
         }
 
         // The description runs to the first `;`, however few spaces precede

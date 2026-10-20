@@ -4,7 +4,8 @@ import Foundation
 
 extension JournalParser {
     /// The line at `index`, refused when it is indented and nothing above it
-    /// can own it.
+    /// can own it, or when it stands at the margin and opens with no word
+    /// hledger reads (`requireKnownDirective`).
     ///
     /// An indented line only reaches the top level of `parse` from outside
     /// every dated entry, since `parseTransaction` takes the ones under a
@@ -17,7 +18,10 @@ extension JournalParser {
     /// file at the line (issue #92), so the parser refuses it too.
     func ownedLine(at index: Int, in lines: [String]) throws -> String {
         let line = lines[index]
-        guard let first = line.unicodeScalars.first, first == " " || first == "\t" else { return line }
+        guard let first = line.unicodeScalars.first, first == " " || first == "\t" else {
+            try requireKnownDirective(line, lineNumber: index + 1)
+            return line
+        }
         guard !indentedLineHasOwner(at: index, in: lines) else { return line }
         throw LedgerError.parseError(
             line: index + 1,

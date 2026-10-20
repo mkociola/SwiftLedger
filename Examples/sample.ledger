@@ -3,7 +3,11 @@
 
 ; Account declarations are optional. They let you explicitly set the
 ; account type when the name root doesn't match the recognised conventions.
+; An indented line under one is a subdirective of it, and one hledger does
+; not know is skipped, here too: the decimal-mark under the first account
+; declares nothing, and the dollars below are still read with the point.
 account Assets:Checking
+    decimal-mark ,
 account Assets:Savings
 account Assets:Brokerage
 account Assets:PettyCash

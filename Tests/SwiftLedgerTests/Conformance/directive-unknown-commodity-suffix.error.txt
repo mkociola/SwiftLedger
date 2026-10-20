@@ -1,0 +1,5 @@
+hledger: Error: directive-unknown-commodity-suffix.journal:1:10:
+  |
+1 | commodityx
+  |          ^
+unexpected 'x'

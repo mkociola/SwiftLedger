@@ -1,0 +1,142 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "E R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "E!R",
+        "mantissa": -200,
+        "places": 0
+      },
+      {
+        "commodity": "E#R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "E$R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "E%R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "E'R",
+        "mantissa": -200,
+        "places": 0
+      },
+      {
+        "commodity": "E(R)",
+        "mantissa": -200,
+        "places": 0
+      },
+      {
+        "commodity": "E*R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "E,R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "E-R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "E/R",
+        "mantissa": -200,
+        "places": 0
+      },
+      {
+        "commodity": "E:R",
+        "mantissa": -100,
+        "places": 0
+      },
+      {
+        "commodity": "E_R",
+        "mantissa": -200,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Rent",
+    "amounts": [
+      {
+        "commodity": "E R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "E!R",
+        "mantissa": 200,
+        "places": 0
+      },
+      {
+        "commodity": "E#R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "E$R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "E%R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "E'R",
+        "mantissa": 200,
+        "places": 0
+      },
+      {
+        "commodity": "E(R)",
+        "mantissa": 200,
+        "places": 0
+      },
+      {
+        "commodity": "E*R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "E,R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "E-R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "E/R",
+        "mantissa": 200,
+        "places": 0
+      },
+      {
+        "commodity": "E:R",
+        "mantissa": 100,
+        "places": 0
+      },
+      {
+        "commodity": "E_R",
+        "mantissa": 200,
+        "places": 0
+      }
+    ]
+  }
+]

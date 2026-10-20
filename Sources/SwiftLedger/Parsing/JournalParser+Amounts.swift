@@ -90,7 +90,9 @@ extension JournalParser {
     ///
     /// A symbol in double quotes runs to its closing quote instead, so
     /// `"Mutual Fund" 10` is ten of `Mutual Fund`, digits and all (see
-    /// `quotedSymbol`).
+    /// `quotedSymbol`). A bare symbol holds none of the characters hledger
+    /// quotes for (`isBareSymbol`), so `E R100` and `E*R100` are no amount
+    /// here either, as hledger refuses them (issue #112).
     ///
     /// The name cannot be empty. The caller has taken one sign off already,
     /// so in `--5` or `+-5` the second stands where the commodity would, and
@@ -110,6 +112,7 @@ extension JournalParser {
             let commodityEnd = str.firstIndex(where: Self.opensSignedNumber) ?? str.endIndex
             commodity = str[..<commodityEnd].trimmingCharacters(in: .whitespaces)
             numberText = String(str[commodityEnd...])
+            guard Self.isBareSymbol(commodity) else { throw LedgerError.invalidAmount(raw) }
         }
         guard !commodity.isEmpty else { throw LedgerError.invalidAmount(raw) }
         var adjustedSign = sign
@@ -143,10 +146,12 @@ extension JournalParser {
     /// A remainder beginning where the number could have carried on means the
     /// run stopped short rather than the commodity starting, so `1 000 EUR`
     /// and `1-2` are invalid instead of a thousandth of what was meant and a
-    /// commodity called `-2`. A remainder carrying a digit is refused for the
-    /// same reason: neither ledger-cli nor hledger lets an unquoted commodity
-    /// symbol hold one, so `1e5` and `1x2y` are a number someone mistyped
-    /// rather than one unit of `e5` and one of `x2y`. A remainder that is
+    /// commodity called `-2`. A remainder a bare symbol could not be is
+    /// refused as well (`isBareSymbol`): neither ledger-cli nor hledger lets
+    /// an unquoted symbol hold a digit, so `1e5` and `1x2y` are a number
+    /// someone mistyped rather than one unit of `e5` and one of `x2y`, and
+    /// hledger lets it hold no space, `*`, `-` or `.` either, so `100 E R`
+    /// and `100 E-R` are no amount (issue #112). A remainder that is
     /// empty is a bare number, which is in the commodity the latest `D` line
     /// above it names, on the side that line's sample put it, and in no
     /// commodity at all where no such line stands above it, as hledger reads
@@ -165,7 +170,7 @@ extension JournalParser {
         if let quoted = try Self.quotedSymbol(opening: remainder[...], raw: raw) {
             guard quoted.rest.isEmpty else { throw LedgerError.invalidAmount(raw) }
             remainder = quoted.symbol
-        } else if Self.cutsNumberShort(remainder) || Self.commodityCarriesDigit(remainder) {
+        } else if Self.cutsNumberShort(remainder) || !Self.isBareSymbol(remainder) {
             throw LedgerError.invalidAmount(raw)
         }
         guard let number = Self.scanNumber(
@@ -211,13 +216,6 @@ extension JournalParser {
     private static func cutsNumberShort(_ remainder: String) -> Bool {
         guard let first = remainder.first else { return false }
         return opensSignedNumber(first)
-    }
-
-    /// Whether a commodity written bare after the number holds a digit, which
-    /// a bare symbol may not do in either tool. A symbol that needs one is
-    /// written in quotes, and `quotedSymbol` reads it before this is asked.
-    private static func commodityCarriesDigit(_ remainder: String) -> Bool {
-        remainder.contains(where: \.isASCIIDigit)
     }
 
     /// Reads a written number: ASCII digits, at most one decimal mark, and

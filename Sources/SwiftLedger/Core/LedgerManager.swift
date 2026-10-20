@@ -20,11 +20,13 @@ public final class LedgerManager {
     /// digits than it balances at: the file would not load back. See
     /// `balance(of:)`. A `.directive` holding `\n` is refused with
     /// `LedgerError.lineBreakInField("directive")`, for the reason the case
-    /// itself gives.
+    /// itself gives, and any other directive line the next parse would
+    /// refuse where it lands is refused with the parser's own error (issue
+    /// #130).
     public func add(_ item: JournalItem) throws {
-        try requireReloadable(item)
         var updated = ledger
         updated.add(item)
+        try requireReloadable(item, in: updated)
         try store?.save(updated)
         ledger = updated
     }
@@ -64,30 +66,42 @@ public final class LedgerManager {
     public func replace(_ item: JournalItem, with replacement: JournalItem) throws -> Bool {
         var updated = ledger
         guard updated.replace(item, with: replacement) else { return false }
-        try requireReloadable(replacement)
+        try requireReloadable(replacement, in: updated)
         try store?.save(updated)
         ledger = updated
         return true
     }
 
-    /// Refuses a transaction the serializer would write as lines the next
-    /// parse, or hledger, refuses.
+    /// Refuses an item the serializer would write as lines the next parse,
+    /// or hledger, refuses, `updated` being the ledger with the item in it.
     ///
     /// A transaction that still carries the lines it was parsed from is
     /// replayed verbatim and was checked when it was read, so it passes: that
-    /// is what lets a removed entry be put back exactly as it was.
+    /// is what lets a removed entry be put back exactly as it was. One built
+    /// in code is held to the digits the journal writes it in, with the
+    /// balance error `Transaction.init` throws.
     ///
-    /// A `.directive` holding `\n` is refused too, for the reason
+    /// A `.directive` holding `\n` is refused for the reason
     /// `JournalItem.directive` gives (issue #72). Only `\n`, unlike
     /// `Transaction.requireOneLine`: the parser keeps a lone `\r` in a
     /// directive line, as hledger reads past one, so a directive read from the
-    /// file has to go back in.
-    private func requireReloadable(_ item: JournalItem) throws {
-        if case let .directive(text) = item, text.unicodeScalars.contains("\n") {
-            throw LedgerError.lineBreakInField("directive")
+    /// file has to go back in. Any other directive line is read where it
+    /// lands, by the next parse itself: at the margin it may open with no
+    /// word hledger knows or be a `D` or `decimal-mark` line hledger cannot
+    /// read, indented it may belong to no block above it, and inside an open
+    /// `comment` block it is text that reads back as it came. Only a parse of
+    /// the journal as it would be saved knows all of that, so `updated` is
+    /// written and read once before the store sees it (issue #130).
+    private func requireReloadable(_ item: JournalItem, in updated: Ledger) throws {
+        switch item {
+        case let .directive(text):
+            if text.unicodeScalars.contains("\n") { throw LedgerError.lineBreakInField("directive") }
+            _ = try JournalParser().parse(JournalSerializer().serialize(updated.journal))
+        case let .transaction(transaction) where transaction.sourceText == nil:
+            try Transaction.requireBalanced(transaction.postings, formats: ledger.journal.commodityFormats)
+        default:
+            break
         }
-        guard case let .transaction(transaction) = item, transaction.sourceText == nil else { return }
-        try Transaction.requireBalanced(transaction.postings, formats: ledger.journal.commodityFormats)
     }
 
     /// Whether `postings` balance as this journal would write them: the answer
@@ -108,7 +122,8 @@ public final class LedgerManager {
     ///
     /// - Returns: The directive removed — `type` and `comment` included, ready
     ///   to hand back to `add(_:)` as an undo step — or `nil` if `name` was not
-    ///   declared.
+    ///   declared. The indented lines under the directive go with it and are
+    ///   not carried (`Journal.removeAccountDirective(named:)`).
     /// - Throws: Any error raised by the store's `save` method.
     @discardableResult
     public func removeAccountDirective(named name: String) throws -> AccountDirective? {

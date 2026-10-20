@@ -1,0 +1,25 @@
+-- a line opening with two dashes is passed over
+payee Grocer
+tag trip
+N $
+C 1 USD = 1 $
+A Assets:Checking
+define x=1
+bucket Assets:Checking
+assert true
+check true
+eval 1
+expr 1
+python
+value x
+capture Expenses:Food Grocer
+apply fixed $ 1.00
+end apply fixed
+P 2024-01-01 AAPL $185.00
+P2024-01-02 AAPL $186.00
+Y2024
+!year 2024
+
+2024-01-03 Rent
+    Expenses:Rent    $1.00
+    Assets:Checking

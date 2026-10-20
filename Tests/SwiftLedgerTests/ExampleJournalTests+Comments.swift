@@ -15,6 +15,7 @@ extension ExampleJournalTests {
         let journal = try JournalParser().parse(Self.exampleText)
         #expect(!journal.transactions.contains { $0.description == "Rent for March" })
         #expect(journal.directives == [
+            "    decimal-mark ,",
             "commodity €1.000,00",
             // The line of four spaces under the car wash is kept as it came.
             "    ",
