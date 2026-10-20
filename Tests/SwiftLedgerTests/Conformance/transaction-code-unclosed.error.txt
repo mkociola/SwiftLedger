@@ -1,0 +1,6 @@
+hledger: Error: transaction-code-unclosed.journal:1:35:
+  |
+1 | 2024-01-01 (CHQ1 Rent ; paid early
+  |                                   ^
+unexpected newline
+expecting closing bracket ')' for transaction code
