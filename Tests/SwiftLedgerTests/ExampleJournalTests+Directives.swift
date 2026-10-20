@@ -36,4 +36,17 @@ extension ExampleJournalTests {
             Amount(quantity: -4500, commodity: "€", commodityIsPrefix: true),
         ])
     }
+
+    /// The `decimal-mark ,` indented under the first account declaration is
+    /// a subdirective hledger skips, and so does the parser: it declares
+    /// nothing, the dollars below it are read with the point as every dollar
+    /// entry in the file shows, and the opening balance is twenty-five
+    /// hundred rather than a quarter of a million.
+    @Test
+    func `the example's indented decimal-mark under an account declares nothing`() throws {
+        let journal = try JournalParser().parse(Self.exampleText)
+        #expect(journal.commodityFormats["$"]?.decimalMark == ".")
+        let opening = try #require(journal.transactions.first { $0.description == "Opening balances" })
+        #expect(opening.postings.first?.amount.quantity == 2500)
+    }
 }
