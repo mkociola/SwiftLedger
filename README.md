@@ -187,7 +187,10 @@ verbatim — indentation included — and is written back byte-for-byte, unless
 it is a `decimal-mark`, `D`, `commodity` or `format` line hledger cannot read
 (`decimal-mark x`, `D xyz`, a `commodity` with nothing after it, a sample with
 no decimal mark such as `commodity €1000`), which
-refuses the file with `LedgerError.unreadableDirective` as hledger does, or a
+refuses the file with `LedgerError.unreadableDirective` as hledger does, a
+`commodity` line with more than a symbol or a sample amount on it
+(`commodity xyz abc`, `commodity $1,000.00 x`) or a `format` line under a
+`commodity` block with no sample amount, refused the same way, or a
 line at the margin that opens with no word hledger reads at all (`foo bar`,
 `decimal-markx ,`, `commodityx`), which refuses the file with
 `LedgerError.parseError` at its line, as hledger does:

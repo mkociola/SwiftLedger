@@ -1,0 +1,6 @@
+hledger: Error: commodity-sample-trailing-text.journal:1:21:
+  |
+1 | commodity $1,000.00 x
+  |                     ^
+unexpected 'x'
+expecting ';', end of input, ledger-style lot cost, ledger-style lot date, ledger-style lot note, newline, transaction price, or valuation expression

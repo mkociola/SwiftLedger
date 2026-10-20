@@ -36,11 +36,12 @@ extension JournalParser {
     /// line opening `--`, which it passes over as a comment. Anything else is
     /// a typo it stops at, and kept, the typo changed what the file says
     /// without a word: `decimal-markx ,` declared no comma, and every `€1.000`
-    /// below it was a euro rather than a thousand. `ownedLine` asks for every
-    /// line at the margin, after `declare` has read it, so a `D` or `year`
-    /// line that cannot be read is refused as that directive rather than as
-    /// an unknown word; an indented line is a subdirective of the block above
-    /// it, or refused there, and is not asked.
+    /// below it was a euro rather than a thousand. `declare(at:in:into:year:)`
+    /// asks for every line at the margin, after `declare(from:into:year:)`
+    /// has read it, so a `D` or `year` line that cannot be read is refused as
+    /// that directive rather than as an unknown word; an indented line is a
+    /// subdirective of the block above it, or refused there, and is not
+    /// asked.
     func requireKnownDirective(_ line: String, lineNumber: Int) throws {
         guard let first = line.first else { return }
         if first == "~" || first == "=" || line.hasPrefix("--") { return }

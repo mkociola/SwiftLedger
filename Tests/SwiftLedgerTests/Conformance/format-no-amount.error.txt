@@ -1,0 +1,6 @@
+hledger: Error: format-no-amount.journal:2:13:
+  |
+2 |   format xyz
+  |             ^
+unexpected newline
+expecting '+', '-', or number

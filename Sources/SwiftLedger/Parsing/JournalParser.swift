@@ -213,9 +213,9 @@ public struct JournalParser {
             // goes back byte for byte.
             // One it recognises and cannot read refuses the file at its line,
             // and so does an indented line no block above it can own
-            // (`ownedLine`).
-            try located(line: index + 1, entry: nil) { try declare(from: line, into: &style, year: &year) }
-            try items.append(.directive(ownedLine(at: index, in: lines)))
+            // (`declare(at:in:into:year:)`).
+            try located(line: index + 1, entry: nil) { try declare(at: index, in: lines, into: &style, year: &year) }
+            items.append(.directive(line))
             index += 1
         }
 
