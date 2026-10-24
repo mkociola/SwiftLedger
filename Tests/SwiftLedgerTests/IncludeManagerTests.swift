@@ -118,4 +118,16 @@ import Testing
         try manager.add(.include(IncludedFiles(line: "include part.journal", journals: [])))
         #expect(manager.currentJournal.transactions.map(\.description) == ["Rent", "Opening balance", "Salary"])
     }
+
+    @Test
+    func `a hand-built include line holding a line break is refused`() throws {
+        let files = try JournalFiles(["top.journal": Self.entry("Rent"), "part.journal": Self.part])
+        defer { files.remove() }
+        let manager = try Self.manager(files)
+        let line = "include part.journal\n" + Self.entry("Smuggled")
+        #expect(throws: LedgerError.lineBreakInField("directive")) {
+            try manager.add(.include(IncludedFiles(line: line, journals: [])))
+        }
+        #expect(try files.read("top.journal") == Self.entry("Rent"))
+    }
 }

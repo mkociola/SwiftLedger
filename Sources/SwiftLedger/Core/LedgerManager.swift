@@ -94,7 +94,8 @@ public final class LedgerManager {
     /// balance error `Transaction.init` throws.
     ///
     /// A `.directive` holding `\n` is refused for the reason
-    /// `JournalItem.directive` gives (issue #72). Only `\n`, unlike
+    /// `JournalItem.directive` gives (issue #72), and so is an `.include`
+    /// whose line holds one, since its line is written the same way. Only `\n`, unlike
     /// `Transaction.requireOneLine`: the parser keeps a lone `\r` in a
     /// directive line, as hledger reads past one, so a directive read from the
     /// file has to go back in. Any other directive line is read where it
@@ -109,6 +110,8 @@ public final class LedgerManager {
         switch item {
         case let .directive(text):
             if text.unicodeScalars.contains("\n") { throw LedgerError.lineBreakInField("directive") }
+        case let .include(included):
+            if included.line.unicodeScalars.contains("\n") { throw LedgerError.lineBreakInField("directive") }
         case let .transaction(transaction) where transaction.sourceText == nil:
             try Transaction.requireBalanced(transaction.postings, formats: formats)
         default:
