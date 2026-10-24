@@ -74,8 +74,7 @@ public final class LedgerManager {
     public func replace(_ item: JournalItem, with replacement: JournalItem) throws -> Bool {
         var updated = ledger
         guard updated.replace(item, with: replacement) else { return false }
-        let file = ledger.journal.file(holding: item) ?? ledger.journal
-        try requireReloadable(replacement, formats: file.commodityFormats)
+        try requireReloadable(replacement, formats: formats(replacing: item))
         let reloaded = try Self.reloaded(updated, after: [item, replacement])
         try store?.save(updated)
         ledger = reloaded
@@ -165,13 +164,26 @@ public final class LedgerManager {
     }
 
     /// Whether `postings` balance as this journal would write them: the answer
-    /// `add` and `replace` give, without throwing.
+    /// `add` gives, without throwing, and with `replacing` the item to be
+    /// replaced, the answer `replace` gives.
     ///
     /// A number is padded to the digits the journal writes its commodity
     /// with, and an entry is held to the digits it is written in. So an entry
     /// that balances at `-1 USD` can be off once the file says `-1.00 USD`.
-    public func balance(of postings: [Posting]) -> (real: BalanceVerdict, bracketed: BalanceVerdict) {
-        Transaction.balance(of: postings, formats: ledger.journal.commodityFormats)
+    /// The digits are those of the file the entry lands in: the top file for
+    /// a new entry, and for a replacement the file holding the original,
+    /// which for an entry read from an included file is that file.
+    public func balance(
+        of postings: [Posting],
+        replacing original: JournalItem? = nil,
+    ) -> (real: BalanceVerdict, bracketed: BalanceVerdict) {
+        Transaction.balance(of: postings, formats: formats(replacing: original))
+    }
+
+    /// The styles of the file an item lands in: the one holding `original`,
+    /// or the top file for a new item or one no file holds.
+    private func formats(replacing original: JournalItem?) -> [String: CommodityFormat] {
+        (original.flatMap(ledger.journal.file(holding:)) ?? ledger.journal).commodityFormats
     }
 
     /// Removes the `account` directive declaring `name` and persists the result.

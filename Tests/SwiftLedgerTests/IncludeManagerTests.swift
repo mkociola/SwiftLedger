@@ -106,6 +106,8 @@ import Testing
             ),
             Posting(accountName: "Assets:Checking", amount: euros(-10)),
         ])
+        #expect(manager.balance(of: bought.postings, replacing: .transaction(opening)).real == .balanced)
+        #expect(manager.balance(of: bought.postings).real != .balanced)
         #expect(try manager.replace(.transaction(opening), with: .transaction(bought)))
         #expect(throws: LedgerError.self) { try manager.add(.transaction(bought)) }
     }
