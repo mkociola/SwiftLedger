@@ -35,7 +35,8 @@ extension JournalParser {
     /// in sorted order, passing over the including file itself. The included
     /// file reads under the `alias`, `apply account`, `Y`, `D`, `commodity`
     /// and `decimal-mark` lines in force at the line, and what it declares
-    /// stays in it.
+    /// stays in it, but for its `commodity` lines, which hledger keeps in
+    /// force below the line.
     ///
     /// - Throws: `LedgerError.unreadableInclude` for a line matching no file
     ///   or a file that cannot be read, since loading without it would show
@@ -54,7 +55,7 @@ extension JournalParser {
     /// serve the text it is about to save.
     func parse(fileAt url: URL, reading read: @escaping (URL) throws -> String) throws -> Journal {
         let file = url.standardizedFileURL
-        return try parse(read(file), in: ParseContext(file: file, read: read, chain: [file]))
+        return try parse(read(file), in: ParseContext(file: file, read: read, chain: [file])).journal
     }
 
     /// The item for a line the earlier branches of `parse` left alone: the
@@ -88,7 +89,14 @@ extension JournalParser {
             let child = ParseContext(
                 file: url, read: read, chain: context.chain + [url], style: style.declarations, year: year,
             )
-            do { return try parse(text, in: child) } catch let error as LedgerError {
+            do {
+                let (journal, childStyle) = try parse(text, in: child)
+                // hledger keeps an included file's `commodity` lines in force
+                // after the `include` line, in this file and in the files it
+                // includes next, where every other declaration stays behind.
+                style.adoptCommodityDeclarations(of: childStyle)
+                return journal
+            } catch let error as LedgerError {
                 throw LedgerError.inIncludedFile(url.path, underlying: error)
             }
         }

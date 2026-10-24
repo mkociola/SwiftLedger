@@ -176,6 +176,20 @@ struct JournalStyleCollector {
         return copy
     }
 
+    /// Takes the decimal marks `child`'s `commodity` lines declare, `child`
+    /// being the collector an included file was read with, started from this
+    /// one's `declarations`.
+    ///
+    /// hledger reads every `commodity` line in parse order, whichever file it
+    /// is in, so one in an included file declares the mark for the including
+    /// file below its `include` line and for the files included after it,
+    /// and a later one in either replaces it. A `decimal-mark`, `D`, `alias`,
+    /// `apply account` or `Y` line stays in its file, so nothing else comes
+    /// back.
+    mutating func adoptCommodityDeclarations(of child: JournalStyleCollector) {
+        commodityDirectiveMarks = child.commodityDirectiveMarks
+    }
+
     /// The decimal mark the file has declared for an amount in `commodity` by
     /// this point in it, or `nil` when no directive has spoken.
     ///

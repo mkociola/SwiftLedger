@@ -232,8 +232,10 @@ a blank line cut off from its entry, refuses the file at its line with
 > (`*`, `?`, `[...]`, `**`) as every match in sorted order, and includes inside
 > included files. An included file is read under the `alias`, `apply
 > account`, `Y`, `D`, `commodity` and `decimal-mark` lines in force at the
-> `include` line, and what it declares stays in it. `Ledger` queries and
-> reports see every file's entries, in the order hledger reads them.
+> `include` line, and what it declares stays in it, but for its `commodity`
+> lines, which stay in force below the `include` line as they do in hledger.
+> `Ledger` queries and reports see every file's entries, in the order hledger
+> reads them.
 >
 > Each file is kept as its own `Journal` in the `JournalItem.include` item of
 > the line that read it, with its own layout and line endings. A new entry

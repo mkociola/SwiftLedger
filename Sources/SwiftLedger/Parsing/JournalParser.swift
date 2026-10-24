@@ -147,12 +147,13 @@ public struct JournalParser {
     /// Parses `text` and returns a `Journal`, an `include` line kept verbatim
     /// as a `.directive` (`parse(fileAt:)` follows one).
     public func parse(_ text: String) throws -> Journal {
-        try parse(text, in: ParseContext())
+        try parse(text, in: ParseContext()).journal
     }
 
     /// Parses `text` as the file `context` names, under the declarations in
-    /// force where an `include` line read it, or as text when it names none.
-    func parse(_ text: String, in context: ParseContext) throws -> Journal {
+    /// force where an `include` line read it, or as text when it names none,
+    /// with the declarations in force at its end, which an includer reads on.
+    func parse(_ text: String, in context: ParseContext) throws -> (journal: Journal, style: JournalStyleCollector) {
         let (lines, lineEnding) = Self.lines(of: text)
         // On the scalars, since `"\r\n"` is one `Character` and not `"\n"`.
         let endsInNewline = text.unicodeScalars.last == "\n"
@@ -234,7 +235,7 @@ public struct JournalParser {
             index += 1
         }
 
-        return Journal(items: items, style: style, lineEnding: lineEnding, file: context.file)
+        return (Journal(items: items, style: style, lineEnding: lineEnding, file: context.file), style)
     }
 
     // MARK: - account directives
