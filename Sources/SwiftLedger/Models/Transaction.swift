@@ -47,7 +47,7 @@ import Foundation
 /// A transaction that comes back from the parser also carries the lines it was
 /// read from, in `sourceText`, so that leaving it alone leaves the file alone.
 public struct Transaction: Identifiable, Sendable, Codable, Hashable {
-    public let id: UUID
+    public private(set) var id: UUID
     /// The effective date of the transaction.
     public let date: JournalDate
     /// Optional auxiliary/effective date (ledger `=` syntax).
@@ -255,6 +255,15 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     func taggedWithSource(_ text: String) -> Transaction {
         var copy = self
         copy.sourceText = text
+        return copy
+    }
+
+    /// The same transaction under `id`. `LedgerManager` reads the journal
+    /// again after a directive edit, and the parse mints a new id for every
+    /// entry, where the caller still holds the old ones.
+    func identified(as id: UUID) -> Transaction {
+        var copy = self
+        copy.id = id
         return copy
     }
 

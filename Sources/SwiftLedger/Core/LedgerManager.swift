@@ -27,8 +27,9 @@ public final class LedgerManager {
         var updated = ledger
         updated.add(item)
         try requireReloadable(item, in: updated)
+        let reloaded = try Self.reloaded(updated, after: [item])
         try store?.save(updated)
-        ledger = updated
+        ledger = reloaded
     }
 
     /// Removes the first occurrence of `item` from the journal.
@@ -36,15 +37,22 @@ public final class LedgerManager {
     /// Equality is value-based: if the journal contains two structurally
     /// identical items, only the first one is removed.
     ///
+    /// Removing a directive line rereads the journal, as adding one does, so
+    /// the entries below it are booked as the saved file books them, and a
+    /// removal that would leave the file unreadable is refused with the
+    /// parser's error (`reloaded(_:after:)`).
+    ///
     /// - Returns: `true` if a matching item was found and removed;
     ///   `false` if no match exists.
-    /// - Throws: Any error raised by the store's `save` method.
+    /// - Throws: Any error raised by the store's `save` method, or by the
+    ///   parser for a directive line the file needs.
     @discardableResult
     public func remove(_ item: JournalItem) throws -> Bool {
         var updated = ledger
         guard updated.remove(item) else { return false }
+        let reloaded = try Self.reloaded(updated, after: [item])
         try store?.save(updated)
-        ledger = updated
+        ledger = reloaded
         return true
     }
 
@@ -67,8 +75,9 @@ public final class LedgerManager {
         var updated = ledger
         guard updated.replace(item, with: replacement) else { return false }
         try requireReloadable(replacement, in: updated)
+        let reloaded = try Self.reloaded(updated, after: [item, replacement])
         try store?.save(updated)
-        ledger = updated
+        ledger = reloaded
         return true
     }
 
@@ -90,18 +99,50 @@ public final class LedgerManager {
     /// word hledger knows or be a `D` or `decimal-mark` line hledger cannot
     /// read, indented it may belong to no block above it, and inside an open
     /// `comment` block it is text that reads back as it came. Only a parse of
-    /// the journal as it would be saved knows all of that, so `updated` is
-    /// written and read once before the store sees it (issue #130).
-    private func requireReloadable(_ item: JournalItem, in updated: Ledger) throws {
+    /// the journal as it would be saved knows all of that, so
+    /// `reloaded(_:after:)` writes and reads `updated` once before the store
+    /// sees it (issue #130).
+    private func requireReloadable(_ item: JournalItem, in _: Ledger) throws {
         switch item {
         case let .directive(text):
             if text.unicodeScalars.contains("\n") { throw LedgerError.lineBreakInField("directive") }
-            _ = try JournalParser().parse(JournalSerializer().serialize(updated.journal))
         case let .transaction(transaction) where transaction.sourceText == nil:
             try Transaction.requireBalanced(transaction.postings, formats: ledger.journal.commodityFormats)
         default:
             break
         }
+    }
+
+    /// `ledger` as the next load reads it from the text it saves as, each
+    /// entry under the id it has now, when one of `items` is a directive
+    /// line, and `ledger` itself otherwise.
+    ///
+    /// A directive line can change what every entry below it means: an
+    /// `alias` or `apply account` line the account it is booked under, a `D`
+    /// or `decimal-mark` line what its amounts are worth. Kept as it was, the
+    /// ledger in memory went on reading those entries the old way while the
+    /// saved file read them the new one, until `reload()` (issue #145). The
+    /// parse keeps the entries in order and mints new ids, so the ids are
+    /// carried over by position, and an entry the edit did not reach is still
+    /// the value the caller holds. The parse also throws for a file that
+    /// would not load, which is what refuses a directive line where it
+    /// lands, and a removal that leaves the file unreadable, such as an
+    /// `end apply account` whose opening line went.
+    private static func reloaded(_ ledger: Ledger, after items: [JournalItem]) throws -> Ledger {
+        guard items.contains(where: { if case .directive = $0 { true } else { false } }) else { return ledger }
+        let journal = try JournalParser().parse(JournalSerializer().serialize(ledger.journal))
+        var ids = ledger.journal.transactions.map(\.id).makeIterator()
+        let items = journal.items.map { item in
+            guard case let .transaction(entry) = item, let id = ids.next() else { return item }
+            return .transaction(entry.identified(as: id))
+        }
+        return Ledger(journal: Journal(
+            items: items,
+            commodityFormats: journal.commodityFormats,
+            amountAlignment: journal.amountAlignment,
+            postingIndent: journal.postingIndent,
+            lineEnding: journal.lineEnding,
+        ))
     }
 
     /// Whether `postings` balance as this journal would write them: the answer
