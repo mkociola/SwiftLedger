@@ -36,6 +36,16 @@ import Testing
     }
 
     @Test
+    func `a staging file a crash left behind is not read by a glob`() throws {
+        let files = try JournalFiles(["top.journal": "include 2024/*\n", "2024/jan.journal": Self.part])
+        defer { files.remove() }
+        let staged = PlainTextJournalStore.stagingURL(for: files.url("2024/jan.journal"))
+        try Data(Self.part.utf8).write(to: staged)
+        let manager = try Self.manager(files)
+        #expect(manager.balance(for: "Assets:Checking").map(\.quantity) == [5500])
+    }
+
+    @Test
     func `a journal with no include saves exactly as before`() throws {
         let files = try JournalFiles(["top.journal": Self.part])
         defer { files.remove() }

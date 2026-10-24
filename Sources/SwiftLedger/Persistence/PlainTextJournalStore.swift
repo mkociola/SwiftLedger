@@ -50,7 +50,7 @@ public final class PlainTextJournalStore: LedgerStore {
         do {
             for (file, text) in files {
                 current = file
-                let tmp = file.appendingPathExtension("tmp")
+                let tmp = Self.stagingURL(for: file)
                 staged.append((file, tmp))
                 try Data(text.utf8).write(to: tmp, options: .atomic)
             }
@@ -70,6 +70,18 @@ public final class PlainTextJournalStore: LedgerStore {
         for (file, text) in files {
             snapshots[file.standardizedFileURL.path] = text
         }
+    }
+
+    /// Where `save` writes `file`'s new text before moving it into place: a
+    /// hidden file beside it.
+    ///
+    /// A crash between the write and the move leaves this file behind, and
+    /// an `include 2024/*` line would read `jan.journal.tmp` as one more
+    /// journal, every entry in it counted twice. A glob passes over a name
+    /// that starts with a dot, in hledger and here, so the leftover is never
+    /// read.
+    static func stagingURL(for file: URL) -> URL {
+        file.deletingLastPathComponent().appending(path: ".\(file.lastPathComponent).tmp")
     }
 
     /// The files `save` writes, with their text: the top file, to `url`,
