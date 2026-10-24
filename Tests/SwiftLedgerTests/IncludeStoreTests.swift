@@ -104,4 +104,46 @@ import Testing
         #expect(try files.read("top.journal") == top)
         #expect(manager.currentJournal == before)
     }
+
+    /// A file that mixes line endings is written back in one, so its text
+    /// never matches what was read. Nobody edited it, so it is not written.
+    @Test
+    func `an unedited included file that does not round-trip byte for byte is left alone`() throws {
+        let mixed = "2024-01-01 Opening balance\r\n    Assets:Checking  $2500.00\n    Equity:Opening\n"
+        let files = try JournalFiles(["top.journal": Self.top, "part.journal": mixed])
+        defer { files.remove() }
+        let manager = try Self.manager(files)
+        try manager.add(.transaction(Self.rent("Rent again")))
+        #expect(try Data(contentsOf: files.url("part.journal")) == Data(mixed.utf8))
+    }
+
+    /// An include line added through the manager reads its file from disk.
+    /// Edited elsewhere afterwards and not here, the file keeps the outside
+    /// edit when the journal is next saved.
+    @Test
+    func `a file included after the load and edited elsewhere is not overwritten`() throws {
+        let files = try JournalFiles(["top.journal": Self.part, "child.journal": IncludeManagerTests.entry("Child")])
+        defer { files.remove() }
+        let manager = try Self.manager(files)
+        try manager.add(.directive("include child.journal"))
+        let outside = IncludeManagerTests.entry("Child") + "\n" + IncludeManagerTests.entry("Elsewhere")
+        try files.write("child.journal", outside)
+        try manager.add(.transaction(Self.rent("Rent again")))
+        #expect(try files.read("child.journal") == outside)
+    }
+
+    /// Once an edit made here is saved, the file is not written again until
+    /// it is edited here again, so a later outside edit survives.
+    @Test
+    func `an included file edited here and then elsewhere keeps the outside edit`() throws {
+        let files = try JournalFiles(["top.journal": Self.top, "part.journal": Self.part])
+        defer { files.remove() }
+        let manager = try Self.manager(files)
+        let opening = try #require(manager.currentJournal.transactions.first)
+        try manager.replace(.transaction(opening), with: .transaction(IncludeEditTests.rebuilt(opening, as: "Opened")))
+        let outside = try files.read("part.journal") + "\n" + IncludeManagerTests.entry("Elsewhere")
+        try files.write("part.journal", outside)
+        try manager.add(.transaction(Self.rent("Rent again")))
+        #expect(try files.read("part.journal") == outside)
+    }
 }

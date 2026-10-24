@@ -117,6 +117,14 @@ public struct Journal: Sendable, Codable, Hashable {
     /// a place on one machine, not anything the journal records.
     public internal(set) var file: URL?
 
+    /// Whether `append`, `remove`, `replace` or `removeAccountDirective`
+    /// changed this file's own items since it was read. The store writes an
+    /// included file only when this is set: comparing texts cannot tell an
+    /// edit made here from one made in another app, or from a file the
+    /// serializer writes back with one line ending where it read two. Not
+    /// encoded, and no part of equality (`EditMark`).
+    var edited = EditMark()
+
     /// How this file writes each commodity it mentions — decimal places,
     /// thousands separators and where a minus sign goes — as `JournalParser`
     /// found it.
@@ -216,6 +224,7 @@ public struct Journal: Sendable, Codable, Hashable {
         case .directive, .blank:
             items.append(item)
         }
+        edited.isSet = true
     }
 
     /// The index of the line opening the block comment this journal ends
@@ -314,6 +323,7 @@ public struct Journal: Sendable, Codable, Hashable {
     /// directive handed back does not carry them; an undo restores the line
     /// alone.
     private mutating func removeItem(at index: Int) {
+        edited.isSet = true
         guard case .accountDirective = items.remove(at: index) else { return }
         let indented = { (text: String) in text.unicodeScalars.first == " " || text.unicodeScalars.first == "\t" }
         while index < items.count, let text = items[index].verbatimLine, indented(text) {
@@ -338,6 +348,7 @@ public struct Journal: Sendable, Codable, Hashable {
             return editIncluded { $0.replace(item, with: replacement) ? true : nil } ?? false
         }
         items[idx] = replacement
+        edited.isSet = true
         return true
     }
 

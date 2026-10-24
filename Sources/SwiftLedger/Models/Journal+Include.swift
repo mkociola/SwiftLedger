@@ -163,3 +163,16 @@ extension Journal {
         return copy
     }
 }
+
+/// Whether a file was edited since it was read (`Journal.edited`), kept out
+/// of the journal's value: two journals holding the same items are equal
+/// however they came to hold them, so every mark compares equal.
+struct EditMark: Hashable {
+    var isSet = false
+
+    static func == (_: EditMark, _: EditMark) -> Bool {
+        true
+    }
+
+    func hash(into _: inout Hasher) {}
+}

@@ -152,8 +152,9 @@ public final class LedgerManager {
             return try Ledger(journal: JournalParser().parse(files[0].text).identified(like: ledger.journal))
         }
         var texts: [String: String] = [:]
-        for case let (file?, text) in files where texts[file.standardizedFileURL.path] == nil {
-            texts[file.standardizedFileURL.path] = text
+        for entry in files {
+            guard let path = entry.file?.standardizedFileURL.path, texts[path] == nil else { continue }
+            texts[path] = entry.text
         }
         texts[top.standardizedFileURL.path] = files[0].text
         let journal = try JournalParser().parse(fileAt: top) { file in

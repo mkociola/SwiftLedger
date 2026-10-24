@@ -8,11 +8,12 @@ import Foundation
 /// writes.
 ///
 /// An edit to an entry of an included file is saved to that file. An included
-/// file is written only when its text differs from what the store last read
-/// from it or wrote to it, so a file nobody edited keeps its bytes and its
-/// modification date, and one edited in another app since the load is not
-/// overwritten unless it was edited here too, which is what has always held
-/// for the top file. The top file is always written, to `url`.
+/// file is written only when it was edited here (`Journal.edited`) and its
+/// text differs from what the store last read from it or wrote to it, so a
+/// file nobody edited keeps its bytes and its modification date, even one the
+/// serializer would write back differently, and one edited in another app
+/// since is not overwritten unless it was edited here too, which is what has
+/// always held for the top file. The top file is always written, to `url`.
 public final class PlainTextJournalStore: LedgerStore {
     private let url: URL
     private let parser = JournalParser()
@@ -72,7 +73,8 @@ public final class PlainTextJournalStore: LedgerStore {
     }
 
     /// The files `save` writes, with their text: the top file, to `url`,
-    /// then every included file whose text differs from its snapshot.
+    /// then every included file edited here whose text differs from its
+    /// snapshot.
     ///
     /// - Throws: `LedgerError.storeError` when one file is included twice and
     ///   its two copies would be written differently, so an edit made in one
@@ -93,7 +95,7 @@ public final class PlainTextJournalStore: LedgerStore {
                 continue
             }
             written[file.path] = entry.text
-            if index == 0 || snapshots[file.path] != entry.text { result.append((file, entry.text)) }
+            if index == 0 || entry.edited && snapshots[file.path] != entry.text { result.append((file, entry.text)) }
         }
         return result
     }

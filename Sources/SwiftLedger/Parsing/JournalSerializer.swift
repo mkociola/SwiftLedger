@@ -78,11 +78,19 @@ public struct JournalSerializer {
     /// `include` line that read it, as the parser read it, so a rebuilt entry
     /// under the including file's `apply account Top` writes `a`, not the
     /// `Top:a` the next parse books as `Top:Top:a`. What the included file
-    /// declares stays in it.
-    func serializedFiles(_ journal: Journal) -> [(file: URL?, text: String)] {
-        var files: [(file: URL?, text: String)] = []
+    /// declares stays in it. `edited` is the file's `Journal.edited`, for
+    /// the store to tell which included files to write.
+    func serializedFiles(_ journal: Journal) -> [SerializedFile] {
+        var files: [SerializedFile] = []
         write(journal, from: FileWalk(), into: &files)
         return files
+    }
+
+    /// One file's text, for the store and the manager.
+    struct SerializedFile {
+        var file: URL?
+        var text: String
+        var edited: Bool
     }
 
     /// Where the walk over one file stands: the lines written so far, and
@@ -107,9 +115,9 @@ public struct JournalSerializer {
     /// Writes `journal` as one file, starting from the directives `walk`
     /// has in force, and appends its text to `files` ahead of the files it
     /// includes.
-    private func write(_ journal: Journal, from start: FileWalk, into files: inout [(file: URL?, text: String)]) {
+    private func write(_ journal: Journal, from start: FileWalk, into files: inout [SerializedFile]) {
         let slot = files.count
-        files.append((journal.file, ""))
+        files.append(SerializedFile(file: journal.file, text: "", edited: journal.edited.isSet))
         var walk = start
         walk.lines = []
         walk.inBlockComment = false
@@ -126,7 +134,7 @@ public struct JournalSerializer {
     }
 
     private func write(
-        _ item: JournalItem, of journal: Journal, walk: inout FileWalk, files: inout [(file: URL?, text: String)],
+        _ item: JournalItem, of journal: Journal, walk: inout FileWalk, files: inout [SerializedFile],
     ) {
         switch item {
         case .blank:
