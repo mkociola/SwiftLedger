@@ -27,25 +27,29 @@ public extension Journal {
     /// does not. Reading the tree in that order is what lets `Ledger` and every
     /// report see a journal of many files as the one journal hledger sees.
     var transactions: [Transaction] {
-        items.flatMap { item -> [Transaction] in
+        var result: [Transaction] = []
+        for item in items {
             switch item {
-            case let .transaction(transaction): [transaction]
-            case let .include(included): included.journals.flatMap(\.transactions)
-            default: []
+            case let .transaction(transaction): result.append(transaction)
+            case let .include(included): result += included.journals.flatMap(\.transactions)
+            default: continue
             }
         }
+        return result
     }
 
     /// All `account` directives in document order, those of an included file
     /// at its `include` line, for the reason `transactions` reads them so.
     var accountDirectives: [AccountDirective] {
-        items.flatMap { item -> [AccountDirective] in
+        var result: [AccountDirective] = []
+        for item in items {
             switch item {
-            case let .accountDirective(directive): [directive]
-            case let .include(included): included.journals.flatMap(\.accountDirectives)
-            default: []
+            case let .accountDirective(directive): result.append(directive)
+            case let .include(included): result += included.journals.flatMap(\.accountDirectives)
+            default: continue
             }
         }
+        return result
     }
 
     /// The verbatim text of every unmodelled directive line in this file, in
