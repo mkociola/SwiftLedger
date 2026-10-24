@@ -11,12 +11,32 @@ extension Posting {
     /// the parser sets one: an elided line split into a posting per commodity
     /// leaves its comments on one posting each, and dates the others the same.
     func datedByComments(year: Int) throws -> Posting {
-        let lines = (comment.map { [$0[...]] } ?? [])
-            + trailingComments.map { $0.drop { $0 == " " || $0 == "\t" }.dropFirst() }
-        let written = try Self.writtenDates(in: lines, year: year)
+        let written = try Self.writtenDates(in: commentLines, year: year)
         var copy = self
         (copy.date, copy.date2) = (written.date ?? date, written.date2 ?? date2)
         return copy
+    }
+
+    /// The `date:` and `date2:` tags for the dates this posting has and its
+    /// comments do not write, or `nil` when they write all it has.
+    ///
+    /// `JournalSerializer` adds them to a rebuilt posting's inline comment,
+    /// so that the next parse dates it the same. Only the legs of a split
+    /// elided line need them, since only the parser dates a posting past
+    /// what its comments say.
+    func unwrittenDateTags(year: Int) -> String? {
+        let written = (try? Self.writtenDates(in: commentLines, year: year)) ?? (date: nil, date2: nil)
+        let tags = [
+            written.date == nil ? date.map { "date:\($0)" } : nil,
+            written.date2 == nil ? date2.map { "date2:\($0)" } : nil,
+        ].compactMap(\.self)
+        return tags.isEmpty ? nil : tags.joined(separator: ", ")
+    }
+
+    /// The inline comment, then each comment line below the posting without
+    /// its indentation and marker.
+    private var commentLines: [Substring] {
+        (comment.map { [$0[...]] } ?? []) + trailingComments.map { $0.drop { $0 == " " || $0 == "\t" }.dropFirst() }
     }
 
     /// The first `date` and the first `date2` the comment lines write, in

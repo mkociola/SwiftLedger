@@ -158,6 +158,16 @@ account Expenses:Utilities
     Expenses:Utilities         $31.00
     Assets:Checking  ; date:2024-04-02
 
+; An elided line that absorbs two commodities is read as a posting in each,
+; and both take the line's date, though only one holds the comment. An entry
+; SwiftLedger rebuilds writes them on lines of their own, and the one without
+; the comment gets a date: tag, so the next load dates it the same.
+
+2024-03-30 Ferry tickets on the card, cleared on the 3rd
+    Expenses:Transport     €12,00
+    Expenses:Transport     £9.00
+    Liabilities:TravelCard  ; date:2024-04-03
+
 ; ── Virtual postings ────────────────────────────────────────────────────────
 ; Parentheses make a posting virtual: it moves money in a tracking account
 ; outside the double-entry books and takes no part in balancing. Square

@@ -157,18 +157,39 @@ import Testing
         }
     }
 
-    /// The dates are read from the comment, so they are not encoded beside
-    /// it, and a decoded transaction reads them again.
+    /// The split elided line above, whose second leg has no comment of its
+    /// own to read a date from.
+    private static let splitLine = "2024-01-31 Rent\n    Expenses:Rent      $10\n    Expenses:Rent      10 EUR\n"
+        + "    Assets:Checking  ; date:2024-02-02\n    ; date2:2024-02-09"
+
     @Test
-    func `the dates round trip through JSON without a key of their own`() throws {
-        let journal = try JournalParser().parse(
-            "2024-01-31 Rent\n    Expenses:Rent      $10\n    Assets:Checking  ; date:02-02, date2:02-03",
-        )
-        let transaction = try #require(journal.transactions.first)
-        let data = try JSONEncoder().encode(transaction)
-        #expect(try !#require(String(data: data, encoding: .utf8)).contains("\"date2\""))
-        let decoded = try JSONDecoder().decode(Transaction.self, from: data)
-        #expect(try decoded.postings[1].date == JournalDate(year: 2024, month: 2, day: 2))
+    func `the dates round trip through JSON, a split line's legs included`() throws {
+        let transaction = try #require(JournalParser().parse(Self.splitLine).transactions.first)
+        let decoded = try JSONDecoder().decode(Transaction.self, from: JSONEncoder().encode(transaction))
+        #expect(decoded.postings.map(\.date) == transaction.postings.map(\.date))
         #expect(decoded == transaction)
+    }
+
+    /// A rebuilt entry writes each leg of a split line on a line of its own,
+    /// and a leg whose comments do not write its dates gets them written.
+    @Test
+    func `a rebuilt split line keeps every leg's dates`() throws {
+        let parsed = try #require(JournalParser().parse(Self.splitLine).transactions.first)
+        let rebuilt = try Transaction(date: parsed.date, description: parsed.description, postings: parsed.postings)
+        let text = JournalSerializer().serialize(Journal(items: [.transaction(rebuilt)]))
+        #expect(text.contains("10 EUR  ; date:2024-02-02\n"))
+        let reread = try #require(JournalParser().parse(text).transactions.first)
+        #expect(reread.postings.map(\.date) == parsed.postings.map(\.date))
+        #expect(reread.postings.map(\.date2) == parsed.postings.map(\.date2))
+    }
+
+    @Test
+    func `a rebuilt leg with an empty comment gets the tag without a stray comma`() throws {
+        let text = "2024-01-31 Rent\n    Expenses:Rent      $10\n    Expenses:Rent      10 EUR\n"
+            + "    Assets:Checking  ;\n    ; date2:2024-02-09"
+        let parsed = try #require(JournalParser().parse(text).transactions.first)
+        let rebuilt = try Transaction(date: parsed.date, description: parsed.description, postings: parsed.postings)
+        let written = JournalSerializer().serialize(Journal(items: [.transaction(rebuilt)]))
+        #expect(written.contains("-$10.00  ; date2:2024-02-09\n"))
     }
 }

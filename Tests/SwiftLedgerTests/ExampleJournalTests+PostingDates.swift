@@ -18,4 +18,29 @@ extension ExampleJournalTests {
         let april = try ledger.balance(for: "Assets:Checking", asOf: JournalDate(year: 2024, month: 4, day: 2))
         #expect(april.map(\.quantity) == march.map { $0.quantity - 31 })
     }
+
+    /// Both card postings the ferry entry's elided line splits into are dated
+    /// April 3rd, and rebuilt, each is written with the date. Written back
+    /// without the tag on the euro leg, the next load dated it March 30th.
+    @Test
+    func `the example's split ferry line keeps its date when rebuilt`() throws {
+        var journal = try JournalParser().parse(Self.exampleText)
+        let ferry = try #require(journal.transactions.first { $0.description.hasPrefix("Ferry tickets") })
+        let cleared = try JournalDate(year: 2024, month: 4, day: 3)
+        #expect(ferry.postings.map(\.date) == [nil, nil, cleared, cleared])
+
+        let rebuilt = try Transaction(date: ferry.date, description: ferry.description, postings: ferry.postings)
+        let replaced = journal.replace(.transaction(ferry), with: .transaction(rebuilt))
+        #expect(replaced)
+        let text = JournalSerializer().serialize(journal)
+        #expect(text.contains("""
+            Liabilities:TravelCard  -£9.00  ; date:2024-04-03
+            Liabilities:TravelCard  -€12,00  ; date:2024-04-03
+
+        """))
+        let reread = try #require(JournalParser().parse(text).transactions.first {
+            $0.description == ferry.description
+        })
+        #expect(reread.postings.map(\.date) == [nil, nil, cleared, cleared])
+    }
 }

@@ -166,8 +166,10 @@ public struct Posting: Sendable, Codable, Hashable {
     /// The comment is the only place the date is written, so this is read
     /// from it rather than set: `Transaction.init` reads it from `comment`
     /// and `trailingComments`, since only the transaction knows the year a
-    /// short date leaves out. A posting that is in no transaction has none,
-    /// and it is not encoded. The rules are on `Posting.writtenDates`.
+    /// short date leaves out. A posting built outside a transaction has none.
+    /// The rules are on `Posting.writtenDates`. It is encoded, for the one
+    /// posting whose comments do not write it, a leg of an elided line split
+    /// by commodity, and a decoded transaction reads the comments again.
     public internal(set) var date: JournalDate?
     /// The posting's secondary date, from a `date2:` tag or the part of a
     /// bracket after its `=`, read the way `date` is.
@@ -221,17 +223,10 @@ public struct Posting: Sendable, Codable, Hashable {
         self.trailingComments = trailingComments
     }
 
-    /// The encoded shape of a posting. `date` and `date2` are left out: they
-    /// are read from the comments, which are encoded, whenever the posting
-    /// joins a transaction.
-    private enum CodingKeys: String, CodingKey {
-        case accountName, kind, amount, price, balanceAssertion, balanceAssertionOperator, status, comment
-        case trailingComments
-    }
-
     /// Decodes a posting, treating a missing `kind`, `trailingComments`,
-    /// `price`, `balanceAssertion` or `balanceAssertionOperator` key as absent
-    /// so that JSON written before those keys existed still decodes. A
+    /// `price`, `balanceAssertion`, `balanceAssertionOperator`, `date` or
+    /// `date2` key as absent so that JSON written before those keys existed
+    /// still decodes. A
     /// posting with no `kind` is real, which is what every posting written
     /// before virtual ones were modelled was, and one with no operator
     /// asserts a single commodity, which is how every assertion was read then.
@@ -247,6 +242,8 @@ public struct Posting: Sendable, Codable, Hashable {
         status = try container.decodeIfPresent(ClearingStatus.self, forKey: .status)
         comment = try container.decodeIfPresent(String.self, forKey: .comment)
         trailingComments = try container.decodeIfPresent([String].self, forKey: .trailingComments) ?? []
+        date = try container.decodeIfPresent(JournalDate.self, forKey: .date)
+        date2 = try container.decodeIfPresent(JournalDate.self, forKey: .date2)
     }
 }
 
