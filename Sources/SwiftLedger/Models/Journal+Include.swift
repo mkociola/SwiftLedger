@@ -112,3 +112,54 @@ extension Journal {
         return nil
     }
 }
+
+extension Journal {
+    /// The journal of the file holding `item`, searched in the order
+    /// `replace(_:with:)` searches, or `nil` when no file holds it.
+    func file(holding item: JournalItem) -> Journal? {
+        if items.contains(item) { return self }
+        for case let .include(included) in items {
+            for child in included.journals {
+                if let found = child.file(holding: item) { return found }
+            }
+        }
+        return nil
+    }
+
+    /// This journal, re-read, with each file's entries under the ids `old`
+    /// gave the same file's entries, in order.
+    ///
+    /// A parse mints new ids, and the caller holds values carrying the old
+    /// ones. The top file takes the top file's ids and an included file those
+    /// of the file at the same path, a file included twice taking its copies'
+    /// ids in turn, so an `include` line added or removed shifts no other
+    /// file's entries. An entry with no id left to take keeps the new one.
+    func identified(like old: Journal) -> Journal {
+        var ids: [String?: ArraySlice<UUID>] = [:]
+        for (index, file) in old.files.enumerated() {
+            let own = file.items.compactMap { if case let .transaction(entry) = $0 { entry.id } else { nil } }
+            ids[index == 0 ? nil : file.file?.path, default: []] += own
+        }
+        return identified(isTop: true, taking: &ids)
+    }
+
+    private func identified(isTop: Bool, taking ids: inout [String?: ArraySlice<UUID>]) -> Journal {
+        var copy = self
+        let key = isTop ? nil : file?.path
+        for index in items.indices {
+            switch items[index] {
+            case let .transaction(entry):
+                guard isTop || file != nil, let id = ids[key]?.popFirst() else { continue }
+                copy.items[index] = .transaction(entry.identified(as: id))
+            case var .include(included):
+                for child in included.journals.indices {
+                    included.journals[child] = included.journals[child].identified(isTop: false, taking: &ids)
+                }
+                copy.items[index] = .include(included)
+            default:
+                continue
+            }
+        }
+        return copy
+    }
+}
