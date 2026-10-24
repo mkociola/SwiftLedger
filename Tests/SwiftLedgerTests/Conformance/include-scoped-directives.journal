@@ -1,0 +1,11 @@
+alias chk = Assets:Checking
+Y 2024
+decimal-mark ,
+commodity 1.000,00 EUR
+include _include-scoped-part.journal
+
+01-10 After
+    rent  1,5 EUR
+    chk  -1,5 EUR
+    Equity:Opening  8
+    Equity:Opening  -8

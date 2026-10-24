@@ -1,0 +1,5 @@
+hledger: Error: include-missing.journal:1:1:
+  |
+1 | include _include-missing-part.journal
+  | ^
+No files were matched by: _include-missing-part.journal

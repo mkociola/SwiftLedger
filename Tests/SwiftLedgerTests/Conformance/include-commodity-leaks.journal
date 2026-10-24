@@ -1,0 +1,10 @@
+2024-01-01 Before
+    Expenses:Rent  1.500 EUR
+    Assets:Checking
+
+include _include-commodity-part.journal
+include _include-commodity-sibling.journal
+
+2024-01-03 After
+    Expenses:Rent  1.500 EUR
+    Assets:Checking

@@ -1,0 +1,47 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": -15015,
+        "places": 1
+      },
+      {
+        "commodity": "USD",
+        "mantissa": -75,
+        "places": 1
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Housing",
+    "amounts": [
+      {
+        "commodity": "USD",
+        "mantissa": 75,
+        "places": 1
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Rent",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 1500,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "rent",
+    "amounts": [
+      {
+        "commodity": "EUR",
+        "mantissa": 15,
+        "places": 1
+      }
+    ]
+  }
+]

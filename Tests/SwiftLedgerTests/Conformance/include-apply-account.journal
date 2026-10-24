@@ -1,0 +1,6 @@
+apply account Home
+include _include-apply-account-part.journal
+
+2024-01-09 Back
+    Expenses:Rent  $1.00
+    Assets:Checking

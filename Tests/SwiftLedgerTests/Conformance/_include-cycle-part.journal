@@ -1,0 +1,5 @@
+2024-01-01 Part
+    Expenses:Rent  $1.00
+    Assets:Checking
+
+include include-cycle.journal

@@ -1,0 +1,5 @@
+hledger: Error: include-no-path.journal:1:1:
+  |
+1 | include
+  | ^
+include needs a file path or glob pattern argument

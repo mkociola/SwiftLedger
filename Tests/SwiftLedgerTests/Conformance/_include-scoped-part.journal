@@ -1,0 +1,12 @@
+01-02 Rent
+    Expenses:Rent  1.500 EUR
+    chk
+
+alias rent = Expenses:Housing
+D 1000,00 USD
+Y 2030
+decimal-mark .
+
+01-03 Bare
+    rent  7.5
+    chk

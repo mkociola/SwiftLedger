@@ -26,7 +26,7 @@ public final class LedgerManager {
     public func add(_ item: JournalItem) throws {
         var updated = ledger
         updated.add(item)
-        try requireReloadable(item, in: updated)
+        try requireReloadable(item, formats: ledger.journal.commodityFormats)
         let reloaded = try Self.reloaded(updated, after: [item])
         try store?.save(updated)
         ledger = reloaded
@@ -74,7 +74,7 @@ public final class LedgerManager {
     public func replace(_ item: JournalItem, with replacement: JournalItem) throws -> Bool {
         var updated = ledger
         guard updated.replace(item, with: replacement) else { return false }
-        try requireReloadable(replacement, in: updated)
+        try requireReloadable(replacement, formats: formats(replacing: item))
         let reloaded = try Self.reloaded(updated, after: [item, replacement])
         try store?.save(updated)
         ledger = reloaded
@@ -82,16 +82,19 @@ public final class LedgerManager {
     }
 
     /// Refuses an item the serializer would write as lines the next parse,
-    /// or hledger, refuses, `updated` being the ledger with the item in it.
+    /// or hledger, refuses, `formats` being the styles of the file it lands
+    /// in: the top file for `add`, which puts every item there, and the file
+    /// holding the original for `replace`.
     ///
     /// A transaction that still carries the lines it was parsed from is
     /// replayed verbatim and was checked when it was read, so it passes: that
     /// is what lets a removed entry be put back exactly as it was. One built
-    /// in code is held to the digits the journal writes it in, with the
+    /// in code is held to the digits that file writes it in, with the
     /// balance error `Transaction.init` throws.
     ///
     /// A `.directive` holding `\n` is refused for the reason
-    /// `JournalItem.directive` gives (issue #72). Only `\n`, unlike
+    /// `JournalItem.directive` gives (issue #72), and so is an `.include`
+    /// whose line holds one, since its line is written the same way. Only `\n`, unlike
     /// `Transaction.requireOneLine`: the parser keeps a lone `\r` in a
     /// directive line, as hledger reads past one, so a directive read from the
     /// file has to go back in. Any other directive line is read where it
@@ -102,20 +105,22 @@ public final class LedgerManager {
     /// the journal as it would be saved knows all of that, so
     /// `reloaded(_:after:)` writes and reads `updated` once before the store
     /// sees it (issue #130).
-    private func requireReloadable(_ item: JournalItem, in _: Ledger) throws {
+    private func requireReloadable(_ item: JournalItem, formats: [String: CommodityFormat]) throws {
         switch item {
         case let .directive(text):
             if text.unicodeScalars.contains("\n") { throw LedgerError.lineBreakInField("directive") }
+        case let .include(included):
+            if included.line.unicodeScalars.contains("\n") { throw LedgerError.lineBreakInField("directive") }
         case let .transaction(transaction) where transaction.sourceText == nil:
-            try Transaction.requireBalanced(transaction.postings, formats: ledger.journal.commodityFormats)
+            try Transaction.requireBalanced(transaction.postings, formats: formats)
         default:
             break
         }
     }
 
     /// `ledger` as the next load reads it from the text it saves as, each
-    /// entry under the id it has now, when one of `items` is a directive
-    /// line, and `ledger` itself otherwise.
+    /// entry under the id it has now, when one of `items` is a directive or
+    /// an `include` line, and `ledger` itself otherwise.
     ///
     /// A directive line can change what every entry below it means: an
     /// `alias` or `apply account` line the account it is booked under, a `D`
@@ -128,31 +133,57 @@ public final class LedgerManager {
     /// would not load, which is what refuses a directive line where it
     /// lands, and a removal that leaves the file unreadable, such as an
     /// `end apply account` whose opening line went.
+    ///
+    /// A journal read from a file is re-read from it, every file it includes
+    /// with it, since a directive line above an `include` line changes what
+    /// the included entries mean. Each file is served the text it is about to
+    /// be saved as, and a file the journal does not hold yet, named by an
+    /// `include` line just added, is read from disk. The ids are carried over
+    /// file by file (`Journal.identified(like:)`), so adding or removing an
+    /// `include` line leaves the entries of every other file under theirs.
     private static func reloaded(_ ledger: Ledger, after items: [JournalItem]) throws -> Ledger {
-        guard items.contains(where: { if case .directive = $0 { true } else { false } }) else { return ledger }
-        let journal = try JournalParser().parse(JournalSerializer().serialize(ledger.journal))
-        var ids = ledger.journal.transactions.map(\.id).makeIterator()
-        let items = journal.items.map { item in
-            guard case let .transaction(entry) = item, let id = ids.next() else { return item }
-            return .transaction(entry.identified(as: id))
+        let rereads = items.contains {
+            switch $0 {
+            case .directive, .include: true
+            default: false
+            }
         }
-        return Ledger(journal: Journal(
-            items: items,
-            commodityFormats: journal.commodityFormats,
-            amountAlignment: journal.amountAlignment,
-            postingIndent: journal.postingIndent,
-            lineEnding: journal.lineEnding,
-        ))
+        guard rereads else { return ledger }
+        let files = JournalSerializer().serializedFiles(ledger.journal)
+        guard let top = ledger.journal.file else {
+            return try Ledger(journal: JournalParser().parse(files[0].text).identified(like: ledger.journal))
+        }
+        let texts = Dictionary(
+            files.compactMap { entry in entry.file.map { ($0.standardizedFileURL.path, entry.text) } },
+            uniquingKeysWith: { first, _ in first },
+        )
+        let journal = try JournalParser().parse(fileAt: top) { file in
+            try texts[file.path] ?? String(contentsOf: file, encoding: .utf8)
+        }
+        return Ledger(journal: journal.identified(like: ledger.journal))
     }
 
     /// Whether `postings` balance as this journal would write them: the answer
-    /// `add` and `replace` give, without throwing.
+    /// `add` gives, without throwing, and with `replacing` the item to be
+    /// replaced, the answer `replace` gives.
     ///
     /// A number is padded to the digits the journal writes its commodity
     /// with, and an entry is held to the digits it is written in. So an entry
     /// that balances at `-1 USD` can be off once the file says `-1.00 USD`.
-    public func balance(of postings: [Posting]) -> (real: BalanceVerdict, bracketed: BalanceVerdict) {
-        Transaction.balance(of: postings, formats: ledger.journal.commodityFormats)
+    /// The digits are those of the file the entry lands in: the top file for
+    /// a new entry, and for a replacement the file holding the original,
+    /// which for an entry read from an included file is that file.
+    public func balance(
+        of postings: [Posting],
+        replacing original: JournalItem? = nil,
+    ) -> (real: BalanceVerdict, bracketed: BalanceVerdict) {
+        Transaction.balance(of: postings, formats: formats(replacing: original))
+    }
+
+    /// The styles of the file an item lands in: the one holding `original`,
+    /// or the top file for a new item or one no file holds.
+    private func formats(replacing original: JournalItem?) -> [String: CommodityFormat] {
+        (original.flatMap(ledger.journal.file(holding:)) ?? ledger.journal).commodityFormats
     }
 
     /// Removes the `account` directive declaring `name` and persists the result.
