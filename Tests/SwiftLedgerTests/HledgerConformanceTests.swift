@@ -6,13 +6,14 @@ import Testing
 ///
 /// Every `NAME.journal` under `Conformance/` was run through hledger by
 /// `Scripts/hledger-fixtures.sh`, and what hledger made of it sits beside it:
-/// `NAME.print.json` holds every transaction hledger read, with elided
-/// amounts filled in and costs inferred, `NAME.balance.json` holds its flat
-/// balance report, and `NAME.error.txt` means hledger refused the file. A
-/// file hledger refuses over a balance assertion loads here, so a failure
-/// `Ledger.checkBalanceAssertions()` reports counts as the refusal, and a
-/// file hledger loads has to report none. The tests never run hledger; they read the fixtures, read the same journal
-/// with `JournalParser.parse(fileAt:)`, following its `include` lines as hledger does, and compare values, never
+/// `NAME.print.json` holds every transaction hledger read, with elided amounts
+/// filled in and costs inferred, `NAME.balance.json` holds its flat balance
+/// report, and `NAME.error.txt` means hledger refused the file. A file hledger
+/// refuses over a balance assertion loads here, so a failure
+/// `Ledger.checkBalanceAssertions()` reports counts as the refusal, and a file
+/// hledger loads has to report none. The tests never run hledger; they read the
+/// fixtures, read the same journal with `JournalParser.parse(fileAt:)`,
+/// following its `include` lines as hledger does, and compare values, never
 /// text.
 ///
 /// A journal SwiftLedger is known to read differently is listed in

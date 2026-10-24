@@ -125,14 +125,14 @@ import Foundation
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
 ///
-/// Any line outside this grammar, such as `P`, `commodity`, `alias`, `D`,
-/// `year`, an `include` read from text or an indented sub-directive, is kept verbatim as a `.directive`
-/// item and written back unchanged by `JournalSerializer`. The parser never
-/// reinterprets what it does not understand. A line at the margin that opens
-/// with no word hledger reads at all, `foo bar` or `decimal-markx ,`, is
-/// refused at its line, as hledger refuses it (`requireKnownDirective`), and
-/// so is an indented line with no block above it to belong to, such as a
-/// posting a blank line cut off from its entry.
+/// Any line outside this grammar, such as `P`, `commodity`, `alias`, `D`, `year`,
+/// an `include` read from text or an indented sub-directive, is kept verbatim as
+/// a `.directive` item and written back unchanged by `JournalSerializer`. The
+/// parser never reinterprets what it does not understand. A line at the margin
+/// that opens with no word hledger reads at all, `foo bar` or `decimal-markx ,`,
+/// is refused at its line, as hledger refuses it (`requireKnownDirective`), and
+/// so is an indented line with no block above it to belong to, such as a posting
+/// a blank line cut off from its entry.
 ///
 /// An error thrown while an entry is being read says where it was found:
 /// `LedgerError.inJournal` carries the line, the header of the entry it was
