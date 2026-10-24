@@ -372,6 +372,30 @@ D $1000.00
     Expenses:Food:Restaurants  25.00
     Assets:Checking
 
+; ── Short names for accounts ────────────────────────────────────────────────
+; An alias line lets the entries below it write a short name for an account,
+; and an apply account line puts a parent in front of every name until its
+; end line, as hledger reads them. The market run is paid from
+; Assets:Checking, and the taxi moves from Expenses:Food:Restaurants to
+; Expenses:Transport. An entry SwiftLedger rebuilds here keeps the names the
+; file wrote, and the end lines close both, so nothing below them is read
+; differently.
+
+alias checking = Assets:Checking
+
+2024-03-22 Market, paid from checking by its short name
+    Expenses:Food:Groceries  $18.00
+    checking
+
+end aliases
+apply account Expenses
+
+2024-03-22 A taxi first booked as a meal
+    Transport              $15.00
+    Food:Restaurants
+
+end apply account
+
 ; ── The mark in force where an entry stands ─────────────────────────────────
 ; A decimal-mark line speaks from where it stands to the next one, so a file
 ; can switch marks part way through, as this one does for the refund below,

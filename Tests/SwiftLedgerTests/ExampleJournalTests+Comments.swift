@@ -28,6 +28,10 @@ extension ExampleJournalTests {
             "end comment",
             "commodity \"BRK.B\"",
             "D $1000.00",
+            "alias checking = Assets:Checking",
+            "end aliases",
+            "apply account Expenses",
+            "end apply account",
             "decimal-mark .",
             "decimal-mark ,",
         ])
