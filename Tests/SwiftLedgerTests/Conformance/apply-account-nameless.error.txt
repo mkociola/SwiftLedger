@@ -1,0 +1,5 @@
+hledger: Error: apply-account-nameless.journal:1:14:
+  |
+1 | apply account
+  |              ^
+unexpected newline

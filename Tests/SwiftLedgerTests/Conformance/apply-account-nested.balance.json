@@ -1,0 +1,62 @@
+[
+  {
+    "account": "Expenses:Food",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 500,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Personal:Expenses:Food",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 500,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Personal:Income:Gifts",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -1000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Personal:Trip:Budget",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -8000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Personal:Trip:Expenses:Hotel",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 8000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Personal:Trip:cash",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -8000,
+        "places": 2
+      }
+    ]
+  }
+]

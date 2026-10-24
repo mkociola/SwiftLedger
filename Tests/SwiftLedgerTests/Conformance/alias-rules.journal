@@ -1,0 +1,40 @@
+alias checking = Assets:Checking
+alias /^exp:(.*)/ = Expenses:\1
+
+2024-01-01 A plain alias rewrites the name and every name under it
+    checking:savings    $10.00
+    checking
+
+2024-01-02 Not a name that only starts with the same letters, nor another case
+    checkingx           $1.00
+    Checking
+
+2024-01-03 A pattern ignores case and keeps its groups
+    Exp:Rent            $1200.00
+    (exp:Food)          $5.00
+    checking
+
+alias b = c
+alias a = b
+
+2024-01-04 The latest alias goes first and the next one sees its result
+    a                   $2.00
+    b
+
+alias /o/ = 0
+
+2024-01-05 A pattern replaces every match
+    foo:boo             $3.00
+    checking
+
+end aliases
+
+2024-01-06 After end aliases every name is read as written
+    checking            $4.00
+    a
+
+alias /^(x)(y+)$/ = \2$\1
+
+2024-01-07 Groups come back in the order the replacement names them
+    xyy                 $5.00
+    a

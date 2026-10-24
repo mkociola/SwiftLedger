@@ -1,0 +1,5 @@
+apply account Personal  Trip
+
+2024-01-01 Rent
+    Expenses:Rent    $1.00
+    Assets:Cash

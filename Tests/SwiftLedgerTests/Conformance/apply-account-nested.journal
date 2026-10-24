@@ -1,0 +1,25 @@
+alias Personal:cash = Assets:Cash
+apply account Personal
+
+2024-01-01 The prefix goes on before the aliases are applied
+    cash                $10.00
+    Income:Gifts
+
+apply account Trip
+
+2024-01-02 Blocks nest
+    Expenses:Hotel      $80.00
+    (Budget)            $-80.00
+    cash
+
+end apply account
+
+2024-01-03 The inner block is over
+    Expenses:Food       $5.00
+    cash
+
+end apply account
+
+2024-01-04 Both are over
+    Expenses:Food       $5.00
+    Personal:cash

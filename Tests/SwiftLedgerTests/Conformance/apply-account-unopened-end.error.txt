@@ -1,0 +1,5 @@
+hledger: Error: apply-account-unopened-end.journal:1:18:
+  |
+1 | end apply account
+  |                  ^
+unexpected "End of apply account block with no beginning"

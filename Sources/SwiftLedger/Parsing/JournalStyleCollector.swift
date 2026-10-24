@@ -11,6 +11,9 @@ import Foundation
 /// line is discarded. What comes out is one `CommodityFormat` per commodity the
 /// file mentions, and the column the file lines its amounts up at.
 struct JournalStyleCollector {
+    /// The `alias` and `apply account` lines in force, which decide the
+    /// account a posting written here is booked under.
+    var accountNames = AccountNameRewrites()
     /// The number of fraction digits seen for a commodity, and how often.
     private var fractionDigitCounts: [String: [Int: Int]] = [:]
     /// The same count over posting amounts alone, leaving out prices and

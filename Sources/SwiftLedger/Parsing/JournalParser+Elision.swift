@@ -120,7 +120,7 @@ extension JournalParser {
     }
 
     static func posting(from raw: RawPosting, amount: Amount) -> Posting {
-        Posting(
+        var posting = Posting(
             accountName: raw.accountName,
             kind: raw.kind,
             amount: amount,
@@ -131,6 +131,8 @@ extension JournalParser {
             comment: raw.comment,
             trailingComments: raw.trailingComments,
         )
+        posting.writtenAccountName = raw.writtenAccountName
+        return posting
     }
 
     /// One posting per amount, sharing the account, kind and status the elided
@@ -165,6 +167,7 @@ extension JournalParser {
                 trailingComments: index == amounts.count - 1 ? raw.trailingComments : [],
             )
             (leg.date, leg.date2) = (line.date, line.date2)
+            leg.writtenAccountName = raw.writtenAccountName
             return leg
         }
     }

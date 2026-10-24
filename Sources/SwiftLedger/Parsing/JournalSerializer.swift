@@ -43,6 +43,12 @@ import Foundation
 ///   commodity is written as the bare number it was read from.
 /// - A posting's price and balance assertion are re-emitted after its amount,
 ///   in canonical `AMOUNT @ PRICE = ASSERTION` order.
+/// - An account is written under the name the journal wrote it under, when
+///   the `alias` and `apply account` lines in force still book that name as
+///   the account, so a rebuilt entry keeps the file's short names; otherwise
+///   under a name they do book as it, the account without the open `apply
+///   account` prefix first. An `account` directive is written the same way.
+///   See `AccountNameRewrites.spelling(of:written:)`.
 /// - A virtual posting's account name is written back inside its own
 ///   delimiters: `(name)` or `[name]`. The delimiters count toward the margin,
 ///   so a rebuilt envelope leg lines its amount up with its neighbours.
@@ -104,7 +110,8 @@ public struct JournalSerializer {
                     try? parser.declare(at: lines.count - 1, in: lines, into: &declared, year: &year)
                 }
             case let .accountDirective(directive):
-                var line = "account \(directive.name)"
+                let name = declared.accountNames.spelling(of: directive.name, written: directive.writtenName)
+                var line = "account \(name)"
                 if let comment = directive.comment {
                     line += "  ; \(comment)"
                 }
@@ -239,7 +246,8 @@ public struct JournalSerializer {
             line += "\(postingStatus.rawValue) "
         }
 
-        line += posting.delimitedAccountName
+        let name = declared.accountNames.spelling(of: posting.accountName, written: posting.writtenAccountName)
+        line += posting.kind.delimited(name)
 
         let amountStr = formatPostingAmount(posting, formats: formats, declared: declared)
         // Pad to the journal's own margin — two spaces at minimum, since one

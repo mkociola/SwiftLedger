@@ -89,27 +89,30 @@ extension Transaction {
     /// lesser divergence.
     static func validatePostingSyntax(_ postings: [Posting]) throws {
         for (index, posting) in postings.enumerated() {
-            let field = { "postings[\(index)].accountName" }
-            let name = posting.accountName
-            try requireTrimmed(name, at: field())
-            try require(!name.isEmpty, at: field(), rule: "an account name may not be empty")
-            try require(
-                !containsWhitespaceRun(name), at: field(),
-                rule: "two spaces or tabs in a row end an account name",
-            )
-            if posting.kind == .real, (posting.status ?? .unmarked) == .unmarked {
-                try require(
-                    name != "*" && name != "!" && !name.hasPrefix("* ") && !name.hasPrefix("! "), at: field(),
-                    rule: "with no status of its own, a real posting's name may not be '*' or '!' "
-                        + "or open with '* ' or '! ', which mark a status",
-                )
-                try require(
-                    !name.hasPrefix(";") && !name.hasPrefix("#"), at: field(),
-                    rule: "with no status of its own, a real posting's name may not open with ';' or '#', "
-                        + "which mark a comment line",
-                )
+            try validatePostingName(posting.accountName, of: posting, at: "postings[\(index)].accountName")
+            if let written = posting.writtenAccountName {
+                try validatePostingName(written, of: posting, at: "postings[\(index)].writtenAccountName")
             }
             try requireTrimmed(posting.comment, at: "postings[\(index)].comment")
+        }
+    }
+
+    /// The rules `validatePostingSyntax` holds a posting's name to, the
+    /// booked one and the written one alike, since either may be the one
+    /// written on the line.
+    private static func validatePostingName(_ name: String, of posting: Posting, at field: String) throws {
+        try validateAccountName(name, at: field)
+        if posting.kind == .real, (posting.status ?? .unmarked) == .unmarked {
+            try require(
+                name != "*" && name != "!" && !name.hasPrefix("* ") && !name.hasPrefix("! "), at: field,
+                rule: "with no status of its own, a real posting's name may not be '*' or '!' "
+                    + "or open with '* ' or '! ', which mark a status",
+            )
+            try require(
+                !name.hasPrefix(";") && !name.hasPrefix("#"), at: field,
+                rule: "with no status of its own, a real posting's name may not open with ';' or '#', "
+                    + "which mark a comment line",
+            )
         }
     }
 
@@ -175,13 +178,20 @@ extension Transaction {
     /// would trim. It can hand it a name holding another run, and the file is
     /// then refused at that line, as hledger refuses it.
     static func validateAccountDirectiveSyntax(name: String, comment: String?) throws {
-        try requireTrimmed(name, at: "name")
-        try require(!name.isEmpty, at: "name", rule: "an account name may not be empty")
+        try validateAccountName(name, at: "name")
+        try requireTrimmed(comment, at: "comment")
+    }
+
+    /// What every account name is held to, a posting's or a directive's: it
+    /// is trimmed, not empty, and holds no run of two spaces or tabs, which
+    /// would end it on the line.
+    static func validateAccountName(_ name: String, at field: String) throws {
+        try requireTrimmed(name, at: field)
+        try require(!name.isEmpty, at: field, rule: "an account name may not be empty")
         try require(
-            !containsWhitespaceRun(name), at: "name",
+            !containsWhitespaceRun(name), at: field,
             rule: "two spaces or tabs in a row end an account name",
         )
-        try requireTrimmed(comment, at: "comment")
     }
 
     /// Every way two spaces or tabs can stand side by side. A run of two or

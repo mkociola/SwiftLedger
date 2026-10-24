@@ -19,6 +19,12 @@ public struct AccountDirective: Sendable, Codable, Hashable {
     public let type: AccountType?
     /// Inline comment text following the account name (the part after `; `).
     public let comment: String?
+    /// The name the line wrote, when an `apply account` or `alias` line above
+    /// it declares the account under another, or `nil`. Set by the parser
+    /// and written back by the serializer, as `Posting.writtenAccountName`
+    /// is; a decoded one is held to the rules `name` is held to, since it is
+    /// the name the line is written with.
+    public internal(set) var writtenName: String?
 
     /// - Throws: `LedgerError.lineBreakInField` if `name` or `comment` holds
     ///   `\n` or `\r`; `LedgerError.syntaxInField` if `name` is empty, has
@@ -42,6 +48,9 @@ public struct AccountDirective: Sendable, Codable, Hashable {
             type: container.decodeIfPresent(AccountType.self, forKey: .type),
             comment: container.decodeIfPresent(String.self, forKey: .comment),
         )
+        writtenName = try container.decodeIfPresent(String.self, forKey: .writtenName)
+        try Transaction.requireOneLine(writtenName, at: "writtenName")
+        if let writtenName { try Transaction.validateAccountName(writtenName, at: "writtenName") }
     }
 }
 

@@ -86,6 +86,7 @@ extension JournalParser {
     /// line states, and the year a `Y` or `year` line sets.
     func declare(from line: String, into style: inout JournalStyleCollector, year: inout Int?) throws {
         try declareFormat(from: line, into: &style)
+        try declareAccountNames(from: line, into: &style.accountNames)
         year = try yearDirective(line) ?? year
     }
 
