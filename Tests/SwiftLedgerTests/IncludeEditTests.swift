@@ -80,6 +80,28 @@ import Testing
     }
 
     @Test
+    func `a rebuilt entry below an include is written under the commodity line it read`() throws {
+        let top = "2024-01-01 Before\n    a  1.25 EUR\n    b\n\ninclude part.journal\n\n"
+            + "2024-01-05 After\n    a  3 EUR\n    b\n"
+        let files = try JournalFiles(["top.journal": top, "part.journal": "commodity 1.000,00 EUR\n"])
+        defer { files.remove() }
+        var journal = try files.parse("top.journal")
+        let entry = try #require(journal.transactions.last)
+        let half = try #require(Decimal(string: "2.5"))
+        let edited = try Transaction(date: entry.date, description: "Edited", postings: [
+            Self.posting(like: entry.postings[0], quantity: half),
+            Self.posting(like: entry.postings[1], quantity: -half),
+        ])
+        let found = journal.replace(.transaction(entry), with: .transaction(edited))
+        #expect(found)
+        let text = JournalSerializer().serialize(journal)
+        #expect(text.contains("2,5"))
+        try files.write("top.journal", text)
+        let reread = try #require(files.parse("top.journal").transactions.last)
+        #expect(reread.postings.first?.amount.quantity == half)
+    }
+
+    @Test
     func `removing an entry from an included file removes it there`() throws {
         let files = try JournalFiles(["top.journal": Self.top, "part.journal": Self.part])
         defer { files.remove() }

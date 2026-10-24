@@ -78,7 +78,8 @@ public struct JournalSerializer {
     /// `include` line that read it, as the parser read it, so a rebuilt entry
     /// under the including file's `apply account Top` writes `a`, not the
     /// `Top:a` the next parse books as `Top:Top:a`. What the included file
-    /// declares stays in it. `edited` is the file's `Journal.edited`, for
+    /// declares stays in it, but for its `commodity` lines, as the parser
+    /// reads them. `edited` is the file's `Journal.edited`, for
     /// the store to tell which included files to write.
     func serializedFiles(_ journal: Journal) -> [SerializedFile] {
         var files: [SerializedFile] = []
@@ -114,8 +115,12 @@ public struct JournalSerializer {
 
     /// Writes `journal` as one file, starting from the directives `walk`
     /// has in force, and appends its text to `files` ahead of the files it
-    /// includes.
-    private func write(_ journal: Journal, from start: FileWalk, into files: inout [SerializedFile]) {
+    /// includes. Returns the directives in force at its end, for the
+    /// `commodity` lines the including file goes on being read by.
+    @discardableResult
+    private func write(
+        _ journal: Journal, from start: FileWalk, into files: inout [SerializedFile],
+    ) -> JournalStyleCollector {
         let slot = files.count
         files.append(SerializedFile(file: journal.file, text: "", edited: journal.edited.isSet))
         var walk = start
@@ -131,6 +136,7 @@ public struct JournalSerializer {
         // A journal with no file of its own has nowhere to be written. The
         // top one is kept all the same, since the caller names where it goes.
         if slot > 0, journal.file == nil { files.remove(at: slot) }
+        return walk.declared
     }
 
     private func write(
@@ -155,8 +161,10 @@ public struct JournalSerializer {
             declare(raw, in: &walk)
         case let .include(included):
             walk.lines.append(included.line)
+            // An included file's `commodity` lines stay in force after the
+            // line, as the parser reads them (`adoptCommodityDeclarations`).
             for child in included.journals {
-                write(child, from: walk, into: &files)
+                walk.declared.adoptCommodityDeclarations(of: write(child, from: walk, into: &files))
             }
         case let .accountDirective(directive):
             walk.lines.append(accountLine(directive, declared: walk.declared))
