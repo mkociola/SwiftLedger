@@ -147,6 +147,17 @@ account Expenses:Utilities
     Expenses:Transport         $24.00
     Assets:Checking
 
+; ── A posting with a date of its own ────────────────────────────────────────
+; A date: tag in a posting's comment dates that posting on its own, as hledger
+; reads it, and so does a date in square brackets. The water bill is written
+; on the day it arrived and leaves the checking account on the day it cleared,
+; so a balance as of the end of March still counts it as unpaid. The comment
+; is kept as written, and the entry keeps its own date.
+
+2024-03-29 Water bill, cleared on the 2nd
+    Expenses:Utilities         $31.00
+    Assets:Checking  ; date:2024-04-02
+
 ; ── Virtual postings ────────────────────────────────────────────────────────
 ; Parentheses make a posting virtual: it moves money in a tracking account
 ; outside the double-entry books and takes no part in balancing. Square
