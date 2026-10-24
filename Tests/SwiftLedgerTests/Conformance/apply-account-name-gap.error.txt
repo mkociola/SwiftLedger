@@ -1,0 +1,6 @@
+hledger: Error: apply-account-name-gap.journal:1:23:
+  |
+1 | apply account Personal  Trip
+  |                       ^
+unexpected space
+expecting newline

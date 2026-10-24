@@ -30,9 +30,7 @@ import Testing
     /// posting's amount: only the `\r` that ends a line is a line ending.
     static let knownDivergences: Set<String> = [
         "account-directive-stray-cr",
-        "alias",
         "amount-stray-cr",
-        "apply-account",
         "include",
         "posting-status-tabs",
     ]

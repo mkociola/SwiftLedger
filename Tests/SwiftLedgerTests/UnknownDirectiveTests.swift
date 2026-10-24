@@ -26,10 +26,12 @@ import Testing
     /// Each is a line hledger reads, whether it models it or not: its own
     /// directives, the ledger-cli ones it passes over, the single-letter ones
     /// with or without a gap, a `!` straight in front of a keyword, a tab
-    /// after the keyword, and a `--` line. Every one is kept as it came.
+    /// after the keyword, and a `--` line. Every one is kept as it came. An
+    /// `end apply account` with no block open is refused, as hledger refuses
+    /// it (`apply-account-unopened-end`).
     @Test(arguments: [
         "include foo.journal", "!include foo.journal", "alias a = b", "end aliases", "apply account Foo",
-        "end apply account", "payee Foo", "tag foo", "end tag", "P 2024-01-01 $ 1", "P2024-01-01 $ 1",
+        "payee Foo", "tag foo", "end tag", "P 2024-01-01 $ 1", "P2024-01-01 $ 1",
         "N $", "C 1 $ = 1 USD", "A assets", "define x=1", "bucket assets", "assert true", "check true",
         "eval 1", "expr 1", "python", "value x", "capture x y", "apply fixed $ 1", "end apply fixed",
         "apply tag foo", "end apply tag", "--foo", "include\tfoo.journal", "~ monthly", "= expenses",

@@ -5,6 +5,9 @@ import Foundation
 extension JournalParser {
     struct RawPosting {
         var accountName: String
+        /// The name the line wrote, when an `alias` or `apply account` line
+        /// books it under another.
+        var writtenAccountName: String?
         var kind: Posting.Kind
         var amount: Amount?
         var price: PostingPrice?
@@ -16,6 +19,16 @@ extension JournalParser {
         var trailingComments: [String] = []
         /// The fraction digits the line wrote its amount and its price with.
         var written = WrittenDigits()
+
+        /// This posting booked under the name the `alias` and `apply account`
+        /// lines in force give the one it wrote, which it keeps when the two
+        /// differ.
+        func booked(by names: AccountNameRewrites) -> RawPosting {
+            var posting = self
+            posting.accountName = names.booked(accountName)
+            if posting.accountName != accountName { posting.writtenAccountName = accountName }
+            return posting
+        }
     }
 
     func parsePosting(

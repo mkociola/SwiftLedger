@@ -301,6 +301,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         }
         for (index, posting) in postings.enumerated() {
             try requireOneLine(posting.accountName, at: "postings[\(index)].accountName")
+            try requireOneLine(posting.writtenAccountName, at: "postings[\(index)].writtenAccountName")
             try requireOneLine(posting.amount.commodity, at: "postings[\(index)].amount.commodity")
             try requireOneLine(posting.price?.amount.commodity, at: "postings[\(index)].price.amount.commodity")
             try requireOneLine(
@@ -345,8 +346,9 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     /// not a real posting's.
     private static func validateAccountNames(_ postings: [Posting]) throws {
         for posting in postings where posting.kind == .real {
-            guard Posting.Kind.split(posting.accountName).kind == .real else {
-                throw LedgerError.unwritableAccountName(posting.accountName)
+            let names = [posting.accountName, posting.writtenAccountName].compactMap(\.self)
+            if let name = names.first(where: { Posting.Kind.split($0).kind != .real }) {
+                throw LedgerError.unwritableAccountName(name)
             }
         }
     }

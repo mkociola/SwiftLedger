@@ -1,0 +1,102 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -121300,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Assets:Checking:savings",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 1000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -100,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Food",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 500,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Rent",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 120000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "a",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -900,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 400,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "checkingx",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 100,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "f00:b00",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 300,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "yy$x",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 500,
+        "places": 2
+      }
+    ]
+  }
+]

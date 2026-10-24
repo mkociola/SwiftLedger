@@ -1,0 +1,7 @@
+hledger: Error: alias-bad-regex.journal:1:8:
+  |
+1 | alias /(/ = Assets:Checking
+  |        ^
+
+This regular expression is invalid or unsupported, please correct it:
+(

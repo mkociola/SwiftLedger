@@ -66,6 +66,11 @@ import Foundation
 ///   and none of it is interpreted: a transaction written there is text, not
 ///   data.
 /// - `account NAME` directives, with an optional inline comment
+/// - `alias OLD = NEW`, `alias /PATTERN/ = NEW`, `end aliases`, `apply account
+///   NAME` and `end apply account` decide the account a posting or an
+///   `account` line below them is booked under, as hledger reads them
+///   (`AccountNameRewrites`), and the name the line wrote is kept beside it
+///   (`Posting.writtenAccountName`) for a rebuilt entry to write back.
 /// - Virtual postings: `(ACCOUNT)` takes no part in balancing; `[ACCOUNT]` is
 ///   exempt from balancing against the real postings but the bracketed
 ///   postings of one transaction must sum to zero among themselves. The
@@ -185,7 +190,7 @@ public struct JournalParser {
             // model, and falls through to be kept verbatim, and so does an
             // indented one, which is a subdirective of the block above it or
             // belongs to nothing (issue #118); the last branch settles which.
-            let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(line) }
+            let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(line, in: style) }
             if let directive {
                 items.append(.accountDirective(directive))
                 index += 1
@@ -208,10 +213,10 @@ public struct JournalParser {
             // so serialising never rewrites what we cannot interpret. A line
             // at the margin opening with no word hledger reads is refused at
             // its line instead, as hledger refuses it (`requireKnownDirective`).
-            // A `D`, `commodity`, `decimal-mark`, `Y` or `year` line is read
-            // for what it declares and kept verbatim all the same: learning
-            // from a line is not the same as modelling it, and this one still
-            // goes back byte for byte.
+            // A `D`, `commodity`, `decimal-mark`, `Y`, `year`, `alias` or
+            // `apply account` line is read for what it declares and kept
+            // verbatim all the same: learning from a line is not the same as
+            // modelling it, and this one still goes back byte for byte.
             // One it recognises and cannot read refuses the file at its line,
             // and so does an indented line no block above it can own
             // (`declare(at:in:into:year:)`).
@@ -247,15 +252,21 @@ public struct JournalParser {
     /// on the line is not a line ending, and the name or comment it lands in
     /// is one no journal can write, so `AccountDirective.init` refuses it and
     /// the file does not load, as it does not for a transaction's field.
-    private func parseAccountDirective(_ line: String) throws -> AccountDirective? {
+    ///
+    /// The account is declared under the name the `alias` and `apply
+    /// account` lines in force give it, as hledger declares it, and the name
+    /// the line wrote is kept for the serializer (`AccountNameRewrites`).
+    private func parseAccountDirective(_ line: String, in style: JournalStyleCollector) throws -> AccountDirective? {
         guard line.lowercased().hasPrefix("account ") else { return nil }
         let (mainPart, comment) = splitInlineComment(line)
         let name = String(mainPart.dropFirst("account ".count)).trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return nil }
-        return try AccountDirective(
-            name: name,
+        var directive = try AccountDirective(
+            name: style.accountNames.booked(name),
             comment: comment?.trimmingCharacters(in: .whitespaces),
         )
+        directive.writtenName = directive.name == name ? nil : name
+        return directive
     }
 
     // MARK: - Transaction parsing
@@ -305,7 +316,7 @@ public struct JournalParser {
                 let posting = try located(line: index + 1, entry: entry) {
                     try parsePosting(currentLine, lineNumber: index + 1, into: &style)
                 }
-                rawPostings.append(posting)
+                rawPostings.append(posting.booked(by: style.accountNames))
             }
             index += 1
         }

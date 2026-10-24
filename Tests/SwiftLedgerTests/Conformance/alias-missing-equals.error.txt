@@ -1,0 +1,6 @@
+hledger: Error: alias-missing-equals.journal:6:1:
+  |
+6 | <empty line>
+  | ^
+unexpected end of input
+expecting '='

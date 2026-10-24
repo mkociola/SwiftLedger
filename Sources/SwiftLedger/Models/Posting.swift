@@ -112,6 +112,21 @@ public struct Posting: Sendable, Codable, Hashable {
     /// virtual posting's `(…)` / `[…]` delimiters are stripped by the parser
     /// and written back by the serializer, so every query matches one spelling.
     public let accountName: String
+    /// The name the journal wrote for the account, bare like `accountName`,
+    /// when an `alias` or `apply account` line above the posting books it
+    /// under another, or `nil` when it is booked under the name it was
+    /// written under.
+    ///
+    /// Under `alias checking = Assets:Checking` a posting written `checking`
+    /// is booked, queried and reported as `Assets:Checking`, as hledger reads
+    /// it, and this keeps `checking`, because the alias exists so that the
+    /// file can say `checking`: a rebuilt entry written with the booked name
+    /// would rewrite the file's own vocabulary under the user. It is set by
+    /// the parser alone, and `JournalSerializer` writes it back where it
+    /// still books `accountName` (`AccountNameRewrites.spelling(of:written:)`).
+    /// It takes part in `Posting ==` and is encoded, as `kind` is: two files
+    /// that write one posting differently hold two different postings.
+    public internal(set) var writtenAccountName: String?
     /// Whether the posting is real, virtual, or balanced virtual.
     ///
     /// `Hashable`/`Equatable` are synthesized, so this takes part in
@@ -194,9 +209,10 @@ public struct Posting: Sendable, Codable, Hashable {
     /// posting: bare for a real one, `(name)` for a virtual one, `[name]` for a
     /// balanced virtual one.
     ///
-    /// This is the spelling `JournalSerializer` puts back on the line, and the
-    /// one a register or an account picker should show, so that a reader can
-    /// tell an envelope leg from an ordinary one at a glance.
+    /// This is the spelling a register or an account picker should show, so
+    /// that a reader can tell an envelope leg from an ordinary one at a
+    /// glance, and the one `JournalSerializer` puts back on the line unless
+    /// the journal wrote the name under an alias (`writtenAccountName`).
     public var delimitedAccountName: String {
         kind.delimited(accountName)
     }
@@ -224,8 +240,8 @@ public struct Posting: Sendable, Codable, Hashable {
     }
 
     /// Decodes a posting, treating a missing `kind`, `trailingComments`,
-    /// `price`, `balanceAssertion`, `balanceAssertionOperator`, `date` or
-    /// `date2` key as absent so that JSON written before those keys existed
+    /// `price`, `balanceAssertion`, `balanceAssertionOperator`, `date`,
+    /// `date2` or `writtenAccountName` key as absent so that JSON written before those keys existed
     /// still decodes. A
     /// posting with no `kind` is real, which is what every posting written
     /// before virtual ones were modelled was, and one with no operator
@@ -233,6 +249,7 @@ public struct Posting: Sendable, Codable, Hashable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         accountName = try container.decode(String.self, forKey: .accountName)
+        writtenAccountName = try container.decodeIfPresent(String.self, forKey: .writtenAccountName)
         kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .real
         amount = try container.decode(Amount.self, forKey: .amount)
         price = try container.decodeIfPresent(PostingPrice.self, forKey: .price)
