@@ -1,0 +1,9 @@
+; The deposit has not cleared when the second entry asserts it has.
+
+2024-01-01 Deposit, cleared on the 5th
+    Assets:Checking     $10.00  ; date:2024-01-05
+    Equity:Opening
+
+2024-01-02 Before the deposit cleared
+    Assets:Checking      $5.00 = $15.00
+    Equity:Opening

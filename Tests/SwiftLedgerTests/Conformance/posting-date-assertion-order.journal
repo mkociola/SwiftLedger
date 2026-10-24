@@ -1,0 +1,15 @@
+; An assertion sees the postings dated before it, by their own dates, within
+; one entry too.
+
+2024-01-01 Deposit, cleared on the 5th
+    Assets:Checking     $10.00  ; date:2024-01-05
+    Equity:Opening
+
+2024-01-02 Before the deposit cleared
+    Assets:Checking      $0.00 = $0.00
+    Equity:Opening
+
+2024-01-03 Transfer, the first leg cleared later
+    Assets:Savings      $10.00  ; date:2024-01-09
+    Assets:Savings       $5.00 = $5.00
+    Equity:Opening

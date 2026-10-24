@@ -1,0 +1,146 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Deposit, cleared on the 5th",
+    "postings": [
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": "2024-01-05",
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 1000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Equity:Opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -1000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-02",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Before the deposit cleared",
+    "postings": [
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 0,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 0,
+          "places": 2,
+          "total": false,
+          "inclusive": false
+        }
+      },
+      {
+        "account": "Equity:Opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 0,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-03",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Transfer, the first leg cleared later",
+    "postings": [
+      {
+        "account": "Assets:Savings",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": "2024-01-09",
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 1000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Savings",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 500,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 500,
+          "places": 2,
+          "total": false,
+          "inclusive": false
+        }
+      },
+      {
+        "account": "Equity:Opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -1500,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

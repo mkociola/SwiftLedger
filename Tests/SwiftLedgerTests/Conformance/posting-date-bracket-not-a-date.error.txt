@@ -1,0 +1,6 @@
+hledger: Error: posting-date-bracket-not-a-date.journal:3:25:
+  |
+3 |     Assets:Checking  ; [2024-13-45]
+  |                         ^^^^^^^^^^
+
+This is not a valid date, please fix it.

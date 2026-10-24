@@ -1,0 +1,52 @@
+; Every way a posting comment can date the posting, and text that only looks
+; like a date. Each entry dates its checking posting one way.
+
+2024-01-31 Tag after text
+    Expenses:Rent      $10.00
+    Assets:Checking  ; cleared late date:2024-02-02
+
+2024-01-31 Tag after another tag
+    Expenses:Rent      $10.00
+    Assets:Checking  ; ref:1, date:2024/02/03
+
+2024-01-31 Short tag
+    Expenses:Rent      $10.00
+    Assets:Checking  ; date:2.4
+
+2024-12-31 Short tag in a December entry
+    Expenses:Rent      $10.00
+    Assets:Checking  ; date:01-02
+
+2024-01-31 Both tags
+    Expenses:Rent      $10.00
+    Assets:Checking  ; date:2024-02-02, date2:2024-02-05
+
+2024-01-31 Secondary tag alone
+    Expenses:Rent      $10.00
+    Assets:Checking  ; date2:2024-02-05
+
+2024-01-31 Tag on the line below
+    Expenses:Rent      $10.00
+    Assets:Checking
+    ; date:2024-02-06
+
+2024-01-31 The first date wins
+    Expenses:Rent      $10.00
+    Assets:Checking  ; date:2024-02-02 [2024-02-03], date:2024-02-04
+    ; date:2024-02-05
+
+2024-01-31 Bracket
+    Expenses:Rent      $10.00
+    Assets:Checking  ; paid [2024-02-07] online
+
+2024-01-31 Bracket with a secondary date
+    Expenses:Rent      $10.00
+    Assets:Checking  ; [2024-02-07=02-09]
+
+2024-01-31 Bracket with a secondary date alone
+    Expenses:Rent      $10.00
+    Assets:Checking  ; [=02-09]
+
+2024-01-31 Text that is no date
+    Expenses:Rent      $10.00
+    Assets:Checking  ; ref:1 date:2024-02-02, Date:2024-02-03, [note] [2024]

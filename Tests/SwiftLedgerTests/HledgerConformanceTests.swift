@@ -34,7 +34,6 @@ import Testing
         "amount-stray-cr",
         "apply-account",
         "include",
-        "posting-date-tag",
         "posting-status-tabs",
     ]
 
@@ -205,7 +204,7 @@ import Testing
         if let assertion = posting.balanceAssertion {
             line += " \(posting.balanceAssertionOperator.rawValue) " + render(assertion)
         }
-        return line
+        return line + renderDates(posting.date?.description, posting.date2?.description)
     }
 
     private static func render(_ amount: Amount) -> String {
@@ -214,6 +213,12 @@ import Testing
 
     private static func render(_ quantity: Decimal, _ commodity: String) -> String {
         "\(quantity) \(commodity)"
+    }
+
+    /// A posting's own dates, in the form both readings are rendered to.
+    private static func renderDates(_ date: String?, _ date2: String?) -> String {
+        let tags = [date.map { "date:\($0)" }, date2.map { "date2:\($0)" }].compactMap(\.self)
+        return tags.isEmpty ? "" : "  ; " + tags.joined(separator: ", ")
     }
 
     private static func marker(_ status: ClearingStatus) -> String? {
@@ -262,10 +267,7 @@ import Testing
                 let written = (assertion.total ? "==" : "=") + (assertion.inclusive ? "*" : "")
                 line += " \(written) " + render(assertion.quantity, assertion.commodity)
             }
-            if let date = posting.date {
-                line += "  ; date:\(date)"
-            }
-            return line
+            return line + renderDates(posting.date, posting.date2)
         }
     }
 
@@ -313,6 +315,7 @@ private struct HledgerPosting: Decodable {
     var kind: String
     var status: String
     var date: String?
+    var date2: String?
     var amounts: [HledgerAmount]
     var assertion: HledgerAssertion?
 

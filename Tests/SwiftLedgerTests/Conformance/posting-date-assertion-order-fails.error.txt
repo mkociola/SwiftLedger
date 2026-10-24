@@ -1,0 +1,13 @@
+hledger: Error: posting-date-assertion-order-fails.journal:8:32:
+  | 2024-01-02 Before the deposit cleared
+8 |     Assets:Checking           $5.00 = $15.00
+  |                                     ^^^^^^^^
+  |     Equity:Opening           $-5.00
+
+Balance assertion failed in Assets:Checking
+In commodity $ at this point, excluding subaccounts, ignoring costs,
+the asserted balance is:        $15.00
+but the calculated balance is:   $5.00
+(difference: $10.00)
+To troubleshoot, check this account's running balance with assertions disabled, eg:
+hledger reg -I 'Assets:Checking$' cur:'$'

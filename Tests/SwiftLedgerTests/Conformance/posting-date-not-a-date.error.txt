@@ -1,0 +1,6 @@
+hledger: Error: posting-date-not-a-date.journal:3:29:
+  |
+3 |     Assets:Checking  ; date:2024-02-30
+  |                             ^^^^^^^^^^
+
+This is not a valid date, please fix it.
