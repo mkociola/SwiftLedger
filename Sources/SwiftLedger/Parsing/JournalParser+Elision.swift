@@ -32,9 +32,10 @@ extension JournalParser {
     /// empty.
     ///
     /// Returns, beside the postings and index for index with them, the digits
-    /// each one's numbers were written with.
+    /// each one's numbers were written with. `year` is the entry's, for the
+    /// short dates a split elided line's comments write.
     func resolveElisions(
-        _ rawPostings: [RawPosting],
+        _ rawPostings: [RawPosting], year: Int,
     ) throws -> (postings: [Posting], written: [WrittenDigits]) {
         var fills: [Posting.Kind: [Amount]] = [:]
         for kind in [Posting.Kind.real, .balancedVirtual] {
@@ -54,7 +55,7 @@ extension JournalParser {
             guard let fill = fills[raw.kind], !fill.isEmpty else {
                 throw LedgerError.cannotResolveElision
             }
-            return Self.postings(from: raw, amounts: fill).map { ($0, WrittenDigits()) }
+            return try Self.postings(from: raw, amounts: fill, year: year).map { ($0, WrittenDigits()) }
         }
         return (resolved.map(\.0), resolved.map(\.1))
     }
@@ -143,13 +144,16 @@ extension JournalParser {
     /// back to the first when it names one the line did not absorb, where it
     /// is checked against a balance in which the line moved nothing. A price
     /// on a line that wrote no amount prices nothing, and stays on the first
-    /// posting, which is where it was before an elision could expand.
-    static func postings(from raw: RawPosting, amounts: [Amount]) -> [Posting] {
+    /// posting, which is where it was before an elision could expand. The
+    /// dates the line's comments write are the line's, as hledger reads them,
+    /// so every posting gets them, wherever the comment went.
+    static func postings(from raw: RawPosting, amounts: [Amount], year: Int) throws -> [Posting] {
         guard amounts.count > 1 else { return amounts.map { posting(from: raw, amount: $0) } }
         let assertionIndex = raw.balanceAssertion
             .flatMap { assertion in amounts.firstIndex { $0.commodity == assertion.commodity } } ?? 0
+        let line = try posting(from: raw, amount: amounts[0]).datedByComments(year: year)
         return amounts.enumerated().map { index, amount in
-            Posting(
+            var leg = Posting(
                 accountName: raw.accountName,
                 kind: raw.kind,
                 amount: amount,
@@ -160,6 +164,8 @@ extension JournalParser {
                 comment: index == 0 ? raw.comment : nil,
                 trailingComments: index == amounts.count - 1 ? raw.trailingComments : [],
             )
+            (leg.date, leg.date2) = (line.date, line.date2)
+            return leg
         }
     }
 }

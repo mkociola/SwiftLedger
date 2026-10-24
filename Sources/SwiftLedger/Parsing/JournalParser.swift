@@ -90,6 +90,10 @@ import Foundation
 ///   left to absorb, where the elided line was. An elided parenthesised
 ///   posting has no group to balance against and reads as zero, which is
 ///   hledger's reading; ledger-cli would hand it the real remainder instead.
+/// - A posting's comments can date it: a `date:` or `date2:` tag, or a
+///   `[date=date2]` bracket, sets `Posting.date` or `Posting.date2`, read by
+///   `Posting.writtenDates`, and the comment is kept as written. Every
+///   posting a split elided line becomes is dated as the line is.
 /// - Blank lines and full-line comments are preserved in the AST. A line
 ///   holding nothing but spaces or tabs is blank wherever a blank line
 ///   matters, so it ends the entry above it, and is kept verbatim as a
@@ -306,7 +310,7 @@ public struct JournalParser {
             index += 1
         }
 
-        let resolved = try resolveElisions(rawPostings)
+        let resolved = try resolveElisions(rawPostings, year: header.date.year)
         let transaction = try Transaction(
             date: header.date,
             auxDate: header.auxDate,

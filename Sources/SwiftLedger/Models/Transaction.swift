@@ -118,9 +118,11 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
     ///   `LedgerError.unbalancedTransaction` if the real postings do
     ///   not sum to zero for any commodity,
     ///   `LedgerError.unbalancedBracketedPostings` if the balanced virtual ones
-    ///   do not sum to zero among themselves, or
+    ///   do not sum to zero among themselves,
     ///   `LedgerError.unwritableAccountName` if a real posting is named a
-    ///   matched pair of parentheses or brackets.
+    ///   matched pair of parentheses or brackets, or
+    ///   `LedgerError.invalidDate` if a posting's comment writes a date that
+    ///   is no date, as `Posting.writtenDates` reads it.
     public init(
         id: UUID = UUID(),
         date: JournalDate,
@@ -182,7 +184,7 @@ public struct Transaction: Identifiable, Sendable, Codable, Hashable {
         self.status = status
         self.code = code
         self.description = description
-        self.postings = postings
+        self.postings = try postings.map { try $0.datedByComments(year: date.year) }
         self.comment = comment
         self.leadingComments = leadingComments
     }

@@ -155,6 +155,26 @@ public struct Posting: Sendable, Codable, Hashable {
     /// round-trip. These lines are commentary only: they are not postings and
     /// take no part in balancing.
     public let trailingComments: [String]
+    /// The posting's own date, from a `date:` tag or a `[date]` bracket in its
+    /// comments, or `nil` when it is dated by its transaction.
+    ///
+    /// A payment written on the statement date with `; date:2024-02-02` for
+    /// the day it cleared counts on the day it cleared: every query `Ledger`
+    /// bounds by date, and every report built on one, dates a posting by this
+    /// when it is set, as hledger does. The transaction keeps its own date.
+    ///
+    /// The comment is the only place the date is written, so this is read
+    /// from it rather than set: `Transaction.init` reads it from `comment`
+    /// and `trailingComments`, since only the transaction knows the year a
+    /// short date leaves out. A posting that is in no transaction has none,
+    /// and it is not encoded. The rules are on `Posting.writtenDates`.
+    public internal(set) var date: JournalDate?
+    /// The posting's secondary date, from a `date2:` tag or the part of a
+    /// bracket after its `=`, read the way `date` is.
+    ///
+    /// No query reads it. hledger uses secondary dates only when asked to,
+    /// and SwiftLedger does not ask, so it is carried for the app to show.
+    public internal(set) var date2: JournalDate?
 
     /// What this posting contributes when its transaction is balanced.
     ///
@@ -199,6 +219,14 @@ public struct Posting: Sendable, Codable, Hashable {
         self.status = status
         self.comment = comment
         self.trailingComments = trailingComments
+    }
+
+    /// The encoded shape of a posting. `date` and `date2` are left out: they
+    /// are read from the comments, which are encoded, whenever the posting
+    /// joins a transaction.
+    private enum CodingKeys: String, CodingKey {
+        case accountName, kind, amount, price, balanceAssertion, balanceAssertionOperator, status, comment
+        case trailingComments
     }
 
     /// Decodes a posting, treating a missing `kind`, `trailingComments`,
