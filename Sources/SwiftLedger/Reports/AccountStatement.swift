@@ -1,10 +1,12 @@
 import Foundation
 
-/// An account statement: a chronological list of transactions affecting one
-/// account, with a running balance per commodity.
+/// An account statement: a chronological list of the postings to one account,
+/// with a running balance per commodity.
 ///
-/// Lines are ordered by date, ties broken by original document order, which is
-/// what makes each `runningBalance` the account's balance as of that posting.
+/// Lines are ordered by the postings' own dates, `Posting.date` or else their
+/// transaction's, ties broken by original document order, which is what makes
+/// each `runningBalance` the account's balance as of that posting. `from` and
+/// `to` bound the same dates, as an hledger register does.
 public struct AccountStatement: Sendable {
     public struct Line: Sendable {
         public let transaction: Transaction
@@ -25,23 +27,20 @@ public struct AccountStatement: Sendable {
         var resultLines: [Line] = []
 
         // Date-ordered by `Ledger`, unlike `journal.transactions`, which is in
-        // document order; `filter` preserves that order. The running balance
-        // accumulated below is only correct chronologically.
-        let txs = ledger.transactions(from: from, to: to)
-            .filter { $0.postings.contains { $0.accountName == accountName } }
+        // document order. The running balance accumulated below is only
+        // correct chronologically.
+        for (transaction, index) in ledger.postingsByDate(from: from, to: to) {
+            let posting = transaction.postings[index]
+            guard posting.accountName == accountName else { continue }
+            let commodity = posting.amount.commodity
+            balances[commodity, default: .zero] += posting.amount.quantity
+            prefixFlags[commodity] = posting.amount.commodityIsPrefix
 
-        for transaction in txs {
-            for posting in transaction.postings where posting.accountName == accountName {
-                let commodity = posting.amount.commodity
-                balances[commodity, default: .zero] += posting.amount.quantity
-                prefixFlags[commodity] = posting.amount.commodityIsPrefix
+            let runningBalance = balances.map { commodity, qty in
+                Amount(quantity: qty, commodity: commodity, commodityIsPrefix: prefixFlags[commodity] ?? false)
+            }.sorted { $0.commodity < $1.commodity }
 
-                let runningBalance = balances.map { commodity, qty in
-                    Amount(quantity: qty, commodity: commodity, commodityIsPrefix: prefixFlags[commodity] ?? false)
-                }.sorted { $0.commodity < $1.commodity }
-
-                resultLines.append(Line(transaction: transaction, posting: posting, runningBalance: runningBalance))
-            }
+            resultLines.append(Line(transaction: transaction, posting: posting, runningBalance: runningBalance))
         }
 
         lines = resultLines

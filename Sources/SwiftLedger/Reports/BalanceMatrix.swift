@@ -137,7 +137,9 @@ public extension Ledger {
     /// last bucket runs through `to` inclusive — the same contract as
     /// `incomeStatementSeries(bucketStarts:to:)`. A row's `opening` nets every
     /// posting dated strictly before `bucketStarts[0]`; postings dated after
-    /// `to` land nowhere. An empty `bucketStarts` yields an empty matrix.
+    /// `to` land nowhere. A posting is dated by `Posting.date` when it has
+    /// one, so one transaction can span buckets. An empty `bucketStarts`
+    /// yields an empty matrix.
     ///
     /// **Zeros** follow `subtreeBalanceSeries(forPrefix:from:to:)` rather than
     /// `incomeStatementSeries`: netted amounts are kept even when they net to
@@ -149,7 +151,7 @@ public extension Ledger {
     /// **Rows** are exact posting accounts — one per account named by at least
     /// one posting the matrix can see, sorted by name, with no parent roll-up
     /// (aggregate subtrees caller-side). An account named only by postings that
-    /// `including` excludes, or only by transactions dated after `to`, gets no
+    /// `including` excludes, or only by postings dated after `to`, gets no
     /// row at all. Ordering within a bucket is irrelevant here — only sums are
     /// taken — so, unlike the transaction queries, nothing is sorted by date.
     ///
@@ -192,14 +194,16 @@ public extension Ledger {
         let emptyBuckets = [CommoditySums](repeating: [:], count: bucketStarts.count)
 
         for transaction in journal.transactions {
-            // Date first: the caller's predicate never runs on transactions
+            // Dates first: the caller's predicate never runs on transactions
             // the window excludes anyway.
-            guard transaction.date <= to else { continue }
+            guard transaction.postings.contains(where: { ($0.date ?? transaction.date) <= to }) else { continue }
             if let including, !including(transaction) { continue }
-            // `nil` only for dates before the first start, which fold into the
-            // opening balance.
-            let bucket = Self.bucketIndex(for: transaction.date, in: bucketStarts)
             for posting in transaction.postings {
+                // A posting is bucketed by its own date. `nil` only for dates
+                // before the first start, which fold into the opening balance.
+                let date = posting.date ?? transaction.date
+                guard date <= to else { continue }
+                let bucket = Self.bucketIndex(for: date, in: bucketStarts)
                 let key = posting.accountName
                 if let bucket {
                     Self.accumulate(
