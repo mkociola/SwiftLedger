@@ -240,8 +240,11 @@ a blank line cut off from its entry, refuses the file at its line with
 > Each file is kept as its own `Journal` in the `JournalItem.include` item of
 > the line that read it, with its own layout and line endings. A new entry
 > goes to the top file; an edited or removed entry is changed in the file it
-> came from, and saving writes only the files whose text changed, so a file
-> nobody edited keeps its bytes and its modification date.
+> came from. Saving writes the top file and each included file edited here
+> whose text changed, so an included file nobody edited keeps its bytes and
+> its modification date, and one changed in another app since the load is not
+> overwritten unless it was edited here too. A file included twice cannot be
+> edited in one place only: the save is refused with `LedgerError.storeError`.
 >
 > An `include` that cannot be followed refuses the load rather than showing
 > balances that leave a file out: a path matching no file, or a file that
