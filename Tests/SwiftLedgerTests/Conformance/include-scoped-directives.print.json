@@ -1,0 +1,149 @@
+[
+  {
+    "date": "2024-01-02",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Rent",
+    "postings": [
+      {
+        "account": "Expenses:Rent",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 1500,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -1500,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-10",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "After",
+    "postings": [
+      {
+        "account": "rent",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 15,
+            "places": 1,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -15,
+            "places": 1,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Equity:Opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "",
+            "mantissa": 8,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Equity:Opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "",
+            "mantissa": -8,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2030-01-03",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Bare",
+    "postings": [
+      {
+        "account": "Expenses:Housing",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": 75,
+            "places": 1,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "USD",
+            "mantissa": -75,
+            "places": 1,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  }
+]

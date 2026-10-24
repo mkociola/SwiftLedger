@@ -1,0 +1,6 @@
+hledger: Error: in file included from include-cycle.journal,
+_include-cycle-part.journal:5:1:
+  |
+5 | include include-cycle.journal
+  | ^
+This included file forms a cycle: include-cycle.journal

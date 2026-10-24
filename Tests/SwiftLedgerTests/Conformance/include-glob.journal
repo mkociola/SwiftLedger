@@ -1,0 +1,1 @@
+include _include-glob-*.journal  ; both parts, in name order
