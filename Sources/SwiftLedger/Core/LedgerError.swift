@@ -39,6 +39,21 @@ public enum LedgerError: Error, Sendable, Equatable {
     /// are read by another mark than the author meant without a word. hledger
     /// refuses the file at the line, and so does the parser.
     case unreadableDirective(String, reason: String)
+    /// An `include` line names no file that can be read: nothing matches the
+    /// path or glob, or a file it matches cannot be opened (on iOS, one outside
+    /// the folder the app was given access to). The first associated value is
+    /// the path as the line writes it; `reason` says what went wrong.
+    ///
+    /// Loading the rest of the journal without the file would show balances
+    /// that leave out every entry in it, with nothing to say so, so the load
+    /// is refused instead, and a caller can match on this to ask for access.
+    case unreadableInclude(String, reason: String)
+    /// An error found inside a file an `include` line reads, wrapped around
+    /// the error found there. The first associated value is the full path of
+    /// that file, as hledger names it; `underlying` is the error located in
+    /// that file, its line counted in that file. The whole is itself located
+    /// at the `include` line of the file that read it.
+    indirect case inIncludedFile(String, underlying: LedgerError)
 
     // MARK: - Transaction
 
@@ -120,6 +135,10 @@ extension LedgerError: LocalizedError {
             "Cannot resolve elided amount: no explicit amount to balance it against"
         case let .unreadableDirective(directive, reason):
             "Directive '\(directive)' cannot be read: \(reason)"
+        case let .unreadableInclude(path, reason):
+            "Could not follow include \(path): \(reason)"
+        case let .inIncludedFile(path, underlying):
+            "In \(path): \(underlying.localizedDescription)"
         case let .unbalancedTransaction(commodity, imbalance):
             "Transaction is unbalanced in \(commodity.isEmpty ? "its bare numbers" : commodity): off by \(imbalance)"
         case let .unbalancedBracketedPostings(commodity, imbalance):
@@ -157,11 +176,12 @@ public extension LedgerError {
     /// What went wrong and where it went wrong are separate questions, and a
     /// caller deciding what to do about a journal asks the first one: this is
     /// the same error whether it was thrown over a file or over a transaction
-    /// built in code. A located error wraps exactly one bare error, so one
-    /// step is always enough.
+    /// built in code. An error found in an included file is located twice,
+    /// at the `include` line and inside the file, so the wrappers are taken
+    /// off until none is left.
     var withoutLocation: LedgerError {
         switch self {
-        case let .inJournal(_, _, underlying): underlying
+        case let .inJournal(_, _, underlying), let .inIncludedFile(_, underlying): underlying.withoutLocation
         default: self
         }
     }

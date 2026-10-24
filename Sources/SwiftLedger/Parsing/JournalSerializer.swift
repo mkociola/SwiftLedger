@@ -109,13 +109,10 @@ public struct JournalSerializer {
                 } else {
                     try? parser.declare(at: lines.count - 1, in: lines, into: &declared, year: &year)
                 }
+            case let .include(included):
+                lines.append(included.line)
             case let .accountDirective(directive):
-                let name = declared.accountNames.spelling(of: directive.name, written: directive.writtenName)
-                var line = "account \(name)"
-                if let comment = directive.comment {
-                    line += "  ; \(comment)"
-                }
-                lines.append(line)
+                lines.append(accountLine(directive, declared: declared))
             case let .transaction(transaction):
                 lines.append(contentsOf: serializeTransaction(
                     transaction,
@@ -130,6 +127,14 @@ public struct JournalSerializer {
         // newline after it (issue #66), and an edit can leave one last.
         if journal.endsOnBlockCommentLine { lines.append("") }
         return lines.joined(separator: journal.lineEnding.rawValue)
+    }
+
+    /// An `account` line, its name spelled the way the `alias` and `apply
+    /// account` lines in force where it stands book it as the account.
+    private func accountLine(_ directive: AccountDirective, declared: JournalStyleCollector) -> String {
+        let name = declared.accountNames.spelling(of: directive.name, written: directive.writtenName)
+        guard let comment = directive.comment else { return "account \(name)" }
+        return "account \(name)  ; \(comment)"
     }
 
     // MARK: - Comments
