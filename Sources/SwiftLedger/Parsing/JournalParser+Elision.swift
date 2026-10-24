@@ -140,10 +140,10 @@ extension JournalParser {
     /// inline comment sat at the end of the first line and the full-line
     /// comments sat under the last, so they go there. A balance assertion
     /// names a commodity and belongs to the posting in that commodity, falling
-    /// back to the first when it names one the line did not absorb, since the
-    /// assertion is preserved and never checked either way. A price on a line
-    /// that wrote no amount prices nothing, and stays on the first posting,
-    /// which is where it was before an elision could expand.
+    /// back to the first when it names one the line did not absorb, where it
+    /// is checked against a balance in which the line moved nothing. A price
+    /// on a line that wrote no amount prices nothing, and stays on the first
+    /// posting, which is where it was before an elision could expand.
     static func postings(from raw: RawPosting, amounts: [Amount]) -> [Posting] {
         guard amounts.count > 1 else { return amounts.map { posting(from: raw, amount: $0) } }
         let assertionIndex = raw.balanceAssertion

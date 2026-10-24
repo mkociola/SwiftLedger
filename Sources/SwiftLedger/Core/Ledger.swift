@@ -337,7 +337,7 @@ public struct Ledger: Sendable {
             .filter { isInSubtree($0.accountName, prefix: prefix) }
     }
 
-    private func isInSubtree(_ name: String, prefix: String) -> Bool {
+    func isInSubtree(_ name: String, prefix: String) -> Bool {
         name == prefix || name.hasPrefix(prefix + ":")
     }
 }
