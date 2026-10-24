@@ -42,7 +42,7 @@ import Testing
         #expect(journal.commodityFormats["$"]?.signPrecedesCommodity == true)
     }
 
-    /// The library preserves a balance assertion without checking it, so the
+    /// A failed balance assertion does not stop the example loading, so the
     /// example has to be honest on its own: the figure it asserts is the
     /// balance the entries above it produce.
     @Test
