@@ -209,9 +209,15 @@ public struct JournalSerializer {
 
         // Posting lines, each followed by the comment lines written below it
         for posting in transaction.postings {
-            lines.append(serializePosting(
+            var line = serializePosting(
                 posting, formats: formats, declared: declared, alignment: alignment, indent: indent,
-            ))
+            )
+            // A leg of a split elided line may hold a date its own comments
+            // do not write, and the next parse reads dates from comments alone.
+            if let tags = posting.unwrittenDateTags(year: transaction.date.year) {
+                line += (posting.comment.map { $0.isEmpty ? "" : ", " } ?? "  ; ") + tags
+            }
+            lines.append(line)
             for comment in posting.trailingComments {
                 lines.append(transactionCommentLine(comment))
             }

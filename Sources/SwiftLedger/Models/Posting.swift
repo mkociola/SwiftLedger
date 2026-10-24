@@ -155,6 +155,28 @@ public struct Posting: Sendable, Codable, Hashable {
     /// round-trip. These lines are commentary only: they are not postings and
     /// take no part in balancing.
     public let trailingComments: [String]
+    /// The posting's own date, from a `date:` tag or a `[date]` bracket in its
+    /// comments, or `nil` when it is dated by its transaction.
+    ///
+    /// A payment written on the statement date with `; date:2024-02-02` for
+    /// the day it cleared counts on the day it cleared: every query `Ledger`
+    /// bounds by date, and every report built on one, dates a posting by this
+    /// when it is set, as hledger does. The transaction keeps its own date.
+    ///
+    /// The comment is the only place the date is written, so this is read
+    /// from it rather than set: `Transaction.init` reads it from `comment`
+    /// and `trailingComments`, since only the transaction knows the year a
+    /// short date leaves out. A posting built outside a transaction has none.
+    /// The rules are on `Posting.writtenDates`. It is encoded, for the one
+    /// posting whose comments do not write it, a leg of an elided line split
+    /// by commodity, and a decoded transaction reads the comments again.
+    public internal(set) var date: JournalDate?
+    /// The posting's secondary date, from a `date2:` tag or the part of a
+    /// bracket after its `=`, read the way `date` is.
+    ///
+    /// No query reads it. hledger uses secondary dates only when asked to,
+    /// and SwiftLedger does not ask, so it is carried for the app to show.
+    public internal(set) var date2: JournalDate?
 
     /// What this posting contributes when its transaction is balanced.
     ///
@@ -202,8 +224,9 @@ public struct Posting: Sendable, Codable, Hashable {
     }
 
     /// Decodes a posting, treating a missing `kind`, `trailingComments`,
-    /// `price`, `balanceAssertion` or `balanceAssertionOperator` key as absent
-    /// so that JSON written before those keys existed still decodes. A
+    /// `price`, `balanceAssertion`, `balanceAssertionOperator`, `date` or
+    /// `date2` key as absent so that JSON written before those keys existed
+    /// still decodes. A
     /// posting with no `kind` is real, which is what every posting written
     /// before virtual ones were modelled was, and one with no operator
     /// asserts a single commodity, which is how every assertion was read then.
@@ -219,6 +242,8 @@ public struct Posting: Sendable, Codable, Hashable {
         status = try container.decodeIfPresent(ClearingStatus.self, forKey: .status)
         comment = try container.decodeIfPresent(String.self, forKey: .comment)
         trailingComments = try container.decodeIfPresent([String].self, forKey: .trailingComments) ?? []
+        date = try container.decodeIfPresent(JournalDate.self, forKey: .date)
+        date2 = try container.decodeIfPresent(JournalDate.self, forKey: .date2)
     }
 }
 

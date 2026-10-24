@@ -1,4 +1,5 @@
-/// An income statement (profit & loss) for a date range.
+/// An income statement (profit & loss) for a date range, counting each
+/// posting on its own date, `Posting.date` or else its transaction's.
 public struct IncomeStatement: Sendable {
     public let from: JournalDate?
     // swiftlint:disable:next identifier_name
@@ -11,15 +12,14 @@ public struct IncomeStatement: Sendable {
         self.from = from
         self.to = to
 
-        let transactions = ledger.transactions(from: from, to: to)
+        let postings = ledger.postingsByDate(from: from, to: to).map { $0.transaction.postings[$0.index] }
         let accounts = ledger.accounts
 
         func balances(for type: AccountType) -> [AccountBalance] {
             accounts
                 .filter { $0.type == type }
                 .compactMap { acc -> AccountBalance? in
-                    let amounts = transactions
-                        .flatMap(\.postings)
+                    let amounts = postings
                         .filter { $0.accountName == acc.name }
                         .map(\.amount)
                         .netByCommodity()

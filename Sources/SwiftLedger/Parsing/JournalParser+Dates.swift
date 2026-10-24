@@ -34,11 +34,11 @@ extension JournalParser {
     /// `= 01-10 Rent`, and `2024-01-08= 01-10 Rent` is refused at the space.
     /// Both used to read a secondary date across the gaps (issue #119).
     func consumeDates(_ rest: inout Substring, year: Int?, lineNumber: Int) throws -> (JournalDate, JournalDate?) {
-        let date = try consumeDate(&rest, year: year, lineNumber: lineNumber)
+        let date = try Self.consumeDate(&rest, year: year, lineNumber: lineNumber)
         var auxDate: JournalDate?
         if rest.first == "=" {
             rest = rest.dropFirst()
-            auxDate = try consumeDate(&rest, year: date.year, lineNumber: lineNumber)
+            auxDate = try Self.consumeDate(&rest, year: date.year, lineNumber: lineNumber)
         }
         guard rest.first.map({ $0 == " " || $0 == "\t" }) ?? true else {
             throw LedgerError.parseError(line: lineNumber, message: "Expected a space after the date, got '\(rest)'")
@@ -47,7 +47,10 @@ extension JournalParser {
     }
 
     /// Reads one date off the front of `text`, leaving `text` past it.
-    private func consumeDate(_ text: inout Substring, year: Int?, lineNumber: Int) throws -> JournalDate {
+    ///
+    /// A posting's `date:` tag and `[date]` brackets are read through this
+    /// too, so they take and refuse the same dates a header does.
+    static func consumeDate(_ text: inout Substring, year: Int?, lineNumber: Int) throws -> JournalDate {
         let start = text
         var parts: [Substring] = []
         var separators: Set<Character> = []

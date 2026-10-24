@@ -7,7 +7,9 @@
 #
 #   NAME.print.json    what hledger reads: every transaction, every posting,
 #                      every amount, with elided amounts filled in and costs
-#                      inferred, projected down to the fields the test compares
+#                      inferred, projected down to the fields the test compares;
+#                      a posting's secondary date only where it has one, so
+#                      the fixtures written before it was compared still hold
 #   NAME.balance.json  hledger's flat balance report, one row per account
 #
 # or, when hledger refuses the file:
@@ -35,6 +37,7 @@ PRINT_FILTER='[ .[] | {
     kind: .ptype,
     status: .pstatus,
     date: .pdate,
+    date2: .pdate2,
     amounts: [ .pamount[] | {
       commodity: .acommodity,
       mantissa: .aquantity.decimalMantissa,
@@ -53,7 +56,7 @@ PRINT_FILTER='[ .[] | {
       total: .pbalanceassertion.batotal,
       inclusive: .pbalanceassertion.bainclusive
     } end)
-  } ]
+  } | if .date2 == null then del(.date2) else . end ]
 } ]'
 
 BALANCE_FILTER='[ .[0][] | {

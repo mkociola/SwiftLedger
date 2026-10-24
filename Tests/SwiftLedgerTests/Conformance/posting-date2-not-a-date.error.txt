@@ -1,0 +1,6 @@
+hledger: Error: posting-date2-not-a-date.journal:3:30:
+  |
+3 |     Assets:Checking  ; date2:soon
+  |                              ^
+unexpected 's'
+expecting full or partial date

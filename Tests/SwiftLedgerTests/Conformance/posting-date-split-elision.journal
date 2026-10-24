@@ -1,0 +1,8 @@
+; An elided line that absorbs two commodities is one posting to hledger, dated
+; by its comments, and two here, both dated the same.
+
+2024-01-31 Rent in two currencies
+    Expenses:Rent      $10.00
+    Expenses:Rent      10.00 EUR
+    Assets:Checking  ; date:2024-02-02
+    ; date2:2024-02-09

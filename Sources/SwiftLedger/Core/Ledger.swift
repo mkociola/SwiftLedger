@@ -94,7 +94,14 @@ public struct Ledger: Sendable {
     // MARK: - Balance queries
 
     /// Returns the net balance for an exact account name, grouped by commodity.
-    /// An optional `asOf` date filters to transactions on or before that date.
+    /// An optional `asOf` date filters to postings dated on or before that
+    /// date.
+    ///
+    /// Here and in every other query bounded by dates, a posting is dated by
+    /// `Posting.date` when its comment gives it one and by its transaction
+    /// otherwise, as hledger dates it. The transaction queries further down
+    /// are the exception: they find transactions, and a transaction keeps its
+    /// own date.
     public func balance(for accountName: String, asOf: JournalDate? = nil) -> [Amount] {
         postings(for: accountName, asOf: asOf)
             .map(\.amount)
@@ -126,19 +133,15 @@ public struct Ledger: Sendable {
         // Running balance per commodity; seeded with everything before the
         // window, then advanced day by day through the window itself.
         var running: CommoditySums = [:]
-        func fold(_ transaction: Transaction) {
-            for posting in transaction.postings {
-                guard isInSubtree(posting.accountName, prefix: prefix) else { continue }
-                Self.accumulate(posting.amount, into: &running)
-            }
-        }
-
-        var window: [Transaction] = []
-        for transaction in journal.transactions where transaction.date <= to {
-            if transaction.date < from {
-                fold(transaction)
-            } else {
-                window.append(transaction)
+        var window: [(date: JournalDate, amount: Amount)] = []
+        for transaction in journal.transactions {
+            for posting in transaction.postings where isInSubtree(posting.accountName, prefix: prefix) {
+                let date = posting.date ?? transaction.date
+                if date < from {
+                    Self.accumulate(posting.amount, into: &running)
+                } else if date <= to {
+                    window.append((date, posting.amount))
+                }
             }
         }
         window.sort { $0.date < $1.date }
@@ -154,7 +157,7 @@ public struct Ledger: Sendable {
         for offset in 0 ..< dayCount {
             let day = JournalDate(calendar.date(byAdding: .day, value: offset, to: fromDate)!)
             while index < window.endIndex, window[index].date <= day {
-                fold(window[index])
+                Self.accumulate(window[index].amount, into: &running)
                 index = window.index(after: index)
             }
             series.append(Self.amounts(from: running))
@@ -180,10 +183,10 @@ public struct Ledger: Sendable {
         var revenueSums = [CommoditySums](repeating: [:], count: bucketStarts.count)
         var expenseSums = revenueSums
         for transaction in journal.transactions {
-            guard transaction.date >= firstStart, transaction.date <= to else { continue }
-            guard let bucket = Self.bucketIndex(for: transaction.date, in: bucketStarts)
-            else { continue }
             for posting in transaction.postings {
+                let date = posting.date ?? transaction.date
+                guard date >= firstStart, date <= to,
+                      let bucket = Self.bucketIndex(for: date, in: bucketStarts) else { continue }
                 let type =
                     declaredTypes[posting.accountName]
                         ?? AccountType.inferred(from: posting.accountName)
@@ -323,18 +326,43 @@ public struct Ledger: Sendable {
             .map(\.element)
     }
 
+    /// The journal's postings, each with its transaction, ordered by their
+    /// own dates, postings of one date in file order, and limited to those
+    /// dated `from` through `to` inclusive.
+    ///
+    /// This is the order hledger replays a journal in to check its balance
+    /// assertions and lists a register in, so a posting dated past its
+    /// transaction moves past the entries in between. `sorted(by:)` is not
+    /// guaranteed stable, so the file position is carried through the
+    /// comparison.
+    func postingsByDate(
+        from: JournalDate? = nil, to: JournalDate? = nil, // swiftlint:disable:this identifier_name
+    ) -> [(transaction: Transaction, index: Int)] {
+        let all = journal.transactions.flatMap { transaction in
+            transaction.postings.indices.map { (transaction: transaction, index: $0) }
+        }
+        let dates = all.map { $0.transaction.postings[$0.index].date ?? $0.transaction.date }
+        return all.indices
+            .filter { index in
+                (from.map { dates[index] >= $0 } ?? true) && (to.map { dates[index] <= $0 } ?? true)
+            }
+            .sorted { dates[$0] == dates[$1] ? $0 < $1 : dates[$0] < dates[$1] }
+            .map { all[$0] }
+    }
+
     private func postings(for accountName: String, asOf: JournalDate?) -> [Posting] {
-        journal.transactions
-            .filter { transaction in asOf.map { transaction.date <= $0 } ?? true }
-            .flatMap(\.postings)
-            .filter { $0.accountName == accountName }
+        postingsInRange(asOf: asOf).filter { $0.accountName == accountName }
     }
 
     private func postingsInSubtree(prefix: String, asOf: JournalDate?) -> [Posting] {
-        journal.transactions
-            .filter { transaction in asOf.map { transaction.date <= $0 } ?? true }
-            .flatMap(\.postings)
-            .filter { isInSubtree($0.accountName, prefix: prefix) }
+        postingsInRange(asOf: asOf).filter { isInSubtree($0.accountName, prefix: prefix) }
+    }
+
+    /// Every posting dated on or before `asOf`, in no particular order.
+    private func postingsInRange(asOf: JournalDate?) -> [Posting] {
+        journal.transactions.flatMap { transaction in
+            transaction.postings.filter { posting in asOf.map { (posting.date ?? transaction.date) <= $0 } ?? true }
+        }
     }
 
     func isInSubtree(_ name: String, prefix: String) -> Bool {

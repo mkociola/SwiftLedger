@@ -120,6 +120,7 @@ account Income:Salary
 ;     [* | !] ACCOUNT  (elided — computed automatically)
 ;     [* | !] (ACCOUNT)  AMOUNT   ; virtual: takes no part in balancing
 ;     [* | !] [ACCOUNT]  AMOUNT   ; balanced virtual: balances among brackets
+;     [* | !] ACCOUNT  AMOUNT  ; date:DATE   ; the posting's own date, [DATE] too
 
 2024-01-15 * Salary received
     Assets:Checking        $3200.00
