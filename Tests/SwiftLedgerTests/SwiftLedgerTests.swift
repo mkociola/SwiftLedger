@@ -4644,9 +4644,9 @@ private func decodeTransaction(editing edit: (inout [String: Any]) throws -> Voi
 
     @Test
     func `saving a multi-file journal leaves its include directives intact`() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("test-\(UUID().uuidString).ledger")
-        defer { try? FileManager.default.removeItem(at: url) }
+        let files = try JournalFiles(["accounts.ledger": "account Assets:Cash\n", "2023.ledger": ""])
+        defer { files.remove() }
+        let url = files.url("main.ledger")
 
         try """
         include accounts.ledger
