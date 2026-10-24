@@ -61,8 +61,9 @@ branches merged one after another spread their additions over small files
 instead of pushing one past SwiftLint's length limits.
 
 The example has to keep parsing and serialising byte for byte, and any balance
-assertion it carries has to be the balance its own entries produce, because the
-library preserves assertions without checking them.
+assertion it carries has to be the balance its own entries produce, because a
+failed assertion is reported by `Ledger.checkBalanceAssertions()` rather than
+refusing the load.
 
 ## hledger conformance
 

@@ -8,8 +8,10 @@ import Testing
 /// `Scripts/hledger-fixtures.sh`, and what hledger made of it sits beside it:
 /// `NAME.print.json` holds every transaction hledger read, with elided
 /// amounts filled in and costs inferred, `NAME.balance.json` holds its flat
-/// balance report, and `NAME.error.txt` means hledger refused the file. The
-/// tests never run hledger; they read the fixtures, read the same journal
+/// balance report, and `NAME.error.txt` means hledger refused the file. A
+/// file hledger refuses over a balance assertion loads here, so a failure
+/// `Ledger.checkBalanceAssertions()` reports counts as the refusal, and a
+/// file hledger loads has to report none. The tests never run hledger; they read the fixtures, read the same journal
 /// with `JournalParser`, and compare values, never text.
 ///
 /// A journal SwiftLedger is known to read differently is listed in
@@ -31,7 +33,6 @@ import Testing
         "alias",
         "amount-stray-cr",
         "apply-account",
-        "balance-assertion-fails",
         "include",
         "posting-date-tag",
         "posting-status-tabs",
@@ -77,7 +78,8 @@ import Testing
             // hledger refused the file, so SwiftLedger has to refuse it too.
             // What it refuses it for is not compared: the messages are
             // hledger's, and only the verdict is the contract.
-            if let journal = try? JournalParser().parse(text) {
+            let journal = try? JournalParser().parse(text)
+            if let journal, Ledger(journal: journal).checkBalanceAssertions().isEmpty {
                 Issue.record(
                     """
                     hledger refuses \(name).journal and SwiftLedger read \(journal.transactions.count) \
@@ -91,6 +93,10 @@ import Testing
         }
 
         let journal = try JournalParser().parse(text)
+        for failure in Ledger(journal: journal).checkBalanceAssertions() {
+            let failed = "\(failure.transaction.description): \(failure.asserted) asserted, \(failure.actual) actual"
+            Issue.record("hledger loads \(name).journal and SwiftLedger reports a failed assertion in \(failed)")
+        }
         let decoder = JSONDecoder()
         let expectedTransactions = try decoder.decode(
             [HledgerTransaction].self, from: Data(contentsOf: fixture("\(name).print.json")),
@@ -197,7 +203,7 @@ import Testing
         case nil: break
         }
         if let assertion = posting.balanceAssertion {
-            line += " = " + render(assertion)
+            line += " \(posting.balanceAssertionOperator.rawValue) " + render(assertion)
         }
         return line
     }
@@ -253,7 +259,8 @@ import Testing
                     : " @ " + render(cost.quantity, cost.commodity)
             }
             if let assertion = posting.assertion {
-                line += " = " + render(assertion.quantity, assertion.commodity)
+                let written = (assertion.total ? "==" : "=") + (assertion.inclusive ? "*" : "")
+                line += " \(written) " + render(assertion.quantity, assertion.commodity)
             }
             if let date = posting.date {
                 line += "  ; date:\(date)"

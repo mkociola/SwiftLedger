@@ -1,0 +1,62 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 7400,
+        "places": 2
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 0,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Assets:Checking:Reserve",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 2000,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Equity:Opening",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -12000,
+        "places": 2
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 0,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Fees",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 100,
+        "places": 2
+      }
+    ]
+  },
+  {
+    "account": "Expenses:Rent",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 3000,
+        "places": 2
+      }
+    ]
+  }
+]

@@ -1,0 +1,13 @@
+hledger: Error: balance-assertion-date-order-fails.journal:2:32:
+  | 2024-01-05 Opening
+2 |     Assets:Checking         $100.00 = $100.00
+  |                                     ^^^^^^^^^
+  |     Equity:Opening         $-100.00
+
+Balance assertion failed in Assets:Checking
+In commodity $ at this point, excluding subaccounts, ignoring costs,
+the asserted balance is:        $100.00
+but the calculated balance is:  $150.00
+(difference: $-50.00)
+To troubleshoot, check this account's running balance with assertions disabled, eg:
+hledger reg -I 'Assets:Checking$' cur:'$'

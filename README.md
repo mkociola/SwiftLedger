@@ -75,6 +75,14 @@ own line; anything about the entry as a whole reports the line the entry starts
 on. A `Transaction` built in code has no line to report and throws the bare
 error, which is the one `withoutLocation` hands back.
 
+A balance assertion the journal's own postings contradict does not stop the
+file loading, where hledger refuses it, so that an editor can still open the
+file and fix the line. `Ledger(journal:).checkBalanceAssertions()` replays the
+journal the way hledger checks it and returns every failure with its entry,
+the posting's index, and the asserted and the actual amount; an empty list is
+a file hledger loads. `=`, `==`, `=*` and `==*` are each read and written back
+as written.
+
 ### Build a ledger programmatically
 
 ```swift

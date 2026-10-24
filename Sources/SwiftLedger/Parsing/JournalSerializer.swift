@@ -254,7 +254,8 @@ public struct JournalSerializer {
 
     /// The whole amount field of a posting: the amount, then whatever price
     /// and balance assertion it carries, in the order ledger writes them —
-    /// `AMOUNT @ PRICE = ASSERTION`, canonically spaced.
+    /// `AMOUNT @ PRICE = ASSERTION`, canonically spaced, with the assertion's
+    /// own operator.
     private func formatPostingAmount(
         _ posting: Posting, formats: [String: CommodityFormat], declared: JournalStyleCollector,
     ) -> String {
@@ -266,7 +267,7 @@ public struct JournalSerializer {
         case let .total(price): field += " @@ \(format(price))"
         }
         if let assertion = posting.balanceAssertion {
-            field += " = \(format(assertion))"
+            field += " \(posting.balanceAssertionOperator.rawValue) \(format(assertion))"
         }
         return field
     }

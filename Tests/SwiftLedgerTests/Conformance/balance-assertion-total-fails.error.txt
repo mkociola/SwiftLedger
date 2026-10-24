@@ -1,0 +1,12 @@
+hledger: Error: balance-assertion-total-fails.journal:7:32:
+  | 2024-01-02 Statement
+7 |     Assets:Checking              $0 == $100.00
+  |                                     ^^^^^^^^^^
+
+Balance assertion failed in Assets:Checking
+Across all commodities at this point, excluding subaccounts, ignoring costs,
+the asserted balance is:         0 EUR
+but the calculated balance is:  10 EUR
+(difference: -10 EUR)
+To troubleshoot, check this account's running balance with assertions disabled, eg:
+hledger reg -I 'Assets:Checking$'

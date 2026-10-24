@@ -115,9 +115,16 @@ account Expenses:Utilities
 
 ; The usual hledger shape: a zero posting carrying a balance assertion, which
 ; states the balance on that date without recording a movement. SwiftLedger
-; preserves the assertion and does not check it.
+; loads the file whether or not the assertion holds, and checks it as hledger
+; does when asked.
 2024-02-29 Statement check
     Assets:Savings         $0 = $5000.00
+
+; A doubled = asserts that the commodity is all the account holds: these
+; savings are dollars and nothing else. =* and ==* would count the
+; subaccounts' postings too.
+2024-03-01 Statement check, dollars only
+    Assets:Savings         $0 == $5000.00
 
 ; ── Dates written other ways ────────────────────────────────────────────────
 ; hledger writes a date with '-', '/' or '.' between its parts, the month and

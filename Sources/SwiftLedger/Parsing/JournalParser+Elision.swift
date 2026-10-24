@@ -125,6 +125,7 @@ extension JournalParser {
             amount: amount,
             price: raw.price,
             balanceAssertion: raw.balanceAssertion,
+            balanceAssertionOperator: raw.balanceAssertionOperator,
             status: raw.status,
             comment: raw.comment,
             trailingComments: raw.trailingComments,
@@ -139,10 +140,10 @@ extension JournalParser {
     /// inline comment sat at the end of the first line and the full-line
     /// comments sat under the last, so they go there. A balance assertion
     /// names a commodity and belongs to the posting in that commodity, falling
-    /// back to the first when it names one the line did not absorb, since the
-    /// assertion is preserved and never checked either way. A price on a line
-    /// that wrote no amount prices nothing, and stays on the first posting,
-    /// which is where it was before an elision could expand.
+    /// back to the first when it names one the line did not absorb, where it
+    /// is checked against a balance in which the line moved nothing. A price
+    /// on a line that wrote no amount prices nothing, and stays on the first
+    /// posting, which is where it was before an elision could expand.
     static func postings(from raw: RawPosting, amounts: [Amount]) -> [Posting] {
         guard amounts.count > 1 else { return amounts.map { posting(from: raw, amount: $0) } }
         let assertionIndex = raw.balanceAssertion
@@ -154,6 +155,7 @@ extension JournalParser {
                 amount: amount,
                 price: index == 0 ? raw.price : nil,
                 balanceAssertion: index == assertionIndex ? raw.balanceAssertion : nil,
+                balanceAssertionOperator: raw.balanceAssertionOperator,
                 status: raw.status,
                 comment: index == 0 ? raw.comment : nil,
                 trailingComments: index == amounts.count - 1 ? raw.trailingComments : [],

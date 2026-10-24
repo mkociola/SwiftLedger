@@ -1,0 +1,20 @@
+2024-01-01 Opening
+    Assets:Checking          $100.00
+    Assets:Checking:Reserve   $20.00
+    Assets:Checking            10 EUR
+    Equity:Opening
+
+2024-01-03 Rent
+    Expenses:Rent             $30.00
+    Assets:Checking          $-30.00 = $69.00
+    Assets:Checking           -10 EUR == $69.00
+    Equity:Opening             10 EUR
+    Assets:Checking               $0 =* $89.00
+    Assets:Checking               $0 ==* $89.00
+
+2024-01-02 Fee, written after the rent
+    Expenses:Fees              $1.00
+    Assets:Checking           $-1.00 = $99.00
+
+2024-01-04 Envelope
+    (Assets:Checking)          $5.00 = $74.00

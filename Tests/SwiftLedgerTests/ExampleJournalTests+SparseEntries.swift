@@ -30,5 +30,11 @@ extension ExampleJournalTests {
         #expect(check.postings.map(\.amount.quantity) == [0])
         let asserted = Amount(quantity: 5000, commodity: "$", commodityIsPrefix: true)
         #expect(check.postings.first?.balanceAssertion == asserted)
+        #expect(check.postings.first?.balanceAssertionOperator == .single)
+
+        let dollarsOnly = try #require(byPayee["Statement check, dollars only"])
+        #expect(dollarsOnly.postings.first?.balanceAssertion == asserted)
+        #expect(dollarsOnly.postings.first?.balanceAssertionOperator == .total)
+        #expect(Ledger(journal: journal).checkBalanceAssertions().isEmpty)
     }
 }

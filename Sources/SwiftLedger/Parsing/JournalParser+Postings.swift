@@ -9,6 +9,7 @@ extension JournalParser {
         var amount: Amount?
         var price: PostingPrice?
         var balanceAssertion: Amount?
+        var balanceAssertionOperator = BalanceAssertionOperator.single
         var status: ClearingStatus?
         var comment: String?
         /// Full-line comments written below this posting, verbatim.
@@ -52,6 +53,7 @@ extension JournalParser {
         var amount: Amount?
         var price: PostingPrice?
         var balanceAssertion: Amount?
+        var assertionOperator = BalanceAssertionOperator.single
         var written = WrittenDigits()
         if let rawAmount = amountStr {
             let field = splitAmountField(rawAmount)
@@ -71,6 +73,7 @@ extension JournalParser {
                 let asserted = try parseShapedAmount(rawAssertion, lineNumber: lineNumber, in: style)
                 style.observe(rawAssertion, shape: asserted.shape, as: asserted.amount, posted: false)
                 balanceAssertion = asserted.amount
+                assertionOperator = field.assertionOperator
             }
         }
 
@@ -80,6 +83,7 @@ extension JournalParser {
             amount: amount,
             price: price,
             balanceAssertion: balanceAssertion,
+            balanceAssertionOperator: assertionOperator,
             status: postingStatus,
             comment: comment?.trimmingCharacters(in: .whitespaces),
             written: written,
