@@ -107,7 +107,7 @@ public enum JournalItem: Sendable, Codable, Hashable {
 /// tree of files. Equality is synthesised over every stored property, the
 /// file a journal came from included.
 public struct Journal: Sendable, Codable, Hashable {
-    public private(set) var items: [JournalItem]
+    public internal(set) var items: [JournalItem]
 
     /// The file this journal was read from, or `nil` for one parsed from text,
     /// built in code or decoded from JSON.
@@ -287,13 +287,17 @@ public struct Journal: Sendable, Codable, Hashable {
     /// `account` directive the indented lines under it (`removeItem(at:)`).
     ///
     /// Equality is value-based: if the journal contains two structurally
-    /// identical items, only the first one is removed.
+    /// identical items, only the first one is removed. This file's own items
+    /// are searched first, then each included file's in document order
+    /// (`editIncluded(_:)`), and the item is removed from the file holding it.
     ///
     /// - Returns: `true` if a matching item was found and removed;
     ///   `false` if no match exists.
     @discardableResult
     public mutating func remove(_ item: JournalItem) -> Bool {
-        guard let idx = items.firstIndex(of: item) else { return false }
+        guard let idx = items.firstIndex(of: item) else {
+            return editIncluded { $0.remove(item) ? true : nil } ?? false
+        }
         removeItem(at: idx)
         return true
     }
@@ -323,13 +327,16 @@ public struct Journal: Sendable, Codable, Hashable {
     /// leaves the file reordered — the edited entry torn out of its date order
     /// and left at the end — which in a journal kept in version control is two
     /// changed hunks for a one-field edit, neither of them where the reader is
-    /// looking. Equality is value-based, as it is for `remove(_:)`.
+    /// looking. Equality is value-based, and the search order is the one
+    /// `remove(_:)` uses, so an entry of an included file is replaced there.
     ///
     /// - Returns: `true` if a matching item was found and replaced;
     ///   `false` if no match exists, in which case nothing changed.
     @discardableResult
     public mutating func replace(_ item: JournalItem, with replacement: JournalItem) -> Bool {
-        guard let idx = items.firstIndex(of: item) else { return false }
+        guard let idx = items.firstIndex(of: item) else {
+            return editIncluded { $0.replace(item, with: replacement) ? true : nil } ?? false
+        }
         items[idx] = replacement
         return true
     }
@@ -345,7 +352,8 @@ public struct Journal: Sendable, Codable, Hashable {
     /// Removing by value through `remove(_:)` can do neither. The subdirectives
     /// are not carried: an undo restores the declaration without them.
     ///
-    /// If two lines declare the same account, only the first is removed.
+    /// If two lines declare the same account, only the first is removed, in
+    /// the search order `remove(_:)` uses.
     ///
     /// - Returns: The directive removed, or `nil` if nothing declared `name`.
     @discardableResult
@@ -355,7 +363,7 @@ public struct Journal: Sendable, Codable, Hashable {
             removeItem(at: index)
             return directive
         }
-        return nil
+        return editIncluded { $0.removeAccountDirective(named: name) }
     }
 }
 

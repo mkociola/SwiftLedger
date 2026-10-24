@@ -90,3 +90,25 @@ extension Journal {
         }
     }
 }
+
+extension Journal {
+    /// Applies `edit` to each journal this one includes, in document order,
+    /// until one answers, and keeps the edited journal where it was.
+    ///
+    /// `remove`, `replace` and `removeAccountDirective(named:)` look in this
+    /// file's own items before calling this, and `edit` is one of them, so
+    /// each included file is searched the same way in turn. The top file
+    /// first means that undoing an `add` removes the line just added, even
+    /// when an included file holds an equal one.
+    mutating func editIncluded<Answer>(_ edit: (inout Journal) -> Answer?) -> Answer? {
+        for index in items.indices {
+            guard case var .include(included) = items[index] else { continue }
+            for child in included.journals.indices {
+                guard let answer = edit(&included.journals[child]) else { continue }
+                items[index] = .include(included)
+                return answer
+            }
+        }
+        return nil
+    }
+}
