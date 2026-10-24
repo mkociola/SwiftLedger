@@ -5,7 +5,7 @@ import Foundation
 extension JournalParser {
     /// The parts a posting's amount field can carry: the amount itself, an
     /// optional price after `@` / `@@`, and an optional balance assertion
-    /// after `=`.
+    /// after `=`, `==`, `=*` or `==*`.
     ///
     /// Each part is raw source text, trimmed, for `parseAmount` to interpret.
     /// `amount` is empty when the posting elides it and writes only an
@@ -15,6 +15,7 @@ extension JournalParser {
         var price: String?
         var priceIsTotal: Bool
         var assertion: String?
+        var assertionOperator = BalanceAssertionOperator.single
     }
 
     /// Splits everything written after the account name on a posting line into
@@ -37,44 +38,39 @@ extension JournalParser {
     /// line was refused over a quote with no partner.
     func splitAmountField(_ field: String) -> AmountField {
         guard let operatorIndex = field.firstIndex(outsideQuotes: { $0 == "@" || $0 == "=" }) else {
-            return AmountField(amount: trimmedField(field), price: nil, priceIsTotal: false, assertion: nil)
+            return AmountField(amount: trimmedField(field), price: nil, priceIsTotal: false)
         }
         let amount = trimmedField(field[..<operatorIndex])
         let rest = field[operatorIndex...]
         if rest.first == "=" {
-            return AmountField(amount: amount, price: nil, priceIsTotal: false, assertion: assertionText(rest))
+            var field = AmountField(amount: amount, price: nil, priceIsTotal: false)
+            (field.assertionOperator, field.assertion) = assertion(rest)
+            return field
         }
 
         var price = rest.dropFirst()
         let isTotal = price.first == "@"
         if isTotal { price = price.dropFirst() }
         guard let assertionIndex = price.firstIndex(outsideQuotes: { $0 == "=" }) else {
-            return AmountField(
-                amount: amount,
-                price: trimmedField(price),
-                priceIsTotal: isTotal,
-                assertion: nil,
-            )
+            return AmountField(amount: amount, price: trimmedField(price), priceIsTotal: isTotal)
         }
-        return AmountField(
-            amount: amount,
-            price: trimmedField(price[..<assertionIndex]),
-            priceIsTotal: isTotal,
-            assertion: assertionText(price[assertionIndex...]),
-        )
+        var field = AmountField(amount: amount, price: trimmedField(price[..<assertionIndex]), priceIsTotal: isTotal)
+        (field.assertionOperator, field.assertion) = assertion(price[assertionIndex...])
+        return field
     }
 
-    /// The amount text of a balance assertion whose leading `=` is still attached.
+    /// The operator and the amount text of a balance assertion whose leading
+    /// `=` is still attached.
     ///
-    /// hledger spells a second, stronger form `==` — an assertion over every
-    /// commodity in the account rather than this posting's alone. Both are read
-    /// as assertions here: the distinction is not modelled, but reading either
-    /// operator as part of the commodity name is what made the file refuse to
-    /// load, and that is the failure worth removing first.
-    private func assertionText(_ text: Substring) -> String {
+    /// hledger reads the operator as `=`, then an optional second `=`, then
+    /// an optional `*`, with nothing between them, so `= *$5` is an `=`
+    /// followed by an amount that starts with a star, and is refused as one.
+    private func assertion(_ text: Substring) -> (BalanceAssertionOperator, String) {
         var rest = text.dropFirst()
-        if rest.first == "=" { rest = rest.dropFirst() }
-        return trimmedField(rest)
+        var written = "="
+        if rest.first == "=" { rest = rest.dropFirst(); written += "=" }
+        if rest.first == "*" { rest = rest.dropFirst(); written += "*" }
+        return (BalanceAssertionOperator(rawValue: written) ?? .single, trimmedField(rest))
     }
 
     private func trimmedField(_ text: some StringProtocol) -> String {

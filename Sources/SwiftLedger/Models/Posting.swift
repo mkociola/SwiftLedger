@@ -16,6 +16,32 @@ import Foundation
 /// back. It keeps no price history — a `P` directive is preserved verbatim as
 /// an unmodelled `.directive` line and is never consulted — so nothing here
 /// values a holding at any date other than the one it was traded on.
+/// The operator a balance assertion is written with, which decides what it
+/// asserts. The raw value is the operator as hledger writes it, `=`, then an
+/// optional second `=`, then an optional `*`, with nothing between them.
+public enum BalanceAssertionOperator: String, Sendable, Codable, Hashable {
+    /// `=`: the account's own balance in the asserted commodity, other
+    /// commodities and subaccounts left out.
+    case single = "="
+    /// `==`: as `=`, and every other commodity the account itself has held
+    /// is now zero, so the asserted one is all it holds.
+    case total = "=="
+    /// `=*`: as `=`, with the subaccounts' postings counted.
+    case singleInclusive = "=*"
+    /// `==*`: as `==`, with the subaccounts' postings counted.
+    case totalInclusive = "==*"
+
+    /// Whether every other commodity has to be zero.
+    public var isTotal: Bool {
+        self == .total || self == .totalInclusive
+    }
+
+    /// Whether the subaccounts' postings count.
+    public var isInclusive: Bool {
+        self == .singleInclusive || self == .totalInclusive
+    }
+}
+
 public enum PostingPrice: Sendable, Codable, Hashable {
     /// A per-unit price, written `@`: `10 AAPL @ $150.00` costs $1,500.
     case perUnit(Amount)
@@ -107,14 +133,16 @@ public struct Posting: Sendable, Codable, Hashable {
     /// A balance assertion from a trailing `= <amount>`: what the journal
     /// claims the account's balance is *after* this posting.
     ///
-    /// Parsed, carried, and written back unchanged — and **never checked**.
-    /// Verifying an assertion means replaying every earlier posting for the
-    /// account and telling the user which ones disagree; that is a feature of
-    /// its own, with a report to go with it, and it does not exist yet. Until
-    /// it does, an assertion is data SwiftLedger preserves, not a promise it
-    /// enforces: no initialiser throws because an assertion is wrong, and no
-    /// query consults one.
+    /// Parsed, carried and written back unchanged, and checked only when
+    /// asked: `Ledger.checkBalanceAssertions()` replays the journal and
+    /// reports every assertion that disagrees. hledger refuses such a file;
+    /// an editor that did the same would leave the user no way to open it and
+    /// fix the line, so no initialiser throws because an assertion is wrong
+    /// and the app decides what a failure means.
     public let balanceAssertion: Amount?
+    /// Which balance `balanceAssertion` speaks of, from the operator it was
+    /// written with. `.single` when the posting asserts nothing.
+    public let balanceAssertionOperator: BalanceAssertionOperator
     /// Optional posting-level clearing status (overrides the transaction status).
     public let status: ClearingStatus?
     /// Inline comment text (the part after `; ` on the posting line).
@@ -157,6 +185,7 @@ public struct Posting: Sendable, Codable, Hashable {
         amount: Amount,
         price: PostingPrice? = nil,
         balanceAssertion: Amount? = nil,
+        balanceAssertionOperator: BalanceAssertionOperator = .single,
         status: ClearingStatus? = nil,
         comment: String? = nil,
         trailingComments: [String] = [],
@@ -166,16 +195,18 @@ public struct Posting: Sendable, Codable, Hashable {
         self.amount = amount
         self.price = price
         self.balanceAssertion = balanceAssertion
+        self.balanceAssertionOperator = balanceAssertion == nil ? .single : balanceAssertionOperator
         self.status = status
         self.comment = comment
         self.trailingComments = trailingComments
     }
 
     /// Decodes a posting, treating a missing `kind`, `trailingComments`,
-    /// `price` or `balanceAssertion` key as absent so that JSON written before
-    /// those keys existed still decodes — a posting with no `kind` is real,
-    /// which is what every posting written before virtual ones were modelled
-    /// was.
+    /// `price`, `balanceAssertion` or `balanceAssertionOperator` key as absent
+    /// so that JSON written before those keys existed still decodes. A
+    /// posting with no `kind` is real, which is what every posting written
+    /// before virtual ones were modelled was, and one with no operator
+    /// asserts a single commodity, which is how every assertion was read then.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         accountName = try container.decode(String.self, forKey: .accountName)
@@ -183,6 +214,8 @@ public struct Posting: Sendable, Codable, Hashable {
         amount = try container.decode(Amount.self, forKey: .amount)
         price = try container.decodeIfPresent(PostingPrice.self, forKey: .price)
         balanceAssertion = try container.decodeIfPresent(Amount.self, forKey: .balanceAssertion)
+        let written = try container.decodeIfPresent(BalanceAssertionOperator.self, forKey: .balanceAssertionOperator)
+        balanceAssertionOperator = balanceAssertion == nil ? .single : written ?? .single
         status = try container.decodeIfPresent(ClearingStatus.self, forKey: .status)
         comment = try container.decodeIfPresent(String.self, forKey: .comment)
         trailingComments = try container.decodeIfPresent([String].self, forKey: .trailingComments) ?? []
