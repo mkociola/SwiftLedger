@@ -372,6 +372,18 @@ D $1000.00
     Expenses:Food:Restaurants  25.00
     Assets:Checking
 
+; ── Entries kept in another file ────────────────────────────────────────────
+; An include line reads another journal file where it stands, as hledger
+; reads it, here sample-include.ledger beside this one, under the directives
+; in force at the line: the D line above, and no alias or apply account, so
+; the bus pass in it is booked plainly. A path may be relative to this file,
+; start with ~, or be a glob such as 2024/*.journal. Opened from a file, the
+; journal holds the other file's entries with its own, and an entry edited
+; there is written back there. Parsed from text, which has no directory to
+; look in, the line is kept as it came and nothing is read.
+
+include sample-include.ledger
+
 ; ── Short names for accounts ────────────────────────────────────────────────
 ; An alias line lets the entries below it write a short name for an account,
 ; and an apply account line puts a parent in front of every name until its
