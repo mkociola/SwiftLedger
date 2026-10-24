@@ -33,6 +33,19 @@ import Testing
     }
 
     @Test
+    func `a declaration is looked up where removing it would look`() throws {
+        let child = try Journal(items: [.accountDirective(AccountDirective(name: "Assets:Checking", comment: "old"))])
+        var journal = try Journal(items: [
+            .include(IncludedFiles(line: "include b.journal", journals: [child])),
+            .accountDirective(AccountDirective(name: "Assets:Checking", comment: "new")),
+        ])
+        let shown = journal.accountDirective(named: "Assets:Checking")
+        let removed = journal.removeAccountDirective(named: "Assets:Checking")
+        #expect(shown?.comment == "new")
+        #expect(shown == removed)
+    }
+
+    @Test
     func `transactions walk into included files in document order`() throws {
         let journal = try Self.tree()
         #expect(journal.transactions.map(\.description) == ["A", "B", "C"])

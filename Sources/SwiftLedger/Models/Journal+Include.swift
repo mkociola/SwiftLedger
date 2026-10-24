@@ -70,13 +70,22 @@ public extension Journal {
     /// includes, or `nil` when no line declares it: an account inferred from
     /// postings alone has none.
     ///
+    /// This file is searched first and then each included file, in the order
+    /// `removeAccountDirective(named:)` searches, so that where two lines
+    /// declare one account, the directive shown is the one a removal takes.
+    ///
     /// A directive's identity is the account name it declares; `type` and
     /// `comment` are data it carries. Look one up by name rather than
     /// reconstructing an equal value: a directive parsed from
     /// `account NAME  ; note` carries that comment, and a value built without
     /// it does not compare equal.
     func accountDirective(named name: String) -> AccountDirective? {
-        accountDirectives.first { $0.name == name }
+        for file in files {
+            for case let .accountDirective(directive) in file.items where directive.name == name {
+                return directive
+            }
+        }
+        return nil
     }
 }
 
