@@ -157,6 +157,25 @@ struct JournalStyleCollector {
         decimalMarkDirective = mark
     }
 
+    /// A collector holding what this one's directives declare and nothing it
+    /// observed, for reading a file an `include` line names.
+    ///
+    /// hledger reads an included file under the `alias`, `apply account`,
+    /// `commodity`, `D` and `decimal-mark` lines in force at the `include`
+    /// line, so those go with it. The amounts, columns and indents seen so far
+    /// describe how the including file is written, and the included one has a
+    /// layout of its own to learn from scratch.
+    var declarations: JournalStyleCollector {
+        var copy = JournalStyleCollector()
+        copy.accountNames = accountNames
+        copy.declared = declared
+        copy.defaultCommodity = defaultCommodity
+        copy.decimalMarkDirective = decimalMarkDirective
+        copy.commodityDirectiveMarks = commodityDirectiveMarks
+        copy.defaultCommodityMark = defaultCommodityMark
+        return copy
+    }
+
     /// The decimal mark the file has declared for an amount in `commodity` by
     /// this point in it, or `nil` when no directive has spoken.
     ///
