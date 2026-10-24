@@ -1,0 +1,275 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Opening",
+    "postings": [
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 10000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking:Reserve",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 2000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 10,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Equity:Opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -12000,
+            "places": 2,
+            "cost": null
+          },
+          {
+            "commodity": "EUR",
+            "mantissa": -10,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-02",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Fee, written after the rent",
+    "postings": [
+      {
+        "account": "Expenses:Fees",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 100,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -100,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 9900,
+          "places": 2,
+          "total": false,
+          "inclusive": false
+        }
+      }
+    ]
+  },
+  {
+    "date": "2024-01-03",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Rent",
+    "postings": [
+      {
+        "account": "Expenses:Rent",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 3000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -3000,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 6900,
+          "places": 2,
+          "total": false,
+          "inclusive": false
+        }
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": -10,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 6900,
+          "places": 2,
+          "total": true,
+          "inclusive": false
+        }
+      },
+      {
+        "account": "Equity:Opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "EUR",
+            "mantissa": 10,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 0,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 8900,
+          "places": 2,
+          "total": false,
+          "inclusive": true
+        }
+      },
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 0,
+            "places": 0,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 8900,
+          "places": 2,
+          "total": true,
+          "inclusive": true
+        }
+      }
+    ]
+  },
+  {
+    "date": "2024-01-04",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Envelope",
+    "postings": [
+      {
+        "account": "Assets:Checking",
+        "kind": "VirtualPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 500,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 7400,
+          "places": 2,
+          "total": false,
+          "inclusive": false
+        }
+      }
+    ]
+  }
+]
