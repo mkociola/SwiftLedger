@@ -63,70 +63,119 @@ public struct JournalSerializer {
 
     // MARK: - Public API
 
-    /// Serialises the journal to a string.
+    /// Serialises the journal to a string: this file's text, an `include`
+    /// line written back as it came (`serializedFiles(_:)` writes the files
+    /// it read).
     public func serialize(_ journal: Journal) -> String {
+        serializedFiles(journal)[0].text
+    }
+
+    /// The text of every file in the journal's tree: this journal first,
+    /// whatever its `file`, then each included journal that has a `file`,
+    /// depth first in document order, a file included twice listed twice.
+    ///
+    /// An included file is written from the declarations in force at the
+    /// `include` line that read it, as the parser read it, so a rebuilt entry
+    /// under the including file's `apply account Top` writes `a`, not the
+    /// `Top:a` the next parse books as `Top:Top:a`. What the included file
+    /// declares stays in it.
+    func serializedFiles(_ journal: Journal) -> [(file: URL?, text: String)] {
+        var files: [(file: URL?, text: String)] = []
+        write(journal, from: FileWalk(), into: &files)
+        return files
+    }
+
+    /// Where the walk over one file stands: the lines written so far, and
+    /// the directives in force at that point, read as `JournalParser` reads
+    /// them. `Journal.commodityFormats` carries one mark per commodity for
+    /// the whole file, and a `decimal-mark`, `commodity` or `D` line speaks
+    /// from where it stands to the next one, so a rebuilt entry is written
+    /// by the line above it rather than by the file as a whole (issue #80).
+    /// They are read through the parser's own `declare(at:in:into:year:)`,
+    /// over the lines written so far, so that an indented `format` line
+    /// declares a style only where the next parse reads one, under a
+    /// `commodity` block. Read wherever it stood, one under an `account`
+    /// block gave its commodity a mark the parser does not read it by, and a
+    /// rebuilt `4.50 EUR` came back as 450 EUR.
+    private struct FileWalk {
         var lines: [String] = []
-        // The directives in force at each point of the file, read as
-        // `JournalParser` reads them. `Journal.commodityFormats` carries one
-        // mark per commodity for the whole file, and a `decimal-mark`,
-        // `commodity` or `D` line speaks from where it stands to the next
-        // one, so a rebuilt entry is written by the line above it rather
-        // than by the file as a whole (issue #80). They are read through the
-        // parser's own `declare(at:in:into:year:)`, over the lines written so
-        // far, so that an indented `format` line declares a style only where
-        // the next parse reads one, under a `commodity` block. Read wherever
-        // it stood, one under an `account` block gave its commodity a mark
-        // the parser does not read it by, and a rebuilt `4.50 EUR` came back
-        // as 450 EUR.
-        let parser = JournalParser()
         var declared = JournalStyleCollector()
         var year: Int?
         var inBlockComment = false
+    }
+
+    /// Writes `journal` as one file, starting from the directives `walk`
+    /// has in force, and appends its text to `files` ahead of the files it
+    /// includes.
+    private func write(_ journal: Journal, from start: FileWalk, into files: inout [(file: URL?, text: String)]) {
+        let slot = files.count
+        files.append((journal.file, ""))
+        var walk = start
+        walk.lines = []
+        walk.inBlockComment = false
         for item in journal.items {
-            switch item {
-            case .blank:
-                lines.append("")
-            case let .comment(text):
-                // Line by line, so a break inside the text cannot put a dated
-                // line where the next parse books it. A Windows break in
-                // the text is a break like any other, so it leaves no `\r` on
-                // a line for the journal's own ending to follow. A `\r` that
-                // ends the text broke nothing and is written as it came.
-                let commentLines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
-                lines.append(contentsOf: commentLines.map { isCommentLine($0) ? $0 : "; \($0)" })
-            case let .directive(raw):
-                // Verbatim, a `\n` included: a directive has no marker to put
-                // in front of a second line, so `LedgerManager` refuses one
-                // that holds a `\n` instead (issue #72).
-                lines.append(raw)
-                // A line inside a `comment` block is text the parser reads
-                // nothing from, and a line it would refuse declares nothing
-                // either, since the file it is in does not load.
-                if inBlockComment {
-                    inBlockComment = !parser.isCommentBlockEnd(raw)
-                } else if parser.isCommentBlockStart(raw) {
-                    inBlockComment = true
-                } else {
-                    try? parser.declare(at: lines.count - 1, in: lines, into: &declared, year: &year)
-                }
-            case let .include(included):
-                lines.append(included.line)
-            case let .accountDirective(directive):
-                lines.append(accountLine(directive, declared: declared))
-            case let .transaction(transaction):
-                lines.append(contentsOf: serializeTransaction(
-                    transaction,
-                    formats: journal.commodityFormats,
-                    declared: declared,
-                    alignment: journal.amountAlignment ?? Self.defaultAlignment,
-                    indent: journal.postingIndent ?? Self.defaultIndent,
-                ))
-            }
+            write(item, of: journal, walk: &walk, files: &files)
         }
         // hledger refuses a file that ends on a block comment's line with no
         // newline after it (issue #66), and an edit can leave one last.
-        if journal.endsOnBlockCommentLine { lines.append("") }
-        return lines.joined(separator: journal.lineEnding.rawValue)
+        if journal.endsOnBlockCommentLine { walk.lines.append("") }
+        files[slot].text = walk.lines.joined(separator: journal.lineEnding.rawValue)
+        // A journal with no file of its own has nowhere to be written. The
+        // top one is kept all the same, since the caller names where it goes.
+        if slot > 0, journal.file == nil { files.remove(at: slot) }
+    }
+
+    private func write(
+        _ item: JournalItem, of journal: Journal, walk: inout FileWalk, files: inout [(file: URL?, text: String)],
+    ) {
+        switch item {
+        case .blank:
+            walk.lines.append("")
+        case let .comment(text):
+            // Line by line, so a break inside the text cannot put a dated
+            // line where the next parse books it. A Windows break in
+            // the text is a break like any other, so it leaves no `\r` on
+            // a line for the journal's own ending to follow. A `\r` that
+            // ends the text broke nothing and is written as it came.
+            let commentLines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+            walk.lines.append(contentsOf: commentLines.map { isCommentLine($0) ? $0 : "; \($0)" })
+        case let .directive(raw):
+            // Verbatim, a `\n` included: a directive has no marker to put
+            // in front of a second line, so `LedgerManager` refuses one
+            // that holds a `\n` instead (issue #72).
+            walk.lines.append(raw)
+            declare(raw, in: &walk)
+        case let .include(included):
+            walk.lines.append(included.line)
+            for child in included.journals {
+                write(child, from: walk, into: &files)
+            }
+        case let .accountDirective(directive):
+            walk.lines.append(accountLine(directive, declared: walk.declared))
+        case let .transaction(transaction):
+            walk.lines.append(contentsOf: serializeTransaction(
+                transaction,
+                formats: journal.commodityFormats,
+                declared: walk.declared,
+                alignment: journal.amountAlignment ?? Self.defaultAlignment,
+                indent: journal.postingIndent ?? Self.defaultIndent,
+            ))
+        }
+    }
+
+    /// Reads what the directive line just written declares into `walk`. A
+    /// line inside a `comment` block is text the parser reads nothing from,
+    /// and a line it would refuse declares nothing either, since the file it
+    /// is in does not load.
+    private func declare(_ raw: String, in walk: inout FileWalk) {
+        let parser = JournalParser()
+        if walk.inBlockComment {
+            walk.inBlockComment = !parser.isCommentBlockEnd(raw)
+        } else if parser.isCommentBlockStart(raw) {
+            walk.inBlockComment = true
+        } else {
+            try? parser.declare(at: walk.lines.count - 1, in: walk.lines, into: &walk.declared, year: &walk.year)
+        }
     }
 
     /// An `account` line, its name spelled the way the `alias` and `apply
