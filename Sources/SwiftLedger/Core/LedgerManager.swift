@@ -151,12 +151,10 @@ public final class LedgerManager {
         guard let top = ledger.journal.file else {
             return try Ledger(journal: JournalParser().parse(files[0].text).identified(like: ledger.journal))
         }
-        var texts: [String: String] = [:]
-        for entry in files {
-            guard let path = entry.file?.standardizedFileURL.path, texts[path] == nil else { continue }
-            texts[path] = entry.text
-        }
-        texts[top.standardizedFileURL.path] = files[0].text
+        let texts = Dictionary(
+            files.compactMap { entry in entry.file.map { ($0.standardizedFileURL.path, entry.text) } },
+            uniquingKeysWith: { first, _ in first },
+        )
         let journal = try JournalParser().parse(fileAt: top) { file in
             try texts[file.path] ?? String(contentsOf: file, encoding: .utf8)
         }

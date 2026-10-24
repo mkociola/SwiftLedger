@@ -117,13 +117,7 @@ extension Journal {
     /// The journal of the file holding `item`, searched in the order
     /// `replace(_:with:)` searches, or `nil` when no file holds it.
     func file(holding item: JournalItem) -> Journal? {
-        if items.contains(item) { return self }
-        for case let .include(included) in items {
-            for child in included.journals {
-                if let found = child.file(holding: item) { return found }
-            }
-        }
-        return nil
+        files.first { $0.items.contains(item) }
     }
 
     /// This journal, re-read, with each file's entries under the ids `old`
