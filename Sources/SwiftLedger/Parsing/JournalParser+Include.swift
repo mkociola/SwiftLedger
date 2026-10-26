@@ -55,7 +55,7 @@ extension JournalParser {
     /// serve the text it is about to save.
     func parse(fileAt url: URL, reading read: @escaping (URL) throws -> String) throws -> Journal {
         let file = url.standardizedFileURL
-        return try parse(read(file), in: ParseContext(file: file, read: read, chain: [file])).journal
+        return try finish(parse(read(file), in: ParseContext(file: file, read: read, chain: [file])).file)
     }
 
     /// The item for a line the earlier branches of `parse` left alone: the
@@ -67,18 +67,18 @@ extension JournalParser {
         style: inout JournalStyleCollector,
         year: inout Int?,
         context: ParseContext,
-    ) throws -> JournalItem {
+    ) throws -> ParsedItem {
         try declare(at: index, in: lines, into: &style, year: &year)
         let line = lines[index]
         guard let file = context.file, let read = context.read,
               let argument = try Self.includeArgument(line, lineNumber: index + 1)
-        else { return .directive(line) }
+        else { return .item(.directive(line)) }
         let path = try Self.journalPath(argument, lineNumber: index + 1)
         let matches = Self.includeMatches(path, from: file.deletingLastPathComponent())
         guard !matches.isEmpty else { throw LedgerError.unreadableInclude(argument, reason: "No files were matched") }
         // A glob matching the file it is written in, `*.journal` in a
         // `.journal` file, passes over it, as hledger does.
-        let journals = try matches.filter { $0.path != file.path }.map { url in
+        let files = try matches.filter { $0.path != file.path }.map { url in
             guard !context.chain.contains(where: { $0.path == url.path }) else {
                 throw LedgerError.parseError(line: index + 1, message: "This included file forms a cycle: \(url.path)")
             }
@@ -90,17 +90,17 @@ extension JournalParser {
                 file: url, read: read, chain: context.chain + [url], style: style.declarations, year: year,
             )
             do {
-                let (journal, childStyle) = try parse(text, in: child)
+                let (parsed, childStyle) = try parse(text, in: child)
                 // hledger keeps an included file's `commodity` lines in force
                 // after the `include` line, in this file and in the files it
                 // includes next, where every other declaration stays behind.
                 style.adoptCommodityDeclarations(of: childStyle)
-                return journal
+                return parsed
             } catch let error as LedgerError {
                 throw LedgerError.inIncludedFile(url.path, underlying: error)
             }
         }
-        return .include(IncludedFiles(line: line, journals: journals))
+        return .include(line: line, lineNumber: index + 1, files: files)
     }
 
     /// The path an `include` line at the margin names, as written, or `nil`
