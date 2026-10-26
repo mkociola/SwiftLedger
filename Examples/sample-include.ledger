@@ -1,0 +1,6 @@
+; Read by the include line in sample.ledger, at that line and under the
+; directives in force there. An entry edited here is saved back to this file.
+
+2024-03-21 Bus pass, kept in a file of its own
+    Expenses:Transport     $45.00
+    Assets:Checking

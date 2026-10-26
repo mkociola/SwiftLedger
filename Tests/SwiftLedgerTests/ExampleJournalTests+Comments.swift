@@ -28,6 +28,7 @@ extension ExampleJournalTests {
             "end comment",
             "commodity \"BRK.B\"",
             "D $1000.00",
+            "include sample-include.ledger",
             "alias checking = Assets:Checking",
             "end aliases",
             "apply account Expenses",

@@ -6,13 +6,15 @@ import Testing
 ///
 /// Every `NAME.journal` under `Conformance/` was run through hledger by
 /// `Scripts/hledger-fixtures.sh`, and what hledger made of it sits beside it:
-/// `NAME.print.json` holds every transaction hledger read, with elided
-/// amounts filled in and costs inferred, `NAME.balance.json` holds its flat
-/// balance report, and `NAME.error.txt` means hledger refused the file. A
-/// file hledger refuses over a balance assertion loads here, so a failure
-/// `Ledger.checkBalanceAssertions()` reports counts as the refusal, and a
-/// file hledger loads has to report none. The tests never run hledger; they read the fixtures, read the same journal
-/// with `JournalParser`, and compare values, never text.
+/// `NAME.print.json` holds every transaction hledger read, with elided amounts
+/// filled in and costs inferred, `NAME.balance.json` holds its flat balance
+/// report, and `NAME.error.txt` means hledger refused the file. A file hledger
+/// refuses over a balance assertion loads here, so a failure
+/// `Ledger.checkBalanceAssertions()` reports counts as the refusal, and a file
+/// hledger loads has to report none. The tests never run hledger; they read the
+/// fixtures, read the same journal with `JournalParser.parse(fileAt:)`,
+/// following its `include` lines as hledger does, and compare values, never
+/// text.
 ///
 /// A journal SwiftLedger is known to read differently is listed in
 /// `knownDivergences`. Its test then passes only while the divergence is
@@ -31,7 +33,6 @@ import Testing
     static let knownDivergences: Set<String> = [
         "account-directive-stray-cr",
         "amount-stray-cr",
-        "include",
         "posting-status-tabs",
     ]
 
@@ -69,13 +70,13 @@ import Testing
     // MARK: - Comparison
 
     private static func compare(_ name: String) throws {
-        let text = try String(contentsOf: fixture("\(name).journal"), encoding: .utf8)
+        let file = fixture("\(name).journal")
 
         if let message = try? String(contentsOf: fixture("\(name).error.txt"), encoding: .utf8) {
             // hledger refused the file, so SwiftLedger has to refuse it too.
             // What it refuses it for is not compared: the messages are
             // hledger's, and only the verdict is the contract.
-            let journal = try? JournalParser().parse(text)
+            let journal = try? JournalParser().parse(fileAt: file)
             if let journal, Ledger(journal: journal).checkBalanceAssertions().isEmpty {
                 Issue.record(
                     """
@@ -89,7 +90,7 @@ import Testing
             return
         }
 
-        let journal = try JournalParser().parse(text)
+        let journal = try JournalParser().parse(fileAt: file)
         for failure in Ledger(journal: journal).checkBalanceAssertions() {
             let failed = "\(failure.transaction.description): \(failure.asserted) asserted, \(failure.actual) actual"
             Issue.record("hledger loads \(name).journal and SwiftLedger reports a failed assertion in \(failed)")

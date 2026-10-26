@@ -125,14 +125,14 @@ import Foundation
 ///   postings: they are preserved verbatim on the posting above them, or on
 ///   the transaction when they precede the first posting.
 ///
-/// Any line outside this grammar, such as `include`, `P`, `commodity`, `alias`,
-/// `D`, `year` or an indented sub-directive, is kept verbatim as a `.directive`
-/// item and written back unchanged by `JournalSerializer`. The parser never
-/// reinterprets what it does not understand. A line at the margin that opens
-/// with no word hledger reads at all, `foo bar` or `decimal-markx ,`, is
-/// refused at its line, as hledger refuses it (`requireKnownDirective`), and
-/// so is an indented line with no block above it to belong to, such as a
-/// posting a blank line cut off from its entry.
+/// Any line outside this grammar, such as `P`, `commodity`, `alias`, `D`, `year`,
+/// an `include` read from text or an indented sub-directive, is kept verbatim as
+/// a `.directive` item and written back unchanged by `JournalSerializer`. The
+/// parser never reinterprets what it does not understand. A line at the margin
+/// that opens with no word hledger reads at all, `foo bar` or `decimal-markx ,`,
+/// is refused at its line, as hledger refuses it (`requireKnownDirective`), and
+/// so is an indented line with no block above it to belong to, such as a posting
+/// a blank line cut off from its entry.
 ///
 /// An error thrown while an entry is being read says where it was found:
 /// `LedgerError.inJournal` carries the line, the header of the entry it was
@@ -144,17 +144,25 @@ public struct JournalParser {
 
     // MARK: - Public API
 
-    /// Parses `text` and returns a `Journal`.
+    /// Parses `text` and returns a `Journal`, an `include` line kept verbatim
+    /// as a `.directive` (`parse(fileAt:)` follows one).
     public func parse(_ text: String) throws -> Journal {
+        try parse(text, in: ParseContext()).journal
+    }
+
+    /// Parses `text` as the file `context` names, under the declarations in
+    /// force where an `include` line read it, or as text when it names none,
+    /// with the declarations in force at its end, which an includer reads on.
+    func parse(_ text: String, in context: ParseContext) throws -> (journal: Journal, style: JournalStyleCollector) {
         let (lines, lineEnding) = Self.lines(of: text)
         // On the scalars, since `"\r\n"` is one `Character` and not `"\n"`.
         let endsInNewline = text.unicodeScalars.last == "\n"
         var items: [JournalItem] = []
         // Watches how the file writes each commodity, so that a transaction
         // the caller later rebuilds is written the same way.
-        var style = JournalStyleCollector()
+        var style = context.style
         // The year the last `Y` or `year` line set, for a date that leaves it out.
-        var year: Int?
+        var year = context.year
         var index = 0
 
         while index < lines.count {
@@ -219,19 +227,15 @@ public struct JournalParser {
             // modelling it, and this one still goes back byte for byte.
             // One it recognises and cannot read refuses the file at its line,
             // and so does an indented line no block above it can own
-            // (`declare(at:in:into:year:)`).
-            try located(line: index + 1, entry: nil) { try declare(at: index, in: lines, into: &style, year: &year) }
-            items.append(.directive(line))
+            // (`declare(at:in:into:year:)`). In a file, an `include` line
+            // reads the files it names (`unmodelledItem`).
+            try items.append(located(line: index + 1, entry: nil) {
+                try unmodelledItem(at: index, in: lines, style: &style, year: &year, context: context)
+            })
             index += 1
         }
 
-        return Journal(
-            items: items,
-            commodityFormats: style.formats,
-            amountAlignment: style.amountAlignment,
-            postingIndent: style.postingIndent,
-            lineEnding: lineEnding,
-        )
+        return (Journal(items: items, style: style, lineEnding: lineEnding, file: context.file), style)
     }
 
     // MARK: - account directives
