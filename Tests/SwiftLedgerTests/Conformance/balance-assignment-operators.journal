@@ -1,0 +1,21 @@
+; == clears the other commodities the account itself holds, =* counts the
+; subaccounts, and ==* clears a commodity only a subaccount holds.
+
+2024-01-01 Opening
+    Assets:Checking        $10
+    Assets:Checking        5 EUR
+    Assets:Checking:Sub    $7
+    Assets:Checking:Sub    3 GBP
+    Equity:Opening
+
+2024-01-02 Total
+    Assets:Checking    == $15
+    Income:Salary
+
+2024-01-03 Inclusive
+    Assets:Checking    =* $25
+    Income:Salary
+
+2024-01-04 Total inclusive
+    Assets:Checking    ==* $30
+    Income:Salary

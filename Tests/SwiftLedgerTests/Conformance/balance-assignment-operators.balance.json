@@ -1,0 +1,77 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 23,
+        "places": 0
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 0,
+        "places": 0
+      },
+      {
+        "commodity": "GBP",
+        "mantissa": -3,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Assets:Checking:Sub",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 7,
+        "places": 0
+      },
+      {
+        "commodity": "GBP",
+        "mantissa": 3,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Equity:Opening",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -17,
+        "places": 0
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": -5,
+        "places": 0
+      },
+      {
+        "commodity": "GBP",
+        "mantissa": -3,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Income:Salary",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -13,
+        "places": 0
+      },
+      {
+        "commodity": "EUR",
+        "mantissa": 5,
+        "places": 0
+      },
+      {
+        "commodity": "GBP",
+        "mantissa": 3,
+        "places": 0
+      }
+    ]
+  }
+]

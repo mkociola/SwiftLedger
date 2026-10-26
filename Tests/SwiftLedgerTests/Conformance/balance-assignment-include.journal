@@ -1,0 +1,13 @@
+; An assignment counts the entries of an included file, read where the
+; include line stands, and an assignment in the included file counts the
+; entries above the line.
+
+2024-01-01 Opening
+    Assets:Checking    $10
+    Equity:Opening
+
+include _include-assignment-part.journal
+
+2024-01-04 After the include
+    Assets:Checking    = $30
+    Income:Salary

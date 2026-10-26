@@ -1,0 +1,117 @@
+[
+  {
+    "date": "2024-01-01",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Opening, written after the statement",
+    "postings": [
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 1050,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      },
+      {
+        "account": "Equity:Opening",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -1050,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-05",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Statement",
+    "postings": [
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": 450,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 1500,
+          "places": 2,
+          "total": false,
+          "inclusive": false
+        }
+      },
+      {
+        "account": "Income:Salary",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [
+          {
+            "commodity": "$",
+            "mantissa": -450,
+            "places": 2,
+            "cost": null
+          }
+        ],
+        "assertion": null
+      }
+    ]
+  },
+  {
+    "date": "2024-01-06",
+    "date2": null,
+    "status": "Unmarked",
+    "code": "",
+    "description": "Nothing moved since the statement",
+    "postings": [
+      {
+        "account": "Assets:Checking",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [],
+        "assertion": {
+          "commodity": "$",
+          "mantissa": 1500,
+          "places": 2,
+          "total": false,
+          "inclusive": false
+        }
+      },
+      {
+        "account": "Income:Salary",
+        "kind": "RegularPosting",
+        "status": "Unmarked",
+        "date": null,
+        "amounts": [],
+        "assertion": null
+      }
+    ]
+  }
+]

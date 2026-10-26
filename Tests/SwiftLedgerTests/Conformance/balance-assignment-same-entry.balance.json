@@ -1,0 +1,42 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 23,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Assets:Savings",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 20,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Equity:Opening",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -30,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Income:Salary",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -13,
+        "places": 0
+      }
+    ]
+  }
+]

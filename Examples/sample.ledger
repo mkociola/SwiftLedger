@@ -126,6 +126,16 @@ account Expenses:Utilities
 2024-03-01 Statement check, dollars only
     Assets:Savings         $0 == $5000.00
 
+; ── A balance assignment ────────────────────────────────────────────────────
+; An assertion with no amount in front of it is a balance assignment, as in
+; hledger: the posting takes whatever brings the account to the asserted
+; balance, here $50.00 into a tin that held nothing, and the elided line pays
+; for it. The balance is counted the way the assertion would be checked, over
+; every entry dated before this one, in whichever order the file writes them.
+2024-03-02 Top up the petty cash tin
+    Assets:PettyCash       = $50.00
+    Assets:Checking
+
 ; ── Dates written other ways ────────────────────────────────────────────────
 ; hledger writes a date with '-', '/' or '.' between its parts, the month and
 ; the day with one digit or two, and a secondary date may leave out its year,

@@ -51,6 +51,6 @@ import Testing
         let savings = ledger.balance(for: "Assets:Savings")
         #expect(savings.map(\.quantity) == [5000])
         #expect(ledger.balance(for: "Assets:Brokerage").allSatisfy { $0.quantity == 0 })
-        #expect(ledger.balance(for: "Assets:PettyCash").allSatisfy { $0.quantity == 0 })
+        #expect(ledger.balance(for: "Assets:PettyCash").filter { !$0.isZero }.map(\.quantity) == [50])
     }
 }

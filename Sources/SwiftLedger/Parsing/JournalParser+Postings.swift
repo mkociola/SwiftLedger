@@ -19,6 +19,8 @@ extension JournalParser {
         var trailingComments: [String] = []
         /// The fraction digits the line wrote its amount and its price with.
         var written = WrittenDigits()
+        /// The line's 1-based number, for an error about the posting alone.
+        var lineNumber: Int
 
         /// This posting booked under the name the `alias` and `apply account`
         /// lines in force give the one it wrote, which it keeps when the two
@@ -39,11 +41,8 @@ extension JournalParser {
         var rest = line.trimmingCharacters(in: .whitespaces)
 
         // Optional status (* or !)
-        var postingStatus: ClearingStatus?
-        if rest.hasPrefix("* ") || rest.hasPrefix("! ") {
-            postingStatus = rest.hasPrefix("*") ? .cleared : .pending
-            rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
-        }
+        let postingStatus: ClearingStatus? = rest.hasPrefix("* ") ? .cleared : rest.hasPrefix("! ") ? .pending : nil
+        if postingStatus != nil { rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces) }
 
         // Account name ends at 2+ spaces, or at end of line. The token is kept
         // as the line writes it for the style observation below; the posting
@@ -100,6 +99,7 @@ extension JournalParser {
             status: postingStatus,
             comment: comment?.trimmingCharacters(in: .whitespaces),
             written: written,
+            lineNumber: lineNumber,
         )
     }
 }

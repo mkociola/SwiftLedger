@@ -1,0 +1,5 @@
+; An assignment on a posting its comment dates is refused.
+
+2024-01-02 Pay
+    Assets:Checking    = $15  ; date:2024-01-03
+    Income:Salary

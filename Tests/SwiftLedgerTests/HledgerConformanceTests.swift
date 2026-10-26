@@ -30,9 +30,13 @@ import Testing
     /// transaction's fields, since the name is one no journal can write back.
     /// `amount-stray-cr` is the same choice made for a `\r` stranded behind a
     /// posting's amount: only the `\r` that ends a line is a line ending.
+    /// `elided-virtual-commodity` is a gap: hledger reads an elided
+    /// parenthesised posting as a zero in no commodity, where SwiftLedger
+    /// gives it the entry's first commodity (`zeroAmount(matching:)`).
     static let knownDivergences: Set<String> = [
         "account-directive-stray-cr",
         "amount-stray-cr",
+        "elided-virtual-commodity",
         "posting-status-tabs",
     ]
 
@@ -251,8 +255,16 @@ import Testing
         }
     }
 
+    /// One line per amount of the posting. hledger holds a posting that moves
+    /// two commodities as one posting with two amounts, and SwiftLedger as
+    /// two postings; the one assertion goes on the last line, where hledger
+    /// prints it and where the parser puts it. A posting with no amount at
+    /// all is one that moved nothing, which hledger prints as a bare `0`
+    /// and the parser reads as a zero in no commodity.
     private static func render(_ posting: HledgerPosting) -> [String] {
-        posting.amounts.map { amount in
+        let nothing = HledgerAmount(commodity: "", mantissa: 0, places: 0)
+        let amounts = posting.amounts.isEmpty ? [nothing] : posting.amounts
+        return amounts.enumerated().map { index, amount in
             var line = "    "
             if let mark = marker(posting.status) { line += "\(mark) " }
             line += posting.delimitedAccount
@@ -262,7 +274,7 @@ import Testing
                     ? " @@ " + render(abs(cost.quantity), cost.commodity)
                     : " @ " + render(cost.quantity, cost.commodity)
             }
-            if let assertion = posting.assertion {
+            if let assertion = posting.assertion, index == amounts.count - 1 {
                 let written = (assertion.total ? "==" : "=") + (assertion.inclusive ? "*" : "")
                 line += " \(written) " + render(assertion.quantity, assertion.commodity)
             }

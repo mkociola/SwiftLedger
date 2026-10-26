@@ -45,20 +45,24 @@ import Testing
         #expect(JournalSerializer().serialize(journal).contains("10 AAPL @ $5.00 ==* 10 AAPL\n"))
     }
 
-    /// An elided line that absorbs two commodities becomes two postings, and
-    /// only the one carrying the assertion carries its operator.
+    /// A `==` assignment that clears a second commodity becomes two postings,
+    /// and only the last, which carries the assertion, carries its operator.
     @Test
     func `a posting that asserts nothing has the plain operator`() throws {
         let text = """
         2024-01-01 Opening
             Assets:Checking    $10.00
             Assets:Checking    5 EUR
-            Equity:Opening     == $-10.00
+            Equity:Opening
+
+        2024-01-02 Statement
+            Assets:Checking    == $15.00
+            Income:Salary
 
         """
-        let postings = try JournalParser().parse(text).transactions.first?.postings ?? []
+        let postings = try JournalParser().parse(text).transactions.last?.postings ?? []
 
-        #expect(postings.map(\.balanceAssertionOperator) == [.single, .single, .total, .single])
+        #expect(postings.map(\.balanceAssertionOperator) == [.single, .total, .single, .single])
         #expect(Posting(accountName: "A", amount: Amount(quantity: 1, commodity: "$"), balanceAssertionOperator: .total)
             .balanceAssertionOperator == .single)
     }

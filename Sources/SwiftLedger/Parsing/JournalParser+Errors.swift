@@ -21,12 +21,17 @@ extension JournalParser {
         do {
             return try work()
         } catch let error as LedgerError {
-            switch error {
-            case .parseError, .inJournal:
-                throw error
-            default:
-                throw LedgerError.inJournal(line: line, entry: entry, underlying: error)
-            }
+            throw Self.located(error, line: line, entry: entry)
+        }
+    }
+
+    /// `error` located at `line` and `entry`, by the rule above, for an
+    /// error found after the reading, when `finish(_:)` resolves an entry
+    /// the parse could not finish where it stood.
+    static func located(_ error: LedgerError, line: Int, entry: String?) -> LedgerError {
+        switch error {
+        case .parseError, .inJournal: error
+        default: .inJournal(line: line, entry: entry, underlying: error)
         }
     }
 

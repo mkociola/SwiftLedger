@@ -489,7 +489,7 @@ struct Probe: CustomTestStringConvertible {
 
     @Test
     func `a balance assertion is not a posted amount`() throws {
-        // Three whole-unit postings against four assertions to the cent: the
+        // Four whole-unit postings against four assertions to the cent: the
         // postings decide. Counting an assertion as posted would answer 2.
         let journal = try JournalParser().parse("""
         2026-01-01 A
@@ -497,7 +497,7 @@ struct Probe: CustomTestStringConvertible {
             Equity:Opening    -5 USD = -1000.00 USD
 
         2026-01-02 B
-            Assets:Checking    = 1000.00 USD
+            Assets:Checking    0 USD = 1000.00 USD
             Equity:Opening     0 USD = -1000.00 USD
 
         """)

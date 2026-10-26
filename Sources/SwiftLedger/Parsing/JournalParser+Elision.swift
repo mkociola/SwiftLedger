@@ -141,18 +141,15 @@ extension JournalParser {
     ///
     /// Which one is a question of where the reader would look for it. The
     /// inline comment sat at the end of the first line and the full-line
-    /// comments sat under the last, so they go there. A balance assertion
-    /// names a commodity and belongs to the posting in that commodity, falling
-    /// back to the first when it names one the line did not absorb, where it
-    /// is checked against a balance in which the line moved nothing. A price
-    /// on a line that wrote no amount prices nothing, and stays on the first
-    /// posting, which is where it was before an elision could expand. The
-    /// dates the line's comments write are the line's, as hledger reads them,
-    /// so every posting gets them, wherever the comment went.
+    /// comments sat under the last, so they go there. A price on a line that
+    /// wrote no amount prices nothing, and stays on the first posting, which
+    /// is where it was before an elision could expand. The dates the line's
+    /// comments write are the line's, as hledger reads them, so every posting
+    /// gets them, wherever the comment went. A balance assertion never gets
+    /// here: a line with one and no amount is a balance assignment, given its
+    /// amounts by `finish(_:)` before the elision is resolved.
     static func postings(from raw: RawPosting, amounts: [Amount], year: Int) throws -> [Posting] {
         guard amounts.count > 1 else { return amounts.map { posting(from: raw, amount: $0) } }
-        let assertionIndex = raw.balanceAssertion
-            .flatMap { assertion in amounts.firstIndex { $0.commodity == assertion.commodity } } ?? 0
         let line = try posting(from: raw, amount: amounts[0]).datedByComments(year: year)
         return amounts.enumerated().map { index, amount in
             var leg = Posting(
@@ -160,8 +157,7 @@ extension JournalParser {
                 kind: raw.kind,
                 amount: amount,
                 price: index == 0 ? raw.price : nil,
-                balanceAssertion: index == assertionIndex ? raw.balanceAssertion : nil,
-                balanceAssertionOperator: raw.balanceAssertionOperator,
+                balanceAssertion: nil,
                 status: raw.status,
                 comment: index == 0 ? raw.comment : nil,
                 trailingComments: index == amounts.count - 1 ? raw.trailingComments : [],

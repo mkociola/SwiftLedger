@@ -44,9 +44,15 @@ import Foundation
 ///   as a thousand, and a file written for it says so with a `commodity` or
 ///   `decimal-mark` line.
 /// - A posting amount may be followed by a price (`@` per unit, `@@` total)
-///   and/or a balance assertion (`=`), in that order, each written in either
-///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
-///   balancing; assertions are preserved but never checked.
+///   and/or a balance assertion (`=`, `==`, `=*` or `==*`), in that order,
+///   each written in either commodity style: `10 AAPL @ $150.00 = 30 AAPL`.
+///   Prices take part in balancing; assertions are preserved, and checked
+///   only when `Ledger.checkBalanceAssertions()` is asked. An assertion with
+///   no amount in front of it is a balance assignment, as it is in hledger:
+///   the posting takes whatever brings the account to the asserted balance,
+///   counted the way the assertion would be checked, over every entry dated
+///   before it in every file (`finish(_:)`); what each operator clears
+///   besides is described on `assigned(_:operator:to:in:)`.
 /// - Status: `*` = cleared, `!` = pending
 /// - Code: `(CODE)` after the status, running to the first `)` wherever on
 ///   the line that is, as hledger reads it. A `(` there with no `)` after it
@@ -147,17 +153,20 @@ public struct JournalParser {
     /// Parses `text` and returns a `Journal`, an `include` line kept verbatim
     /// as a `.directive` (`parse(fileAt:)` follows one).
     public func parse(_ text: String) throws -> Journal {
-        try parse(text, in: ParseContext()).journal
+        try finish(parse(text, in: ParseContext()))
     }
 
     /// Parses `text` as the file `context` names, under the declarations in
     /// force where an `include` line read it, or as text when it names none,
     /// with the declarations in force at its end, which an includer reads on.
-    func parse(_ text: String, in context: ParseContext) throws -> (journal: Journal, style: JournalStyleCollector) {
+    ///
+    /// What comes back is not yet a `Journal`: an entry holding a balance
+    /// assignment is finished by `finish(_:)`, once every file is read.
+    func parse(_ text: String, in context: ParseContext) throws -> ParsedFile {
         let (lines, lineEnding) = Self.lines(of: text)
         // On the scalars, since `"\r\n"` is one `Character` and not `"\n"`.
         let endsInNewline = text.unicodeScalars.last == "\n"
-        var items: [JournalItem] = []
+        var items: [ParsedItem] = []
         // Watches how the file writes each commodity, so that a transaction
         // the caller later rebuilds is written the same way.
         var style = context.style
@@ -171,7 +180,7 @@ public struct JournalParser {
             // Blank line. One holding spaces or tabs reads as blank too, and
             // is kept as it came so that it is written back as it came.
             if line.trimmingCharacters(in: .whitespaces).isEmpty {
-                items.append(line.isEmpty ? .blank : .directive(line))
+                items.append(.item(line.isEmpty ? .blank : .directive(line)))
                 index += 1
                 continue
             }
@@ -181,7 +190,7 @@ public struct JournalParser {
             // line would otherwise teach the style collector.
             if isCommentBlockStart(line) {
                 let block = try parseCommentBlock(lines: lines, from: index, fileEndsInNewline: endsInNewline)
-                items.append(contentsOf: block)
+                items.append(contentsOf: block.map(ParsedItem.item))
                 index += block.count // one item per line consumed
                 continue
             }
@@ -189,7 +198,7 @@ public struct JournalParser {
             // Full-line comment — stored verbatim so indentation survives a round-trip.
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if isFullLineComment(trimmed) {
-                items.append(.comment(line))
+                items.append(.item(.comment(line)))
                 index += 1
                 continue
             }
@@ -200,7 +209,7 @@ public struct JournalParser {
             // belongs to nothing (issue #118); the last branch settles which.
             let directive = try located(line: index + 1, entry: nil) { try parseAccountDirective(line, in: style) }
             if let directive {
-                items.append(.accountDirective(directive))
+                items.append(.item(.accountDirective(directive)))
                 index += 1
                 continue
             }
@@ -208,10 +217,10 @@ public struct JournalParser {
             // Transaction header: a date at the margin. Indented, a dated line
             // is a subdirective or an orphan, like an `account` line.
             if startsWithDate(line) {
-                let (transaction, consumed) = try located(line: index + 1, entry: Self.entryHeader(line)) {
+                let (entry, consumed) = try located(line: index + 1, entry: Self.entryHeader(line)) {
                     try parseTransaction(lines: lines, from: index, year: year, into: &style)
                 }
-                items.append(.transaction(transaction))
+                items.append(entry)
                 index += consumed
                 continue
             }
@@ -235,7 +244,7 @@ public struct JournalParser {
             index += 1
         }
 
-        return (Journal(items: items, style: style, lineEnding: lineEnding, file: context.file), style)
+        return ParsedFile(items: items, style: style, lineEnding: lineEnding, file: context.file)
     }
 
     // MARK: - account directives
@@ -275,7 +284,7 @@ public struct JournalParser {
 
     // MARK: - Transaction parsing
 
-    private struct ParsedHeader {
+    struct ParsedHeader {
         var date: JournalDate
         var auxDate: JournalDate?
         var status: ClearingStatus
@@ -289,7 +298,7 @@ public struct JournalParser {
         from start: Int,
         year: Int?,
         into style: inout JournalStyleCollector,
-    ) throws -> (Transaction, Int) {
+    ) throws -> (ParsedItem, Int) {
         let headerLine = lines[start]
         let lineNumber = start + 1 // 1-based for errors
         let entry = Self.entryHeader(headerLine)
@@ -325,76 +334,22 @@ public struct JournalParser {
             index += 1
         }
 
-        let resolved = try resolveElisions(rawPostings, year: header.date.year)
-        let transaction = try Transaction(
-            date: header.date,
-            auxDate: header.auxDate,
-            status: header.status,
-            code: header.code,
-            description: header.description,
-            postings: resolved.postings,
-            comment: header.comment,
+        for raw in rawPostings {
+            try requireUndatedAssignment(raw, year: header.date.year, entry: entry)
+        }
+        let raw = RawEntry(
+            header: header,
+            rawPostings: rawPostings,
             leadingComments: leadingComments,
-            written: resolved.written,
+            source: lines[start ..< index].joined(separator: "\n"),
+            lineNumber: lineNumber,
+            headerLine: entry,
         )
-        // Keep the lines this came from, so that a transaction nobody edits is
-        // written back exactly as the user wrote it.
-        let source = lines[start ..< index].joined(separator: "\n")
-        return (transaction.taggedWithSource(source), index - start)
-    }
-
-    // MARK: - Header parsing
-
-    private func parseHeader(
-        _ line: String,
-        year: Int?,
-        lineNumber: Int,
-    ) throws -> ParsedHeader {
-        // DATE [= AUXDATE]
-        var afterDates = line[...]
-        let (date, auxDate) = try consumeDates(&afterDates, year: year, lineNumber: lineNumber)
-        var rest = afterDates.trimmingCharacters(in: .whitespaces)
-
-        // Optional status (* or !)
-        var txStatus: ClearingStatus = .unmarked
-        if rest.hasPrefix("*") {
-            txStatus = .cleared
-            rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
-        } else if rest.hasPrefix("!") {
-            txStatus = .pending
-            rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
+        // An entry with a balance assignment is finished by `finish(_:)`,
+        // once every entry its assignment depends on has been read.
+        guard rawPostings.contains(where: Self.isAssignment) else {
+            return try (.item(.transaction(transaction(of: raw))), index - start)
         }
-
-        // Optional (CODE). A `(` here opens a code, and one with no `)`
-        // after it on the line refuses the line, as hledger refuses it: a
-        // missing `)` is a typo, and kept, the whole of it became the payee
-        // without a word (issue #101).
-        var code: String?
-        if rest.hasPrefix("(") {
-            guard let closeIdx = rest.firstIndex(of: ")") else {
-                throw LedgerError.parseError(line: lineNumber, message: "Expected ')' to close the transaction code")
-            }
-            code = String(rest[rest.index(after: rest.startIndex) ..< closeIdx])
-            rest = String(rest[rest.index(after: closeIdx)...]).trimmingCharacters(in: .whitespaces)
-        }
-
-        // The description runs to the first `;`, however few spaces precede
-        // it, as hledger reads it. The code is read first, so a `;` inside
-        // its parentheses stays in the code.
-        var comment: String?
-        if let semicolon = rest.firstIndex(of: ";") {
-            comment = rest[rest.index(after: semicolon)...].trimmingCharacters(in: .whitespaces)
-            rest = String(rest[..<semicolon])
-        }
-
-        let description = rest.trimmingCharacters(in: .whitespaces)
-        return ParsedHeader(
-            date: date,
-            auxDate: auxDate,
-            status: txStatus,
-            code: code,
-            description: description,
-            comment: comment,
-        )
+        return (.entry(raw), index - start)
     }
 }

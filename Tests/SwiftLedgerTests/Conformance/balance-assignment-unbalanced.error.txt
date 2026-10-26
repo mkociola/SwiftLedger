@@ -1,0 +1,6 @@
+hledger: Error: balance-assignment-unbalanced.journal:3-4:
+3 | 2024-01-01 Opening
+  |     Assets:Checking             $10 = $10
+
+This transaction is unbalanced.
+The real postings' sum should be 0 but is: $10

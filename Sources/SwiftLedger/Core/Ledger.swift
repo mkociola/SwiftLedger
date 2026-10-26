@@ -135,7 +135,7 @@ public struct Ledger: Sendable {
         var running: CommoditySums = [:]
         var window: [(date: JournalDate, amount: Amount)] = []
         for transaction in journal.transactions {
-            for posting in transaction.postings where isInSubtree(posting.accountName, prefix: prefix) {
+            for posting in transaction.postings where Self.isInSubtree(posting.accountName, prefix: prefix) {
                 let date = posting.date ?? transaction.date
                 if date < from {
                     Self.accumulate(posting.amount, into: &running)
@@ -286,7 +286,7 @@ public struct Ledger: Sendable {
     /// order.
     public func transactions(forPrefix prefix: String) -> [Transaction] {
         filteredTransactions { transaction in
-            transaction.postings.contains { isInSubtree($0.accountName, prefix: prefix) }
+            transaction.postings.contains { Self.isInSubtree($0.accountName, prefix: prefix) }
         }
     }
 
@@ -355,7 +355,7 @@ public struct Ledger: Sendable {
     }
 
     private func postingsInSubtree(prefix: String, asOf: JournalDate?) -> [Posting] {
-        postingsInRange(asOf: asOf).filter { isInSubtree($0.accountName, prefix: prefix) }
+        postingsInRange(asOf: asOf).filter { Self.isInSubtree($0.accountName, prefix: prefix) }
     }
 
     /// Every posting dated on or before `asOf`, in no particular order.
@@ -365,7 +365,7 @@ public struct Ledger: Sendable {
         }
     }
 
-    func isInSubtree(_ name: String, prefix: String) -> Bool {
+    static func isInSubtree(_ name: String, prefix: String) -> Bool {
         name == prefix || name.hasPrefix(prefix + ":")
     }
 }

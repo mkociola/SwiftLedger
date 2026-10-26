@@ -1,0 +1,6 @@
+; An assignment is a written amount: two more elided postings are still two.
+
+2024-01-01 Opening
+    Assets:Checking    = $10
+    Assets:Savings
+    Equity:Opening

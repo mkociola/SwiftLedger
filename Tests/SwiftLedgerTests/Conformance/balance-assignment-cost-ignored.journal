@@ -1,0 +1,9 @@
+; An assignment counts what the account holds, not what it cost.
+
+2024-01-01 Buy
+    Assets:Broker      10 AAPL @ $5
+    Assets:Checking
+
+2024-01-02 Fix
+    Assets:Checking    = $0
+    Equity:Adjust
