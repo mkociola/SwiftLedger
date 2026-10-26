@@ -1,0 +1,19 @@
+; An assignment on a virtual or a bracketed posting is read from the postings
+; of the account, whatever their kind, and balances in its own group.
+
+2024-01-01 Opening
+    Assets:Checking      $10
+    (Budget:Food)        $4
+    [Envelope:Rent]      $6
+    [Envelope:Total]
+    Equity:Opening
+
+2024-01-02 Adjust
+    (Budget:Food)        = $10
+    (Budget:Other)       $-6
+
+2024-01-03 Refill
+    [Envelope:Rent]      = $20
+    [Envelope:Total]
+    Assets:Checking      = $12
+    Income:Salary

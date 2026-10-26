@@ -1,0 +1,13 @@
+hledger: Error: balance-assignment-fails-later.journal:9:27:
+  | 2024-01-02 Check
+9 |     Assets:Checking              $1 = $12
+  |                                     ^^^^^
+  |     Income:Salary               $-1
+
+Balance assertion failed in Assets:Checking
+In commodity $ at this point, excluding subaccounts, ignoring costs,
+the asserted balance is:        $12
+but the calculated balance is:  $11
+(difference: $1)
+To troubleshoot, check this account's running balance with assertions disabled, eg:
+hledger reg -I 'Assets:Checking$' cur:'$'

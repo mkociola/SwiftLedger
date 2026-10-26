@@ -1,0 +1,72 @@
+[
+  {
+    "account": "Assets:Checking",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 12,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Budget:Food",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 10,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Budget:Other",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -6,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Envelope:Rent",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": 20,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Envelope:Total",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -20,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Equity:Opening",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -10,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Income:Salary",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -2,
+        "places": 0
+      }
+    ]
+  }
+]

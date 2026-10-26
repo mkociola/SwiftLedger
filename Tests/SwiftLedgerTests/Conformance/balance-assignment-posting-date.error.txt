@@ -1,0 +1,9 @@
+hledger: Error: Balance assignments and custom posting dates may not be combined.
+
+2024-01-02 Pay
+    Assets:Checking                 = $15  ; date:2024-01-03
+    Income:Salary
+
+Balance assignments may not be used on postings with a custom posting date
+(it makes balancing the journal impossible).
+Please write the posting amount explicitly (or remove the posting date).

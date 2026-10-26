@@ -1,0 +1,7 @@
+; An elided parenthesised posting is a zero in no commodity, whatever the
+; entry's other amounts are written in.
+
+2024-01-01 Opening
+    Assets:Checking    $10
+    Equity:Opening
+    (Budget:Food)

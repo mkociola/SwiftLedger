@@ -1,0 +1,16 @@
+; A posting with an assertion and no amount is a balance assignment: it posts
+; whatever brings the account to the asserted balance, counted over the
+; entries dated before it, however the file orders them, and the elided
+; posting beside it takes what is left.
+
+2024-01-05 Statement
+    Assets:Checking    = $15.00
+    Income:Salary
+
+2024-01-01 Opening, written after the statement
+    Assets:Checking    $10.50
+    Equity:Opening
+
+2024-01-06 Nothing moved since the statement
+    Assets:Checking    = $15.00
+    Income:Salary

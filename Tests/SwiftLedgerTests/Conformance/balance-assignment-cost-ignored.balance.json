@@ -1,0 +1,22 @@
+[
+  {
+    "account": "Assets:Broker",
+    "amounts": [
+      {
+        "commodity": "AAPL",
+        "mantissa": 10,
+        "places": 0
+      }
+    ]
+  },
+  {
+    "account": "Equity:Adjust",
+    "amounts": [
+      {
+        "commodity": "$",
+        "mantissa": -50,
+        "places": 0
+      }
+    ]
+  }
+]

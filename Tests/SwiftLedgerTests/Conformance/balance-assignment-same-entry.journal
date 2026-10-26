@@ -1,0 +1,18 @@
+; An assignment sees the postings of its own account written above it in the
+; same entry, and not the ones below; two assignments in one entry are read
+; in turn, and an elided posting takes what they leave.
+
+2024-01-01 Opening
+    Assets:Checking    = $10
+    Assets:Savings     = $20
+    Equity:Opening
+
+2024-01-02 Above
+    Assets:Checking    $3
+    Assets:Checking    = $15
+    Income:Salary
+
+2024-01-03 Below
+    Assets:Checking    = $20
+    Assets:Checking    $3
+    Income:Salary

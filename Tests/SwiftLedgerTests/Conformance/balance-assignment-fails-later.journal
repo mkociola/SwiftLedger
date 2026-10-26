@@ -1,0 +1,10 @@
+; An assertion after an assignment is checked with the assigned amount
+; counted.
+
+2024-01-01 Opening
+    Assets:Checking    = $10
+    Equity:Opening
+
+2024-01-02 Check
+    Assets:Checking    $1 = $12
+    Income:Salary

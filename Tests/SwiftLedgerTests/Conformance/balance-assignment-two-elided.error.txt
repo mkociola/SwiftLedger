@@ -1,0 +1,9 @@
+hledger: Error: balance-assignment-two-elided.journal:3-6:
+3 | 2024-01-01 Opening
+  |     Assets:Checking             $10 = $10
+  |     Assets:Savings
+  |     Equity:Opening
+
+This multi-commodity transaction is unbalanced.
+There can't be more than one real posting with no amount.
+(Remember to put two or more spaces between account and amount.)
