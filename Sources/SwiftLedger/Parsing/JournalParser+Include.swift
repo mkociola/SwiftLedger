@@ -55,7 +55,7 @@ extension JournalParser {
     /// serve the text it is about to save.
     func parse(fileAt url: URL, reading read: @escaping (URL) throws -> String) throws -> Journal {
         let file = url.standardizedFileURL
-        return try finish(parse(read(file), in: ParseContext(file: file, read: read, chain: [file])).file)
+        return try finish(parse(read(file), in: ParseContext(file: file, read: read, chain: [file])))
     }
 
     /// The item for a line the earlier branches of `parse` left alone: the
@@ -90,11 +90,11 @@ extension JournalParser {
                 file: url, read: read, chain: context.chain + [url], style: style.declarations, year: year,
             )
             do {
-                let (parsed, childStyle) = try parse(text, in: child)
+                let parsed = try parse(text, in: child)
                 // hledger keeps an included file's `commodity` lines in force
                 // after the `include` line, in this file and in the files it
                 // includes next, where every other declaration stays behind.
-                style.adoptCommodityDeclarations(of: childStyle)
+                style.adoptCommodityDeclarations(of: parsed.style)
                 return parsed
             } catch let error as LedgerError {
                 throw LedgerError.inIncludedFile(url.path, underlying: error)

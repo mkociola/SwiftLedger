@@ -51,7 +51,7 @@ public extension Ledger {
             for amount in expected {
                 // ponytail: `=*` scans every account; keep running subtree sums if journals get huge.
                 let quantity = kind.isInclusive
-                    ? own.filter { isInSubtree($0.key, prefix: account) }
+                    ? own.filter { Self.isInSubtree($0.key, prefix: account) }
                     .compactMap { $0.value[amount.commodity]?.quantity }.reduce(Decimal.zero, +)
                     : own[account]?[amount.commodity]?.quantity ?? .zero
                 guard quantity != amount.quantity else { continue }

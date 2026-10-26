@@ -44,9 +44,15 @@ import Foundation
 ///   as a thousand, and a file written for it says so with a `commodity` or
 ///   `decimal-mark` line.
 /// - A posting amount may be followed by a price (`@` per unit, `@@` total)
-///   and/or a balance assertion (`=`), in that order, each written in either
-///   commodity style: `10 AAPL @ $150.00 = 30 AAPL`. Prices take part in
-///   balancing; assertions are preserved but never checked.
+///   and/or a balance assertion (`=`, `==`, `=*` or `==*`), in that order,
+///   each written in either commodity style: `10 AAPL @ $150.00 = 30 AAPL`.
+///   Prices take part in balancing; assertions are preserved, and checked
+///   only when `Ledger.checkBalanceAssertions()` is asked. An assertion with
+///   no amount in front of it is a balance assignment, as it is in hledger:
+///   the posting takes whatever brings the account to the asserted balance,
+///   counted the way the assertion would be checked, over every entry dated
+///   before it in every file (`finish(_:)`); what each operator clears
+///   besides is described on `assigned(_:operator:to:in:)`.
 /// - Status: `*` = cleared, `!` = pending
 /// - Code: `(CODE)` after the status, running to the first `)` wherever on
 ///   the line that is, as hledger reads it. A `(` there with no `)` after it
@@ -147,7 +153,7 @@ public struct JournalParser {
     /// Parses `text` and returns a `Journal`, an `include` line kept verbatim
     /// as a `.directive` (`parse(fileAt:)` follows one).
     public func parse(_ text: String) throws -> Journal {
-        try finish(parse(text, in: ParseContext()).file)
+        try finish(parse(text, in: ParseContext()))
     }
 
     /// Parses `text` as the file `context` names, under the declarations in
@@ -156,7 +162,7 @@ public struct JournalParser {
     ///
     /// What comes back is not yet a `Journal`: an entry holding a balance
     /// assignment is finished by `finish(_:)`, once every file is read.
-    func parse(_ text: String, in context: ParseContext) throws -> (file: ParsedFile, style: JournalStyleCollector) {
+    func parse(_ text: String, in context: ParseContext) throws -> ParsedFile {
         let (lines, lineEnding) = Self.lines(of: text)
         // On the scalars, since `"\r\n"` is one `Character` and not `"\n"`.
         let endsInNewline = text.unicodeScalars.last == "\n"
@@ -238,7 +244,7 @@ public struct JournalParser {
             index += 1
         }
 
-        return (ParsedFile(items: items, style: style, lineEnding: lineEnding, file: context.file), style)
+        return ParsedFile(items: items, style: style, lineEnding: lineEnding, file: context.file)
     }
 
     // MARK: - account directives
@@ -328,21 +334,22 @@ public struct JournalParser {
             index += 1
         }
 
-        let resolved = try resolveElisions(rawPostings, year: header.date.year)
-        let transaction = try Transaction(
-            date: header.date,
-            auxDate: header.auxDate,
-            status: header.status,
-            code: header.code,
-            description: header.description,
-            postings: resolved.postings,
-            comment: header.comment,
+        for raw in rawPostings {
+            try requireUndatedAssignment(raw, year: header.date.year, entry: entry)
+        }
+        let raw = RawEntry(
+            header: header,
+            rawPostings: rawPostings,
             leadingComments: leadingComments,
-            written: resolved.written,
+            source: lines[start ..< index].joined(separator: "\n"),
+            lineNumber: lineNumber,
+            headerLine: entry,
         )
-        // Keep the lines this came from, so that a transaction nobody edits is
-        // written back exactly as the user wrote it.
-        let source = lines[start ..< index].joined(separator: "\n")
-        return (.item(.transaction(transaction.taggedWithSource(source))), index - start)
+        // An entry with a balance assignment is finished by `finish(_:)`,
+        // once every entry its assignment depends on has been read.
+        guard rawPostings.contains(where: Self.isAssignment) else {
+            return try (.item(.transaction(transaction(of: raw))), index - start)
+        }
+        return (.entry(raw), index - start)
     }
 }

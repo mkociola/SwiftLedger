@@ -1908,15 +1908,14 @@ private extension LedgerError {
     /// One written line becomes several postings, so the fields that belong to
     /// the line rather than to an amount have to land somewhere a reader would
     /// look for them: the status on every posting, the inline comment on the
-    /// first, the comments written underneath on the last, and the assertion
-    /// on the posting in the commodity it names.
+    /// first and the comments written underneath on the last.
     @Test
     func `an expanded elided posting spreads the fields of the line it was written on`() throws {
         let text = """
         2024-01-01 opening balances
             assets:bank:checking   $1000
             assets:bank:savings    £500
-            ! equity:opening balances  = £-500  ; the pair of them
+            ! equity:opening balances  ; the pair of them
             ; counted on the first of the year
         """
         let transaction = try #require(try JournalParser().parse(text).transactions.first)
@@ -1926,9 +1925,7 @@ private extension LedgerError {
         #expect(expanded.map(\.comment) == ["the pair of them", nil])
         #expect(expanded[0].trailingComments.isEmpty)
         #expect(expanded[1].trailingComments == ["    ; counted on the first of the year"])
-        #expect(expanded[0].balanceAssertion == nil)
-        #expect(expanded[1].amount.commodity == "£")
-        #expect(expanded[1].balanceAssertion == Amount(quantity: -500, commodity: "£", commodityIsPrefix: true))
+        #expect(expanded.map(\.amount.commodity) == ["$", "£"])
     }
 
     /// `cannotResolveElision` used to be what a two-commodity entry got, and
