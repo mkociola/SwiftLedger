@@ -5,8 +5,8 @@ import Testing
 /// `PlainTextJournalStore` loads a journal through its `include` lines and
 /// saves each file whose text changed, leaving every other file alone: an
 /// included file the user did not edit keeps its bytes and its modification
-/// date, and one edited in another app since the load is not overwritten
-/// (issue #45).
+/// date, and no file edited in another app since the store last read it is
+/// overwritten: the save is refused instead (issue #45).
 @Suite("the store writes each changed file of an included journal") struct IncludeStoreTests {
     static let part = IncludeEditTests.part
     static let top = IncludeEditTests.top
@@ -155,5 +155,89 @@ import Testing
         try files.write("part.journal", outside)
         try manager.add(.transaction(Self.rent("Rent again")))
         #expect(try files.read("part.journal") == outside)
+    }
+
+    /// Asserts `save` was refused with a store error `saying` why, that each
+    /// file holds `disk[name]` byte for byte, and that memory is still `before`.
+    static func expectRefused(
+        _ files: JournalFiles,
+        _ manager: LedgerManager,
+        saying reason: String = "has changed on disk",
+        holding disk: [String: String],
+        unchangedFrom before: Journal,
+        _ save: () throws -> Void,
+    ) throws {
+        let error = try #require(throws: LedgerError.self) { try save() }
+        guard case let .storeError(message) = error else {
+            Issue.record("expected a store error, got \(error)")
+            return
+        }
+        #expect(message.contains(reason))
+        for (name, text) in disk {
+            #expect(try Data(contentsOf: files.url(name)) == Data(text.utf8))
+        }
+        #expect(manager.currentJournal == before)
+    }
+
+    /// The outside edit the app could not reload, because it does not parse,
+    /// is the case nothing else catches: the snapshot is still the old text.
+    @Test
+    func `a save over a top file changed on disk to text that does not parse is refused`() throws {
+        let files = try JournalFiles(["top.journal": Self.part])
+        defer { files.remove() }
+        let manager = try Self.manager(files)
+        let before = manager.currentJournal
+        let outside = Self.part + "\n2024-01-04 Half typed\n    Expenses:Rent  $1.00\n    Assets:Checking  $2.00\n"
+        try files.write("top.journal", outside)
+        #expect(throws: LedgerError.self) { try manager.reload() }
+        try Self.expectRefused(files, manager, holding: ["top.journal": outside], unchangedFrom: before) {
+            try manager.add(.transaction(Self.rent("Rent again")))
+        }
+    }
+
+    @Test
+    func `an edit in an included file changed on disk since the load is refused`() throws {
+        let files = try JournalFiles(["top.journal": Self.top, "part.journal": Self.part])
+        defer { files.remove() }
+        let manager = try Self.manager(files)
+        let before = manager.currentJournal
+        let outside = Self.part + "\n" + IncludeManagerTests.entry("Elsewhere")
+        try files.write("part.journal", outside)
+        let opening = try #require(before.transactions.first)
+        let opened = try IncludeEditTests.rebuilt(opening, as: "Opened")
+        let disk = ["top.journal": Self.top, "part.journal": outside]
+        try Self.expectRefused(files, manager, holding: disk, unchangedFrom: before) {
+            try manager.replace(.transaction(opening), with: .transaction(opened))
+        }
+    }
+
+    /// A file that is gone, or cannot be read back, is not what the store last
+    /// read either: the save is refused rather than quietly recreating it.
+    @Test
+    func `a save over a top file that can no longer be read is refused`() throws {
+        let files = try JournalFiles(["top.journal": Self.part])
+        defer { files.remove() }
+        let manager = try Self.manager(files)
+        let before = manager.currentJournal
+        try FileManager.default.removeItem(at: files.url("top.journal"))
+        try Self.expectRefused(files, manager, saying: "can no longer be read", holding: [:], unchangedFrom: before) {
+            try manager.add(.transaction(Self.rent("Rent again")))
+        }
+        #expect(!FileManager.default.fileExists(atPath: files.url("top.journal").path))
+    }
+
+    @Test
+    func `after a reload the refused save goes through and keeps the outside edit`() throws {
+        let files = try JournalFiles(["top.journal": Self.part])
+        defer { files.remove() }
+        let manager = try Self.manager(files)
+        let outside = Self.part + "\n" + IncludeManagerTests.entry("Elsewhere")
+        try files.write("top.journal", outside)
+        #expect(throws: LedgerError.self) { try manager.add(.transaction(Self.rent("Rent again"))) }
+        try manager.reload()
+        try manager.add(.transaction(Self.rent("Rent again")))
+        let saved = try files.read("top.journal")
+        #expect(saved.hasPrefix(outside))
+        #expect(saved.contains("Rent again"))
     }
 }

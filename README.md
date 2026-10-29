@@ -242,9 +242,11 @@ a blank line cut off from its entry, refuses the file at its line with
 > goes to the top file; an edited or removed entry is changed in the file it
 > came from. Saving writes the top file and each included file edited here
 > whose text changed, so an included file nobody edited keeps its bytes and
-> its modification date, and one changed in another app since the load is not
-> overwritten unless it was edited here too. A file included twice cannot be
-> edited in one place only: the save is refused with `LedgerError.storeError`.
+> its modification date. No file is written over a change made in another app
+> since the store last read it: a save that would write such a file, the top
+> file included, is refused with `LedgerError.storeError` and writes nothing,
+> and `reload()` picks the change up. A file included twice cannot be edited
+> in one place only: the save is refused with `LedgerError.storeError`.
 >
 > An `include` that cannot be followed refuses the load rather than showing
 > balances that leave a file out: a path matching no file, or a file that

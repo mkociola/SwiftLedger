@@ -11,9 +11,16 @@ import Foundation
 /// file is written only when it was edited here (`Journal.edited`) and its
 /// text differs from what the store last read from it or wrote to it, so a
 /// file nobody edited keeps its bytes and its modification date, even one the
-/// serializer would write back differently, and one edited in another app
-/// since is not overwritten unless it was edited here too, which is what has
-/// always held for the top file. The top file is always written, to `url`.
+/// serializer would write back differently. The top file is always written,
+/// to `url`.
+///
+/// No file the store has read is written over a change made to it since. When
+/// a file about to be written has changed on disk since the store last read or
+/// wrote it, or cannot be read any more, the save is refused and nothing is
+/// written, so an edit made in another app or on another device is never
+/// replaced by an older copy held in memory. A file the store never read (one
+/// named by an `include` line added after the load) has nothing to compare
+/// against and is written as before.
 public final class PlainTextJournalStore: LedgerStore {
     private let url: URL
     private let parser = JournalParser()
@@ -43,8 +50,33 @@ public final class PlainTextJournalStore: LedgerStore {
         }
     }
 
+    /// Writes every file of `ledger` that `filesToWrite` selects, refusing a
+    /// file whose text on disk no longer matches its snapshot.
+    ///
+    /// - Throws: `LedgerError.storeError` naming the file, with nothing written.
     public func save(_ ledger: Ledger) throws {
         let files = try filesToWrite(ledger.journal)
+        for (file, _) in files {
+            guard let snapshot = snapshots[file.path] else { continue }
+            let onDisk: String
+            do {
+                onDisk = try String(contentsOf: file, encoding: .utf8)
+            } catch {
+                throw LedgerError.storeError(
+                    "\(file.lastPathComponent) can no longer be read, so nothing was written: "
+                        + error.localizedDescription,
+                )
+            }
+            // Compared byte for byte: `String ==` treats two Unicode
+            // normalisations of one text as equal, and writing memory over
+            // the other normalisation would still rewrite the file.
+            guard onDisk.utf8.elementsEqual(snapshot.utf8) else {
+                throw LedgerError.storeError(
+                    "\(file.lastPathComponent) has changed on disk since it was last read, so nothing was written. "
+                        + "Try again once that change has been loaded.",
+                )
+            }
+        }
         var staged: [(file: URL, tmp: URL)] = []
         var current = url
         do {
@@ -68,7 +100,7 @@ public final class PlainTextJournalStore: LedgerStore {
             throw LedgerError.storeError("Failed to write \(current.lastPathComponent): \(error.localizedDescription)")
         }
         for (file, text) in files {
-            snapshots[file.standardizedFileURL.path] = text
+            snapshots[file.path] = text
         }
     }
 
