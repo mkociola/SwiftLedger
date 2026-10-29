@@ -157,11 +157,12 @@ import Testing
         #expect(try files.read("part.journal") == outside)
     }
 
-    /// Asserts `save` was refused with a store error, that each file holds
-    /// `disk[name]` byte for byte, and that memory is still `before`.
+    /// Asserts `save` was refused with a store error `saying` why, that each
+    /// file holds `disk[name]` byte for byte, and that memory is still `before`.
     static func expectRefused(
         _ files: JournalFiles,
         _ manager: LedgerManager,
+        saying reason: String = "has changed on disk",
         holding disk: [String: String],
         unchangedFrom before: Journal,
         _ save: () throws -> Void,
@@ -171,7 +172,7 @@ import Testing
             Issue.record("expected a store error, got \(error)")
             return
         }
-        #expect(message.contains("has changed on disk"))
+        #expect(message.contains(reason))
         for (name, text) in disk {
             #expect(try Data(contentsOf: files.url(name)) == Data(text.utf8))
         }
@@ -219,7 +220,7 @@ import Testing
         let manager = try Self.manager(files)
         let before = manager.currentJournal
         try FileManager.default.removeItem(at: files.url("top.journal"))
-        try Self.expectRefused(files, manager, holding: [:], unchangedFrom: before) {
+        try Self.expectRefused(files, manager, saying: "can no longer be read", holding: [:], unchangedFrom: before) {
             try manager.add(.transaction(Self.rent("Rent again")))
         }
         #expect(!FileManager.default.fileExists(atPath: files.url("top.journal").path))

@@ -58,11 +58,19 @@ public final class PlainTextJournalStore: LedgerStore {
         let files = try filesToWrite(ledger.journal)
         for (file, _) in files {
             guard let snapshot = snapshots[file.path] else { continue }
+            let onDisk: String
+            do {
+                onDisk = try String(contentsOf: file, encoding: .utf8)
+            } catch {
+                throw LedgerError.storeError(
+                    "\(file.lastPathComponent) can no longer be read, so nothing was written: "
+                        + error.localizedDescription,
+                )
+            }
             // Compared byte for byte: `String ==` treats two Unicode
             // normalisations of one text as equal, and writing memory over
             // the other normalisation would still rewrite the file.
-            let onDisk = try? String(contentsOf: file, encoding: .utf8)
-            guard let onDisk, onDisk.utf8.elementsEqual(snapshot.utf8) else {
+            guard onDisk.utf8.elementsEqual(snapshot.utf8) else {
                 throw LedgerError.storeError(
                     "\(file.lastPathComponent) has changed on disk since it was last read, so nothing was written. "
                         + "Try again once that change has been loaded.",
@@ -92,7 +100,7 @@ public final class PlainTextJournalStore: LedgerStore {
             throw LedgerError.storeError("Failed to write \(current.lastPathComponent): \(error.localizedDescription)")
         }
         for (file, text) in files {
-            snapshots[file.standardizedFileURL.path] = text
+            snapshots[file.path] = text
         }
     }
 
