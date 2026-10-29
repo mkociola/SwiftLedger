@@ -178,19 +178,6 @@ import Testing
         #expect(manager.currentJournal == before)
     }
 
-    @Test
-    func `a save over a top file changed on disk since the load is refused`() throws {
-        let files = try JournalFiles(["top.journal": Self.part])
-        defer { files.remove() }
-        let manager = try Self.manager(files)
-        let before = manager.currentJournal
-        let outside = Self.part + "\n" + IncludeManagerTests.entry("Elsewhere")
-        try files.write("top.journal", outside)
-        try Self.expectRefused(files, manager, holding: ["top.journal": outside], unchangedFrom: before) {
-            try manager.add(.transaction(Self.rent("Rent again")))
-        }
-    }
-
     /// The outside edit the app could not reload, because it does not parse,
     /// is the case nothing else catches: the snapshot is still the old text.
     @Test

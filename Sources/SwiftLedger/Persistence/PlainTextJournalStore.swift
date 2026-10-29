@@ -50,14 +50,8 @@ public final class PlainTextJournalStore: LedgerStore {
         }
     }
 
-    /// Writes every file of `ledger` that `filesToWrite` selects.
-    ///
-    /// Each of those files is first read back from disk, the way `load` reads
-    /// it, and compared with its snapshot: one that changed since, or that can
-    /// no longer be read, refuses the save before anything is staged. The
-    /// check lives here rather than in `filesToWrite` so that one stays a pure
-    /// choice of what to write, and all disk access sits in `save`. A file
-    /// with no snapshot was never read by this store and is not checked.
+    /// Writes every file of `ledger` that `filesToWrite` selects, refusing a
+    /// file whose text on disk no longer matches its snapshot.
     ///
     /// - Throws: `LedgerError.storeError` naming the file, with nothing written.
     public func save(_ ledger: Ledger) throws {
