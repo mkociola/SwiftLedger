@@ -11,9 +11,16 @@ import Foundation
 /// file is written only when it was edited here (`Journal.edited`) and its
 /// text differs from what the store last read from it or wrote to it, so a
 /// file nobody edited keeps its bytes and its modification date, even one the
-/// serializer would write back differently, and one edited in another app
-/// since is not overwritten unless it was edited here too, which is what has
-/// always held for the top file. The top file is always written, to `url`.
+/// serializer would write back differently. The top file is always written,
+/// to `url`.
+///
+/// No file the store has read is written over a change made to it since. When
+/// a file about to be written has changed on disk since the store last read or
+/// wrote it, or cannot be read any more, the save is refused and nothing is
+/// written, so an edit made in another app or on another device is never
+/// replaced by an older copy held in memory. A file the store never read (one
+/// named by an `include` line added after the load) has nothing to compare
+/// against and is written as before.
 public final class PlainTextJournalStore: LedgerStore {
     private let url: URL
     private let parser = JournalParser()
@@ -43,8 +50,31 @@ public final class PlainTextJournalStore: LedgerStore {
         }
     }
 
+    /// Writes every file of `ledger` that `filesToWrite` selects.
+    ///
+    /// Each of those files is first read back from disk, the way `load` reads
+    /// it, and compared with its snapshot: one that changed since, or that can
+    /// no longer be read, refuses the save before anything is staged. The
+    /// check lives here rather than in `filesToWrite` so that one stays a pure
+    /// choice of what to write, and all disk access sits in `save`. A file
+    /// with no snapshot was never read by this store and is not checked.
+    ///
+    /// - Throws: `LedgerError.storeError` naming the file, with nothing written.
     public func save(_ ledger: Ledger) throws {
         let files = try filesToWrite(ledger.journal)
+        for (file, _) in files {
+            guard let snapshot = snapshots[file.path] else { continue }
+            // Compared byte for byte: `String ==` treats two Unicode
+            // normalisations of one text as equal, and writing memory over
+            // the other normalisation would still rewrite the file.
+            let onDisk = try? String(contentsOf: file, encoding: .utf8)
+            guard let onDisk, onDisk.utf8.elementsEqual(snapshot.utf8) else {
+                throw LedgerError.storeError(
+                    "\(file.lastPathComponent) has changed on disk since it was last read, so nothing was written. "
+                        + "Try again once that change has been loaded.",
+                )
+            }
+        }
         var staged: [(file: URL, tmp: URL)] = []
         var current = url
         do {
